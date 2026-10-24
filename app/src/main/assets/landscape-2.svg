@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+<defs>
+<linearGradient id="sky" x2=".36" y2="1"><stop stop-color="#759480"/><stop offset=".36" stop-color="#c5c1b5"/><stop offset=".70" stop-color="#829a8a"/><stop offset="1" stop-color="#2d5143"/></linearGradient>
+<linearGradient id="water" x2=".15" y2="1"><stop stop-color="#517c64"/><stop offset=".5" stop-color="#29533f"/><stop offset="1" stop-color="#103226"/></linearGradient>
+<linearGradient id="peak" x2=".2" y2="1"><stop stop-color="#b9bbb2"/><stop offset=".53" stop-color="#5d7966"/><stop offset="1" stop-color="#1f5135"/></linearGradient>
+<linearGradient id="mist" x2="0" y2="1"><stop stop-color="#e8e6dc" stop-opacity=".43"/><stop offset="1" stop-color="#e2e5db" stop-opacity="0"/></linearGradient>
+<radialGradient id="sun"><stop stop-color="#fceae8" stop-opacity=".7"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="1600" height="900" fill="url(#sky)"/><ellipse cx="1255" cy="175" rx="520" ry="390" fill="url(#sun)"/>
+<path d="M0 395 L120 360 210 398 337 255 415 319 538 188 661 319 752 262 850 372 960 275 1104 393 1233 252 1365 313 1480 234 1600 305 1600 650 0 650Z" fill="#95aa97" opacity=".45"/>
+<path d="M0 500 L135 380 267 419 373 300 488 414 614 241 739 393 835 354 997 431 1070 311 1211 449 1313 367 1448 322 1600 420 1600 700 0 700Z" fill="url(#peak)"/>
+<path d="M333 349 373 300 488 414 413 378 389 366 365 346Z M574 297 614 241 696 347 662 332 640 320 607 308Z M1020 371 1070 311 1127 360 1094 345 1071 336Z" fill="#e7dbd6" opacity=".62"/>
+<path d="M0 514Q270 478 430 512T820 506 1190 498 1600 520L1600 650H0Z" fill="url(#mist)"/>
+<path d="M0 502 Q200 464 420 508 T850 487 1240 490 1600 502L1600 616H0Z" fill="#547c5c" opacity=".48"/>
+<path d="M0 561Q410 539 795 552T1600 560V900H0Z" fill="url(#water)"/>
+<path d="M0 589Q395 574 760 590T1600 580" fill="none" stroke="#cacdbc" stroke-opacity=".27" stroke-width="2"/>
+<path d="M0 657Q320 646 600 658T1190 647 1600 655 M0 715Q450 706 700 718T1600 707 M0 793Q400 784 700 795T1600 785" stroke="#aabea9" stroke-opacity=".15" stroke-width="2" fill="none"/>
+<path d="M0 550 L0 454 38 489 77 410 104 488 141 428 178 515 223 461 263 521 303 469 355 551Z" fill="#19472f"/>
+<path d="M1080 550 1120 472 1150 509 1175 443 1204 519 1245 398 1290 524 1348 433 1397 507 1455 387 1510 496 1556 434 1600 498 1600 620 1080 620Z" fill="#18452f"/>
+<path d="M1292 516 1310 438 1330 515 1345 463 1370 519 1390 405 1412 519 1440 446 1470 520 1490 409 1522 518 1540 450 1570 528 1600 470 1600 900H1292Z" fill="#1a3d30" opacity=".47"/>
+</svg>

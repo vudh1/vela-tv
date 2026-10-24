@@ -1,0 +1,3 @@
+<resources>
+  <string name="home_redirect_description">When enabled, detects the original Google TV Home screen opening and brings Vela forward. Does not read screen contents, keys, or other apps. Turn off in Vela settings to use Sony Home.</string>
+</resources>

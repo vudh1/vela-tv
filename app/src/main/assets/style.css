@@ -1,0 +1,217 @@
+:root{color-scheme:dark;--text:#f7f5f2;--muted:rgba(245,246,244,.62);--hair:rgba(255,255,255,.23);--glass:rgba(20,27,30,.30);--pill:rgba(255,255,255,.09)}
+*{box-sizing:border-box}html,body{height:100%;width:100%;margin:0;overflow:hidden}body{background:#202b2d;color:var(--text);font-family:Arial,"Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased;user-select:none}button{color:inherit;font:inherit;cursor:pointer;border:0}button:focus{outline:none}.scene,.wallpaper,.scrim,.noise{position:absolute;inset:0}.scene{overflow:hidden}.wallpaper{background:#253c3b url('landscape.svg') no-repeat 50% 50%;background-size:cover;transform:scale(1.015)}.scrim{background:linear-gradient(90deg,rgba(8,18,21,.76) 0%,rgba(7,20,23,.46) 40%,rgba(7,16,19,.13) 77%),linear-gradient(0deg,rgba(8,16,21,.84) 0%,rgba(14,19,22,.27) 36%,rgba(16,27,29,.12) 70%,rgba(14,20,21,.19))}.noise{opacity:.08;pointer-events:none;background:repeating-linear-gradient(90deg,transparent 0px,transparent 3px,rgba(255,255,255,.05) 4px)}.page{position:relative;height:100%;width:100%;padding:4.1vh 5.6vw 4.3vh;display:flex;flex-direction:column}.topline{display:flex;justify-content:space-between;align-items:center;height:33px;flex:none;color:#f0f5f3}.brand{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600;letter-spacing:.015em}.brand-mark{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid rgba(255,255,255,.72);border-radius:50%;font-size:15px}.brand-rule{height:16px;width:1px;margin-left:9px;background:rgba(255,255,255,.5)}.brand-sub{font-size:12px;font-weight:400;color:var(--muted)}.date{font-size:12px;letter-spacing:.14em;font-weight:600;color:#f6f6f3}.hero{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;padding-bottom:1vh}.hello{font-size:11px;font-weight:700;letter-spacing:.29em;color:rgba(247,248,244,.80);margin-bottom:11px}.clock{font-family:Georgia, "Times New Roman", serif;font-size:clamp(82px,10vw,183px);font-weight:400;letter-spacing:-.068em;line-height:.94;text-shadow:0px 4px 24px rgba(0,0,0,.08)}.daydate{font-size:13px;letter-spacing:.22em;font-weight:600;margin-top:25px;color:rgba(248,247,245,.83)}.app-section{flex:none;min-height:0;margin-top:1vh}.section-head{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,.3);padding-bottom:14px;margin-bottom:17px;font-size:11px;font-weight:700;letter-spacing:.23em}.section-head span:last-child{font-size:11px;letter-spacing:.01em;font-weight:400;color:rgba(255,255,255,.65)}.favorites.dock{display:flex;gap:15px;width:100%;height:clamp(118px,15vh,190px)}.app-card{background:var(--glass);border:1px solid rgba(255,255,255,.23);border-radius:17px;position:relative;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:transform .13s ease,background-color .13s ease,border-color .13s ease;box-shadow:0 12px 30px rgba(0,0,0,.12);overflow:hidden}.dock .app-card{flex:1 1 0;min-width:0;padding:13px 9px 12px;gap:11px}.app-card:before{content:"";pointer-events:none;position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,.015) 55%,rgba(255,255,255,.05));opacity:.75}.app-card.selected,.app-card:focus{background:rgba(240,246,241,.20);border:2px solid rgba(255,255,255,.95);box-shadow:0 0 0 4px rgba(255,255,255,.13),0 19px 35px rgba(0,0,0,.24);transform:translateY(-5px) scale(1.025);z-index:2}.app-icon{height:100%;width:100%;object-fit:contain;opacity:1;position:relative}.app-card.selected .app-icon,.app-card:focus .app-icon{opacity:1}.app-icon-frame{width:clamp(50px,7.5vh,88px);height:clamp(50px,7.5vh,88px);display:flex;align-items:center;justify-content:center;position:relative;border-radius:21px;background:rgba(2,9,10,.24);border:1px solid rgba(255,255,255,.08);overflow:hidden;flex-shrink:0}.app-monogram{font-family:Georgia,serif;font-size:40px;color:#fff}.app-name{font-size:clamp(11px,1.1vw,16px);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;z-index:1}.favorites.list{display:flex;flex-direction:column;gap:7px;max-width:440px;height:min(41vh,420px);overflow:hidden}.list .app-card{height:47px;min-height:0;padding:6px 19px;display:flex;flex-direction:row;justify-content:flex-start;gap:14px;border-radius:11px;box-shadow:none}.list .app-icon-frame{height:30px;width:30px;border-radius:7px}.list .app-name{text-align:left;font-size:17px}.list .app-card.selected,.list .app-card:focus{transform:translateX(7px)}.list .app-card:after{content:"↗";position:absolute;right:19px;color:rgba(255,255,255,.48)}.utility{display:flex;align-items:center;gap:13px;margin-top:clamp(18px,3vh,34px);flex:none}.utility-button{display:flex;align-items:center;gap:10px;border-radius:24px;padding:11px 18px;font-size:13px;font-weight:600;background:rgba(14,22,25,.32);border:1px solid rgba(255,255,255,.28);transition:background .15s,transform .15s}.utility-button.selected,.utility-button:focus{background:rgba(255,255,255,.25);border-color:#fff;transform:translateY(-2px);box-shadow:0 0 0 3px rgba(255,255,255,.11)}.util-icon{font-size:18px;line-height:12px}.utility-hint{margin-left:auto;font-size:10px;font-weight:700;letter-spacing:.23em;color:rgba(255,255,255,.54)}.utility-hint span{font-weight:400;padding-left:8px}.empty-home{border:1px solid rgba(255,255,255,.3);background:var(--glass);padding:22px;border-radius:14px;max-width:500px;color:#fff}.overlay{position:fixed;inset:0;background:rgba(7,14,15,.62);display:flex;justify-content:center;align-items:center;padding:5vh 8vw;z-index:20}.overlay.hidden{display:none}.panel{background:linear-gradient(146deg,rgba(37,48,51,.98),rgba(20,30,33,.98));border:1px solid rgba(255,255,255,.34);border-radius:21px;box-shadow:0 30px 80px rgba(0,0,0,.38);width:min(1160px,100%);height:min(740px,94vh);display:flex;flex-direction:column;padding:28px 35px 20px}.panel-header{display:flex;justify-content:space-between;align-items:flex-start;gap:30px;flex:none;padding-bottom:20px;border-bottom:1px solid var(--hair)}.panel h2{font-family:Georgia,serif;font-weight:400;font-size:44px;letter-spacing:-.04em;margin:5px 0 8px}.panel p{font-size:13px;color:#adbab9;max-width:640px;line-height:1.5;margin:0}.eyebrow{letter-spacing:.26em;color:#a4b6af;font-size:11px;font-weight:700}.close{background:rgba(255,255,255,.1);border:1px solid var(--hair);width:43px;height:43px;border-radius:50%;font-size:16px}.panel-body{flex:1;overflow:auto;margin-top:20px;scrollbar-width:thin}.app-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:7px 6px 16px}.app-grid .app-card{height:110px;gap:9px}.app-grid .app-icon-frame{height:44px;width:44px;border-radius:11px}.app-grid .app-name{font-size:12px}.app-grid .app-card.selected,.app-grid .app-card:focus{transform:scale(1.03)}.panel-row{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:16px 19px;border:1px solid rgba(255,255,255,.12);border-radius:11px;background:rgba(255,255,255,.055);margin:0 3px 9px;width:calc(100% - 6px);text-align:left}.panel-row.selected,.panel-row:focus,.close.selected,.close:focus{background:rgba(255,255,255,.18);border:1px solid #fff;box-shadow:0 0 0 3px rgba(255,255,255,.09)}.row-title{display:block;font-size:16px}.row-sub{display:block;font-size:12px;color:rgba(255,255,255,.6);margin-top:5px}.row-right{font-size:13px;color:#c3d4cd}.favorite-marker{position:absolute;right:10px;top:9px;background:rgba(255,255,255,.16);border:1px solid #fff;border-radius:10px;padding:3px 7px;font-size:9px;font-weight:700}.panel-foot{border-top:1px solid var(--hair);padding-top:14px;display:flex;gap:29px;font-size:11px;color:rgba(255,255,255,.57);letter-spacing:.08em}.settings-title{font-size:11px;font-weight:bold;color:#9daea8;letter-spacing:.18em;margin:16px 7px 11px}.preview-notice{font-size:11px;color:#fff7be}.panel .button-cluster{display:flex;gap:11px;flex-wrap:wrap;margin:15px 4px}.panel .mini-button{background:rgba(255,255,255,.10);border:1px solid var(--hair);border-radius:9px;padding:10px 14px;min-width:125px;font-size:13px}.mini-button.selected,.mini-button:focus{background:rgba(255,255,255,.24);border-color:#fff}#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);padding:11px 20px;border-radius:20px;background:rgba(8,17,19,.91);font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}#toast.show{opacity:1}body.light .scrim{background:linear-gradient(90deg,rgba(240,244,241,.78) 0%,rgba(222,231,229,.3) 42%,transparent 85%),linear-gradient(0deg,rgba(229,237,234,.69),transparent 50%)}body.light .page{color:#183337}body.light .brand,body.light .date,body.light .clock,body.light .section-head,body.light .daydate,body.light .hello{color:#142b2d;text-shadow:0 1px 10px rgba(255,255,255,.3)}body.light .app-card,body.light .utility-button{background:rgba(25,51,57,.62);color:#fff}body.light .brand-sub,body.light .section-head span:last-child,body.light .utility-hint{color:#224247}
+@media(max-height:650px){.page{padding-top:3vh;padding-bottom:3vh}.hero{justify-content:flex-end;padding-bottom:5vh}.clock{font-size:15vh}.favorites.dock{height:18vh}.utility{margin-top:2vh}.daydate{margin-top:12px}.panel{padding-top:15px}.panel h2{font-size:34px}}
+/* Vela 1.6: CleanFrame-inspired minimal controls; no runtime backdrop-filter.
+   Favor opacity/transform-only focus transitions on low-powered Android TV hardware. */
+.noise,.hello,.section-head,.utility,.brand-rule,.brand-sub,.date,.app-name{display:none!important}
+.page{padding:4vh 5vw 5.5vh}
+.topline{height:50px;align-items:flex-start}
+.brand{display:inline-flex;width:38px;height:38px;border:1px solid rgba(255,255,255,.45);border-radius:50%;font-size:23px;font-weight:300;line-height:35px;text-align:center;justify-content:center;color:rgba(255,255,255,.88);opacity:.8}
+.gear{margin-left:auto;width:53px;height:53px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.25);border-radius:16px;background:rgba(12,25,30,.35);transition:transform .09s linear,background-color .09s linear;will-change:transform}
+.gear.selected,.gear:focus{background:rgba(255,255,255,.23);border-color:rgba(255,255,255,.95);transform:scale(1.06)}
+.hero{flex:1 1 auto;justify-content:center;padding:0 0 9vh 1vw}
+.clock{font-size:clamp(98px,11.2vw,205px);font-weight:400;letter-spacing:-.072em}
+.daydate{margin-top:19px;font-size:12px;letter-spacing:.26em}
+.app-section{width:100%;flex:none}
+.favorites.dock{height:clamp(105px,15vh,165px);display:flex;align-items:center;gap:clamp(10px,1.5vw,29px);padding:9px 16px;max-width:1100px;background:rgba(15,30,34,.15);border:1px solid rgba(255,255,255,.08);border-radius:24px}
+.dock .app-card,.list .app-card{padding:8px;border:1px solid transparent;background:transparent;box-shadow:none;border-radius:18px;overflow:visible;transition:transform .09s ease-out,background-color .09s ease-out,border-color .09s ease-out;will-change:transform}
+.app-card::before{display:none!important}
+.dock .app-card{height:100%;min-width:0;gap:0;flex:1 1 0}
+.app-icon-frame{width:clamp(62px,8.5vh,88px);height:clamp(62px,8.5vh,88px);border:0;background:rgba(10,24,28,.20);border-radius:18px;overflow:hidden;box-shadow:none}
+.app-card.selected,.app-card:focus{border:1px solid rgba(255,255,255,.85);background:rgba(246,250,252,.15);box-shadow:none;transform:scale(1.085);z-index:2}
+.favorites.list{height:min(45vh,430px);width:clamp(95px,9vw,154px);gap:7px;overflow:visible}
+.list .app-card{flex:none;height:52px;width:90px;justify-content:center;padding:4px;border-radius:12px}
+.list .app-icon-frame{width:41px;height:41px;border-radius:10px}
+.list .app-card:after{display:none}
+.list .app-card.selected,.list .app-card:focus{transform:scale(1.08)}
+.focus-label{pointer-events:none;position:fixed;z-index:12;transform:translateX(-50%);font-size:13px;font-weight:600;letter-spacing:.03em;color:#fff;background:rgba(7,21,24,.80);border:1px solid rgba(255,255,255,.28);border-radius:9px;padding:7px 12px;opacity:0;transition:opacity .08s ease-out;white-space:nowrap;max-width:240px;text-overflow:ellipsis;overflow:hidden}
+.focus-label.visible{opacity:1}
+.app-grid .app-card{height:112px;padding:11px 8px 24px;position:relative;background:rgba(255,255,255,.06);box-shadow:none;border-color:rgba(255,255,255,.13);overflow:hidden}
+.app-grid .app-card.selected,.app-grid .app-card:focus{transform:scale(1.025);background:rgba(255,255,255,.15);border-color:#fff}
+.app-grid .app-icon-frame{width:51px;height:51px}
+.app-grid .app-card::after{content:attr(data-name);position:absolute;bottom:10px;left:8px;right:8px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0;text-align:center;display:block!important}
+.app-grid .app-card.selected::after,.app-grid .app-card:focus::after{opacity:1;font-weight:bold}
+.favorite-marker{right:6px;top:5px;border:none;background:rgba(55,122,90,.9)}
+.panel{box-shadow:0 14px 42px rgba(0,0,0,.30)}
+.panel-row{transition:background-color .08s ease-out}
+.panel-body{overscroll-behavior:contain}
+.scene{contain:paint}
+.wallpaper{transform:none;will-change:auto}
+body.light .gear,body.light .brand{color:#173536;border-color:rgba(19,53,55,.3)}
+body.light .gear{background:rgba(230,237,231,.6)}
+body.light .favorites.dock{background:rgba(228,238,232,.20)}
+body.light .app-card.selected{background:rgba(10,35,38,.30)}
+@media(max-height:650px){.hero{padding-bottom:5vh}.clock{font-size:16vh}.favorites.dock{height:18vh}.daydate{margin-top:13px}}
+
+/* Vela 1.8 — persistent live preview + low-overdraw settings drawer. */
+.overlay{position:fixed;inset:0;display:block;padding:0;background:transparent;pointer-events:none;z-index:20}
+.overlay.hidden{display:none}
+.panel{
+ position:absolute;right:3.4vw;top:6.5vh;
+ width:min(470px,36vw);height:min(85vh,800px);min-width:375px;
+ padding:22px 23px 14px;
+ background:linear-gradient(150deg,rgba(29,42,47,.96),rgba(11,22,28,.96));
+ border:1px solid rgba(243,248,248,.30);border-radius:22px;
+ box-shadow:0 12px 44px rgba(0,0,0,.30);
+ pointer-events:auto;overflow:hidden;animation:vela-in .12s ease-out both;
+}
+@keyframes vela-in{from{opacity:.5;transform:translate3d(9px,0,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+.panel-header{padding-bottom:12px;border-color:rgba(255,255,255,.11)}
+.panel h2{font-family:Georgia,serif;font-weight:400;font-size:31px;letter-spacing:-.035em;margin:3px 0 6px}
+.panel p{font-size:12px;line-height:1.45}
+.panel .eyebrow{display:none}
+.panel .close{width:36px;height:36px;font-size:14px;flex:none}
+.panel-body{margin-top:12px;overscroll-behavior:contain;scrollbar-width:none;min-height:0;contain:layout style}
+.panel-body::-webkit-scrollbar{width:0}
+.panel-row{padding:12px 12px;margin:0 0 7px;border-radius:11px;gap:8px;min-height:62px;transition:background-color .06s linear,border-color .06s linear}
+.panel-row.selected,.panel-row:focus{box-shadow:none;border-color:rgba(255,255,255,.9);background:rgba(255,255,255,.20)}
+.panel-row .row-title{font-size:14px;font-weight:600}
+.panel-row .row-sub{font-size:11px;margin-top:4px;line-height:1.25;opacity:.76}
+.panel-row .row-right{white-space:nowrap;flex:none;font-size:11px;color:rgba(255,255,255,.84)}
+.chevron{font-size:16px;opacity:.55;padding-left:2px}
+.panel-foot{font-size:10px;letter-spacing:.03em;padding-top:10px;gap:10px;justify-content:space-between;border-color:rgba(255,255,255,.12)}
+/* Extended All Apps retains the same side-drawer concept, never obscures entire Home. */
+.overlay.catalog .panel{width:min(590px,48vw);right:2.9vw}
+.app-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:6px 3px 13px}
+.app-grid .app-card{height:92px;contain:layout paint}
+.app-grid .app-icon-frame{width:43px;height:43px}
+.app-grid .app-card::after{font-size:11px}
+/* App arrangements live inside the same Personalize panel — no secondary move dialog. */
+.editor-heading{display:flex;justify-content:space-between;align-items:baseline;gap:4px;padding:13px 4px 7px;font-size:11px;font-weight:700;letter-spacing:.11em;color:rgba(255,255,255,.82)}
+.editor-heading small{font-size:10px;font-weight:400;letter-spacing:0;opacity:.7}
+.favorite-editor{display:flex;flex-direction:column;gap:5px}
+.favorite-inline{display:flex;align-items:center;height:48px;gap:8px;padding:5px 8px;border-radius:11px;background:rgba(255,255,255,.055);contain:layout}
+.favorite-inline .app-icon-frame{flex:none;width:33px;height:33px;border-radius:9px}
+.favorite-inline .favorite-title{font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.edit-arrow,.edit-remove{width:31px;height:31px;flex:none;border:1px solid rgba(255,255,255,.20);background:rgba(255,255,255,.045);border-radius:8px;font-size:23px;line-height:27px;text-align:center;padding:0;color:#fff;transition:background-color .07s}
+.edit-remove{font-size:22px;color:#f5c8ba}
+.edit-arrow:focus,.edit-remove:focus,.edit-arrow.selected,.edit-remove.selected{background:rgba(255,255,255,.29);border-color:#fff}
+.edit-arrow:disabled{opacity:.19}
+.add-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:2px 2px 16px}
+.add-app{display:flex;align-items:center;min-height:39px;gap:8px;text-align:left;font-size:12px;padding:8px;border:1px solid rgba(255,255,255,.11);border-radius:9px;background:rgba(255,255,255,.06);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.add-app.selected,.add-app:focus{background:rgba(255,255,255,.23);border-color:#fff}
+.add-sign{display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.5);border-radius:6px;width:22px;height:22px;flex:none;font-weight:bold}
+.version-meta{font-size:12px;line-height:1.45;word-wrap:break-word;border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:12px;margin-bottom:9px;background:rgba(255,255,255,.06)}
+/* Keep focus changes on paint/compositor-friendly properties. Avoid backdrop-filter and layout animation. */
+.app-card,.gear{transition:transform .065s linear,background-color .065s linear,border-color .065s linear}
+@media(max-width:1050px){.panel{right:2vw;width:42vw;min-width:350px}.overlay.catalog .panel{width:52vw}.panel-header{padding-bottom:7px}.panel h2{font-size:27px}}
+@media(max-height:650px){.panel{top:4vh;height:91vh;padding-top:14px}.panel-row{padding:8px 10px;min-height:54px}.editor-heading{padding-top:9px}}
+
+/* Vela 1.9 — profiles + offline wallpaper gallery; all effects compositor-friendly. */
+.profile-button{cursor:pointer;background:rgba(6,20,25,.40);color:#fff;flex:none;font:600 18px/1 Arial,sans-serif!important;
+ display:flex;align-items:center;justify-content:center;letter-spacing:0!important;outline:0;transition:transform .08s linear,background-color .08s linear}
+.profile-button.selected,.profile-button:focus{border-color:#fff;background:rgba(255,255,255,.25);transform:scale(1.10)}
+body.light .profile-button{color:#173536;background:rgba(240,248,244,.55)}
+.overlay.profile-panel .panel{right:3.4vw;left:auto;width:min(430px,35vw);height:min(67vh,620px)}
+.overlay.wallpaper-panel .panel{width:min(505px,39vw)}
+.profiles-list{display:flex;flex-direction:column;gap:7px;margin-bottom:15px}
+.profile-inline{display:flex;gap:7px;align-items:center}
+.profile-switch{display:flex;align-items:center;gap:13px;padding:8px 10px;flex:1;min-width:0;min-height:55px;
+ border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);border-radius:13px;text-align:left}
+.profile-switch.selected,.profile-switch:focus{background:rgba(255,255,255,.24);border-color:#fff}
+.profile-switch.is-current{border-color:rgba(255,255,255,.50)}
+.profile-mini{width:34px;height:34px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+ background:rgba(255,255,255,.22);font-size:16px;font-weight:600}
+.profile-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:600}
+.profile-current{font-size:9px;letter-spacing:.09em;opacity:.7}
+.profile-manage{flex:none;width:35px;height:38px;border-radius:9px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.055);font-size:21px}
+.profile-manage.selected,.profile-manage:focus{background:rgba(255,255,255,.26);border-color:#fff}
+.profile-manage:disabled{opacity:.24}
+.gallery-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:4px 2px 13px}
+.wallpaper-choice{height:122px;position:relative;display:block;padding:0;border-radius:12px;overflow:hidden;border:2px solid rgba(255,255,255,.12);background:#1d3035;contain:layout paint;text-align:left}
+.wallpaper-choice img{width:100%;height:100%;display:block;object-fit:cover;pointer-events:none}
+.wallpaper-choice:after{content:'';position:absolute;inset:40% 0 0;background:linear-gradient(transparent,rgba(5,14,18,.78));pointer-events:none}
+.wallpaper-choice span{position:absolute;left:10px;bottom:10px;z-index:1;font-size:12px;font-weight:600;text-shadow:0 1px 8px #000}
+.wallpaper-choice b{position:absolute;top:7px;right:8px;z-index:1;font-size:15px;color:#fff;text-shadow:0 1px 5px #000}
+.wallpaper-choice.selected,.wallpaper-choice:focus{border-color:#fff;transform:scale(1.012)}
+.wallpaper-choice.is-current{border-color:rgba(236,247,243,.84)}
+.library-footnote{font-size:11px!important;line-height:1.6!important;color:rgba(245,248,248,.67)!important;margin:4px 2px 14px!important}
+body.modern-clock .clock{font-family:Arial,Helvetica,sans-serif;font-weight:200;letter-spacing:-.065em}
+@media(max-width:1050px){.overlay.profile-panel .panel{right:2vw;left:auto;width:42vw}.overlay.wallpaper-panel .panel{width:46vw}}
+
+/* Vela 2.0 — distinct profile avatar controls, native icon artwork, calendar. */
+.profile-button svg,.profile-mini svg{width:23px;height:23px;flex:none}
+.profile-mini svg{width:20px;height:20px}
+.profile-button{font-size:0!important}
+.top-actions{display:flex;gap:13px;align-items:center;justify-content:flex-end}
+.calendar-button{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;position:relative;background:rgba(5,22,24,.28);border:1px solid rgba(255,255,255,.28);transition:transform .07s linear,background .07s}
+.calendar-button svg{width:24px;height:24px}
+.calendar-button.selected,.calendar-button:focus{transform:scale(1.10);background:rgba(255,255,255,.2);border-color:#fff}
+.calendar-badge{position:absolute;top:-8px;right:-9px;min-width:21px;height:21px;padding:2px 5px;border-radius:12px;background:#f2f5ee;color:#20343b;border:1px solid rgba(0,0,0,.1);font:700 11px/16px Arial;text-align:center}
+.calendar-badge.hidden{display:none}
+.calendar-button.calendar-attention .calendar-badge{background:#ebbe82;color:#1f2e31}
+.calendar-peek{margin-top:25px;width:min(380px,43vw);min-height:0;pointer-events:none}
+.peek-heading{font-size:10px;letter-spacing:.2em;opacity:.8;font-weight:700;margin-bottom:9px}
+.event-item{display:flex;flex-direction:column;gap:4px;padding:12px 12px 15px 13px;margin:0 0 7px;background:rgba(255,255,255,.035);border:0;border-left:2px solid transparent;border-radius:8px}
+.event-item.ongoing{background:rgba(205,239,222,.15);border-left-color:#c8f1d3}
+.event-item.soon{background:rgba(235,189,129,.13);border-left-color:#edc78a}
+.event-meta{font-size:11px;font-weight:700;letter-spacing:.03em;color:rgba(250,249,242,.75)}
+.event-item.ongoing .event-meta{color:#c8f2d6}.event-item.soon .event-meta{color:#ffe1b0}
+.event-summary{font-size:14px;line-height:1.4;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.event-when{font-size:11px;opacity:.65}
+.event-peek{background:transparent!important;border-left:0!important;border-radius:0;margin:0 0 9px;padding:0 0 0 11px;box-shadow:none;position:relative}
+.event-peek:before{content:'';position:absolute;left:0;top:2px;bottom:2px;width:2px;background:rgba(255,255,255,.38);border-radius:2px}
+.event-peek.ongoing:before{background:#c8f1d3}.event-peek.soon:before{background:#f7d4a5}
+.event-peek .event-summary{font-size:13px;max-width:390px;text-shadow:0 1px 10px rgba(0,0,0,.35)}
+.calendar-tools{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.12)}
+.calendar-empty,.calendar-help{padding:17px 10px!important;font-size:13px!important;color:rgba(255,255,255,.78)!important;line-height:1.6!important}
+.avatar-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;padding:8px 3px 15px}
+.avatar-option{height:103px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;border:1px solid rgba(255,255,255,.13);border-radius:13px;background:rgba(255,255,255,.08)}
+.avatar-option svg{height:29px;width:29px}.avatar-option span{font-size:11px;opacity:.88}
+.avatar-option.is-current,.avatar-option.selected,.avatar-option:focus{background:rgba(255,255,255,.24);border-color:#fff}
+.fallback-app-mark{position:absolute;inset:27%;height:46%;width:46%;opacity:.65;pointer-events:none}
+.app-icon{z-index:2;background:transparent;object-fit:contain}
+body.light .calendar-button{color:#173536;border-color:rgba(19,53,55,.3);background:rgba(240,248,244,.55)}
+body.light .calendar-peek{color:#152e30}body.light .event-meta{color:#244a4b}
+@media(max-height:650px){.calendar-peek{margin-top:13px}.event-peek{margin-bottom:5px}}
+
+/* Vela 2.1: profile initials and discreet calendar pairing */
+.avatar-initials{font:650 13px/1 Arial,sans-serif;letter-spacing:.02em;display:inline-flex;justify-content:center;align-items:center;min-width:20px}
+.profile-button .avatar-initials{font-size:16px}.avatar-option .avatar-initials{font-size:22px}
+.calendar-connection{margin:10px 0 15px;padding:5px 4px 14px;border-bottom:1px solid rgba(255,255,255,.12)}
+.connection-pill{font:700 10px/1.6 Arial,sans-serif;letter-spacing:.13em;padding:4px 9px;border:1px solid rgba(255,255,255,.3);border-radius:100px}
+.connection-pill.verified{color:#b8f8d2;border-color:rgba(163,237,190,.55)}.connection-pill.pending{color:#f2cf99;border-color:#e0b47e}
+.connection-name{font-weight:650;font-size:18px;margin:18px 0 8px}.connection-detail{font-size:11px;opacity:.8;margin-top:7px;line-height:1.45}
+.pair-qr{display:flex;justify-content:center;align-items:center;min-height:220px}.pair-svg{width:210px;height:210px;max-width:100%;background:white;padding:6px;border-radius:12px}
+.pair-url{max-width:100%;word-break:break-all;font-size:12px;opacity:.86;text-align:center;line-height:1.5}
+.pair-loading{font-size:12px;opacity:.7}
+
+/* Vela 2.2 — optional, on-demand baby monitor quick access. No background video. */
+.monitor-button{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;position:relative;background:rgba(5,22,24,.28);border:1px solid rgba(255,255,255,.28);transition:transform .07s linear,background-color .07s linear}
+.monitor-button svg{width:25px;height:25px}
+.monitor-button.hidden{display:none!important}
+.monitor-button.selected,.monitor-button:focus{transform:scale(1.10);background:rgba(255,255,255,.2);border-color:#fff}
+.monitor-detail{font-size:12px;line-height:1.6;opacity:.84;margin:9px 4px 17px!important}
+.monitor-state{border-bottom:1px solid rgba(255,255,255,.13);padding:9px 5px 15px;margin-bottom:12px}
+.monitor-state strong{font-weight:600;display:block;font-size:17px;letter-spacing:.005em}
+.monitor-state span{display:block;font-size:12px;line-height:1.5;opacity:.79;margin-top:7px}
+body.light .monitor-button{color:#173536;border-color:rgba(19,53,55,.3);background:rgba(240,248,244,.55)}
+
+/* Vela 2.3 — compositor-only, low-overdraw volume HUD. Never focuses or intercepts remote input. */
+.volume-hud{position:fixed;bottom:clamp(22px,2.8vh,38px);left:50%;z-index:60;display:flex;align-items:center;
+ gap:clamp(11px,1.25vw,20px);padding:14px 20px;width:min(330px,35vw);min-width:230px;height:61px;
+ border-radius:999px;box-sizing:border-box;color:#f6faf8;pointer-events:none;
+ background:linear-gradient(118deg,rgba(33,50,56,.95),rgba(13,26,31,.96));
+ border:1px solid rgba(255,255,255,.25);box-shadow:0 17px 50px rgba(0,0,0,.30);
+ opacity:0;visibility:hidden;transform:translate3d(-50%,9px,0);
+ transition:opacity 135ms ease-out,transform 160ms ease-out,visibility 0s linear 160ms;
+ contain:layout style paint;will-change:opacity,transform}
+.volume-hud.visible{opacity:1;visibility:visible;transform:translate3d(-50%,0,0);transition:opacity 135ms ease-out,transform 160ms ease-out,visibility 0s}
+.volume-hud.bottom-right{left:auto;right:clamp(22px,4vw,76px);transform:translate3d(0,9px,0)}
+.volume-hud.bottom-right.visible{transform:translate3d(0,0,0)}
+.volume-hud.minimal{background:rgba(10,19,24,.88);border-color:rgba(255,255,255,.10);box-shadow:0 7px 24px rgba(0,0,0,.25);height:51px}
+.volume-glyph{display:flex;flex:none;align-items:center;justify-content:center;width:26px;height:26px}
+.volume-glyph svg{display:block;width:26px;height:26px}
+.volume-wave-small,.volume-wave-big,.volume-slash{display:none}
+.volume-hud.low .volume-wave-small,.volume-hud.high .volume-wave-small,.volume-hud.high .volume-wave-big,.volume-hud.muted .volume-slash{display:block}
+.volume-track{flex:1;min-width:70px;height:5px;background:rgba(226,238,237,.22);border-radius:30px;overflow:hidden}
+.volume-fill{display:block;width:100%;height:100%;border-radius:inherit;transform:scaleX(0);transform-origin:left center;
+ background:linear-gradient(90deg,#cde8e1,#f3fbf7);transition:transform 100ms linear;will-change:transform}
+.volume-number{display:none;flex:none;min-width:35px;font:600 12px/1.2 system-ui,sans-serif;text-align:right;font-variant-numeric:tabular-nums}
+.volume-hud.with-number .volume-number{display:block}
+@media (prefers-reduced-motion:reduce){.volume-hud,.volume-fill{transition:none}}
+
+/* Vela 2.4 quick actions: no new on-Home elements, no backdrop blur. */
+.context-app{display:flex;align-items:center;gap:14px;padding:7px 10px 21px;font-size:17px;font-weight:600;color:rgba(255,255,255,.92)}
+.context-app .app-icon-frame{width:55px;height:55px;border-radius:12px;flex:none}
+.context-app .app-icon-frame img{max-width:100%;max-height:100%}
