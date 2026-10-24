@@ -241,15 +241,15 @@ public final class MainActivity extends Activity {
         }
         if (web != null && javascriptReady) {
             int code = e.getKeyCode();
-            String key = null;
-            if (code == KeyEvent.KEYCODE_DPAD_UP) key="up";
-            else if (code == KeyEvent.KEYCODE_DPAD_DOWN) key="down";
-            else if (code == KeyEvent.KEYCODE_DPAD_LEFT) key="left";
-            else if (code == KeyEvent.KEYCODE_DPAD_RIGHT) key="right";
-            else if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER) key="select";
-            else if (code == KeyEvent.KEYCODE_BACK) key="back";
-            if (key != null) {
-                if ("select".equals(key)) {
+            String remoteKey = null;
+            if (code == KeyEvent.KEYCODE_DPAD_UP) remoteKey="up";
+            else if (code == KeyEvent.KEYCODE_DPAD_DOWN) remoteKey="down";
+            else if (code == KeyEvent.KEYCODE_DPAD_LEFT) remoteKey="left";
+            else if (code == KeyEvent.KEYCODE_DPAD_RIGHT) remoteKey="right";
+            else if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER) remoteKey="select";
+            else if (code == KeyEvent.KEYCODE_BACK) remoteKey="back";
+            if (remoteKey != null) {
+                if ("select".equals(remoteKey)) {
                     if (e.getAction() == KeyEvent.ACTION_DOWN) {
                         if (e.getRepeatCount() == 0 && selectDownAt == 0L) {
                             selectDownAt = android.os.SystemClock.uptimeMillis();
@@ -277,7 +277,7 @@ public final class MainActivity extends Activity {
                     long now = android.os.SystemClock.uptimeMillis();
                     if (e.getRepeatCount() == 0 || now - lastKeyDown >= 24) {
                         lastKeyDown = now;
-                        web.evaluateJavascript("QH.remote(" + JSONObject.quote(key) + ")", null);
+                        web.evaluateJavascript("QH.remote(" + JSONObject.quote(remoteKey) + ")", null);
                     }
                 }
                 return true;
