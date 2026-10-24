@@ -19,7 +19,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - name: Install Android SDK components
         run: sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
       - name: Load private release signing key
