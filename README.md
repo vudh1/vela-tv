@@ -2,14 +2,29 @@
 
 Minimalist Android TV launcher for Sony BRAVIA.
 
-## Branches & releases
+## Release branches
 
-- `main`: development and review.
-- `production`: signed release builds. A push to `production` should trigger GitHub Actions after the Vela source and workflow have been uploaded.
-- Vela's **Gear → Updates** checks releases and offers **Download & install** through the Android package installer. Installation requires TV confirmation; it's not silent.
+- `main`: source changes, testing and review.
+- `production`: builds and publishes a signed APK release on push via [GitHub Actions](.github/workflows/production-apk.yml).
+- [Draft release PR](../../pull/1): stage source and signing configuration safely before the first deployment.
 
-## Setup status
+## One-time signing setup
 
-The project source, workflow, and signing secrets still need an initial upload/configuration from the Mac using the project-provided `scripts/bootstrap-github.sh`. This repository is currently **private**, so the TV cannot access release downloads anonymously. Use a reviewed public repository or a separate public binary distribution channel before expecting TV updates.
+The first production build must use the **same signing certificate** as the Vela APK already installed on the TV. From your Mac (with Android SDK Build Tools 35.0.0 and GitHub CLI installed):
 
-Never commit signing keystores (`*.jks`), APKs, calendar iCal URLs, access tokens or passwords. Android upgrades must reuse the same package name and signing certificate as the installed Vela APK.
+```bash
+gh auth login
+bash scripts/setup-release-signing.sh "/path/to/quiet-home-dev.jks" "/path/to/your-existing-vela.apk"
+```
+
+The script checks certificate fingerprints and uploads **four encrypted Actions secrets**: `VELA_SIGNING_KEY_B64`, `VELA_STOREPASS`, `VELA_KEYPASS`, and `VELA_KEYALIAS`. Signing passwords and keystore contents must never be committed. To verify only the names were created: `gh secret list -R vudh1/vela-tv`.
+
+## Updating the TV
+
+When `production` receives a new commit, Actions builds and signs `Vela-release.apk`, publishes a GitHub Release, and Vela's **Gear → Updates** can check for new versions, download, verify SHA-256, and request installation. Android will prompt for installation approval; the app cannot silently install itself.
+
+**Current limitation:** this source repository is private. Its GitHub Releases cannot be fetched anonymously from the TV. Complete public binary distribution configuration, or audit and change repository visibility, **before** relying on TV self-updates. Do not expose private credentials to the TV.
+
+## Security and compatibility
+
+Never commit signing keystores (`*.jks`), APKs, calendar iCal URLs, access tokens or passwords. Preserve the app package name `com.danielvu.quiethome` and the existing signing certificate to allow Android upgrades. Keep the original APK as a recovery copy and the original signing key safely backed up.
