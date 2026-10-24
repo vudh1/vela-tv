@@ -1,0 +1,61 @@
+name: Production APK
+on:
+  push:
+    branches: [production]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: vela-production
+  cancel-in-progress: false
+jobs:
+  build-release:
+    if: github.ref == 'refs/heads/production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK components
+        run: sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+      - name: Load private release signing key
+        env:
+          VELA_SIGNING_KEY_B64: ${{ secrets.VELA_SIGNING_KEY_B64 }}
+        run: |
+          test -n "$VELA_SIGNING_KEY_B64" || { echo 'Missing signing key secret'; exit 1; }
+          mkdir -p signing
+          printf '%s' "$VELA_SIGNING_KEY_B64" | base64 -d > signing/quiet-home-dev.jks
+          chmod 600 signing/quiet-home-dev.jks
+      - name: Build signed release APK
+        id: build
+        env:
+          VELA_STOREPASS: ${{ secrets.VELA_STOREPASS }}
+          VELA_KEYPASS: ${{ secrets.VELA_KEYPASS }}
+          VELA_KEYALIAS: ${{ secrets.VELA_KEYALIAS }}
+        shell: bash
+        run: |
+          test -n "$VELA_STOREPASS" && test -n "$VELA_KEYPASS" && test -n "$VELA_KEYALIAS" || { echo 'Missing signing secrets'; exit 1; }
+          code=$((20000 + GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
+          name="2.5.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          VELA_VERSION_CODE="$code" VELA_VERSION_NAME="$name" bash scripts/build.sh
+          mv Vela-2.5.apk Vela-release.apk
+          sha256sum Vela-release.apk > Vela-release.apk.sha256
+      - name: Validate APK signature and checksum
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs Vela-release.apk
+          sha256sum -c Vela-release.apk.sha256
+      - name: Publish release for production commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODE: ${{ steps.build.outputs.code }}
+          NAME: ${{ steps.build.outputs.name }}
+        run: |
+          gh release create "v${CODE}" Vela-release.apk Vela-release.apk.sha256 \
+            --target "$GITHUB_SHA" --title "Vela ${NAME}" \
+            --notes "Signed production build from ${GITHUB_SHA}. Android will request installation approval." --latest
