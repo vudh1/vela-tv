@@ -1,0 +1,16 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.danielvu.quiethome'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.danielvu.quiethome'
+        minSdk 26
+        targetSdk 32
+        versionCode 14
+        versionName '2.4'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
