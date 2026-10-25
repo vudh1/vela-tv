@@ -264,21 +264,36 @@ body.light .monitor-button{color:#173536;border-color:rgba(19,53,55,.3);backgrou
 .startup-list{display:flex;flex-direction:column;gap:7px}
 .startup-list .panel-row{min-height:64px;padding:13px 17px}
 
-/* A TV wake is a distinct moment: show a centered, readable profile choice,
-   not the small settings drawer. No secondary selection screen on app return. */
-.overlay.startup-panel{background:rgba(5,17,20,.46);pointer-events:auto}
+/* A new viewing session is a true full-screen profile gate, with a neutral
+   surface that cannot briefly expose the last profile's private Home. */
+body.booting .scene,body.booting .page{visibility:hidden}
+.overlay.startup-panel{z-index:80;background:#1c292d;pointer-events:auto}
 .overlay.startup-panel .panel{
- left:50%;right:auto;top:50%;transform:translate(-50%,-50%);
- width:min(530px,65vw);min-width:340px;height:auto;max-height:82vh;
- background:linear-gradient(145deg,rgba(33,54,55,.98),rgba(15,29,33,.98));
- animation:none;
+ left:0;right:0;top:0;transform:none;
+ display:flex;flex-direction:column;align-items:center;justify-content:center;
+ width:100vw;min-width:0;height:100vh;max-height:none;
+ padding:5vh 5vw;background:#1c292d;border:0;border-radius:0;box-shadow:none;
+ animation:none;color:#f3f7f5;
 }
-.overlay.startup-panel .panel-header{padding-bottom:17px}
-.overlay.startup-panel .panel h2{font-size:38px}
-.overlay.startup-panel .startup-list .panel-row{background:rgba(255,255,255,.055);border-color:rgba(255,255,255,.10);border-radius:13px}
-.overlay.startup-panel .startup-list .panel-row.selected,
-.overlay.startup-panel .startup-list .panel-row:focus{background:rgba(232,245,236,.18);border-color:rgba(234,248,238,.85)}
-@media(max-width:700px){.overlay.startup-panel .panel{width:90vw;min-width:0}}
+.overlay.startup-panel .panel-header{width:100%;flex:none;justify-content:center;text-align:center;padding:0 0 5vh;border:0}
+.overlay.startup-panel .panel-header>div{width:100%}
+.overlay.startup-panel .panel h2{font:600 clamp(28px,3.3vw,51px)/1.2 Arial,sans-serif;letter-spacing:-.035em;margin:0 0 12px}
+.overlay.startup-panel .panel-header p{font-size:clamp(13px,1.1vw,17px);color:#c0ccc9;letter-spacing:.02em}
+.overlay.startup-panel .close,.overlay.startup-panel .panel-foot{display:none}
+.overlay.startup-panel .panel-body{width:min(980px,90vw);max-height:65vh;margin:0;overflow-y:auto;contain:none}
+.startup-avatar-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:clamp(15px,2.7vw,43px);padding:7px 8px 16px}
+.startup-avatar-card{display:flex;flex-direction:column;align-items:center;gap:16px;width:clamp(118px,13vw,175px);padding:6px;
+ color:#d7e2df;background:transparent;border:0;border-radius:14px;outline:none;text-align:center}
+.startup-avatar{display:flex;align-items:center;justify-content:center;width:clamp(105px,12vw,160px);height:clamp(105px,12vw,160px);
+ border-radius:13px;background:linear-gradient(155deg,#466b73,#263f49);border:3px solid transparent;transition:transform .12s,border-color .12s}
+.startup-avatar-card:nth-child(2n) .startup-avatar{background:linear-gradient(145deg,#777578,#403f52)}
+.startup-avatar-card:nth-child(3n) .startup-avatar{background:linear-gradient(145deg,#7d826d,#415950)}
+.startup-avatar svg{width:55%;height:55%;stroke-width:1.5}
+.startup-avatar .avatar-initials{font-size:clamp(30px,4vw,56px);font-weight:600}
+.startup-profile-name{display:block;max-width:100%;font-size:clamp(16px,1.6vw,23px);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.startup-avatar-card.selected .startup-avatar,.startup-avatar-card:focus .startup-avatar{border-color:#f4f8f6;transform:scale(1.035)}
+.startup-avatar-card.selected .startup-profile-name,.startup-avatar-card:focus .startup-profile-name{color:#fff}
+@media(max-height:650px){.overlay.startup-panel .panel{padding:3vh 4vw}.overlay.startup-panel .panel-header{padding-bottom:3vh}.startup-avatar-grid{gap:10px 26px}.startup-avatar{width:94px;height:94px}.startup-avatar-card{width:110px;gap:9px}}
 /* Samsung firmware owns Calendar integrations, TV Home and the system saver. */
 body.tizen-tv #monitorButton{display:none!important}
 .calendar-input-label{display:block;color:rgba(229,241,234,.82);font-size:12px;letter-spacing:.08em;margin:20px 4px 9px}

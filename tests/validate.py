@@ -258,12 +258,61 @@ assert 'vudh1.github.io/velatv/remote' in js
 assert 'https://vudh1.github.io' in remote_worker and 'MAX_FAILED = 5' in remote_worker
 assert 'sameNetwork' in remote_worker and 'controllerHash' in remote_worker
 assert 'pinHash' in remote_worker and 'pinSalt' in remote_worker
-assert 'generatePin(' in remote_native and 'pin_encrypted' in remote_native
-assert "row('remoteRotate'" in js and "row('remoteShowPin'" in js
+assert 'generatePin(' in remote_native and 'remove("pin_encrypted")' in remote_native
+assert '.putString("pin_encrypted"' not in remote_native
+assert "row('remoteRotate'" in js and "row('remoteShowPin'" not in js
+assert 'showWebRemotePin' not in main and 'remoteHasPin' not in main
 assert 'VELA_REMOTE_PIN' not in (r/'.github/workflows/deploy-remote.yml').read_text()
 assert 'REMOTE_PIN' not in remote_worker
 assert 'sessionStorage.setItem' not in remote_js and 'localStorage.setItem' not in remote_js
+assert 'indexedDB' in remote_js and 'crypto.subtle.sign' in remote_js
+assert "'/api/challenge'" in remote_js and "'/api/resume'" in remote_js
+assert "path === '/api/resume'" in remote_worker and 'pairedKeyId' in remote_worker
+assert "addEventListener('pagehide'" not in remote_js
 assert 'content-security-policy' in remote_page.lower()
 subprocess.run(['node','--check',str(r/'remote/app.js')],check=True)
 subprocess.run(['node','--check',str(r/'remote-worker/src/index.js')],check=True)
-print('PASS TV-generated encrypted remote PIN, salted Cloudflare check, exclusive controller lease')
+print('PASS one-time TV PIN, encrypted controller signing key, Cloudflare replay-safe reconnect')
+
+# Web remote onboarding and honest cross-app capabilities.
+assert 'static void remoteControllerConnected()' in main
+assert 'remotePinDialog.dismiss()' in main and 'remotePinDialog.isShowing()' in main
+assert 'MainActivity.remoteControllerConnected();' in remote_native
+assert 'audio.adjustVolume(direction, AudioManager.FLAG_SHOW_UI)' in remote_native
+assert 'audio.isVolumeFixed()' in remote_native
+navigation=(r/'app/src/main/java/com/danielvu/quiethome/VelaRemoteAccessibilityService.java').read_text()
+assert 'ACTION_ACCESSIBILITY_FOCUS' in navigation and 'node.isClickable()' in navigation
+assert 'ACTION_SCROLL_FORWARD' in navigation and 'ACTION_SCROLL_BACKWARD' in navigation
+
+# A standby profile choice must never expose Home behind a translucent drawer.
+assert '<body class="booting">' in (asset/'index.html').read_text()
+assert 'body.booting .scene,body.booting .page{visibility:hidden}' in css
+assert '.overlay.startup-panel{z-index:80;background:#1c292d' in css
+assert 'width:100vw;min-width:0;height:100vh' in css
+assert 'startup-avatar-grid' in js and 'startup-profile-name' in js
+assert "if(screen==='startupProfiles')return;" in js
+assert "document.body.classList.remove('booting')" in js
+assert "document.body.classList.remove('booting');listDirty=true;activeList()" in js
+
+# A refresh is not verified just because an older cache succeeded today.
+assert 'CalendarIcs.upcoming(feed,zone,day,30)' in calendar
+assert 'refreshed==total' in calendar and 'Refresh failed · showing saved calendar events' in calendar
+assert 'now+30*86400000' in js
+print('PASS remote auto-dismiss, best-effort native control, immersive startup profiles and 30-day calendar refresh')
+
+# Sony IRCC keys are never in the public browser assets or Cloudflare relay.
+sony=(r/'app/src/main/java/com/danielvu/quiethome/VelaSonyIpControl.java').read_text()
+codes=(r/'app/src/main/java/com/danielvu/quiethome/SonyIrccMessage.java').read_text()
+assert "row('sonyIpSetup'" in js and 'configureSonyIpControl' in main
+assert 'sonyIpControlEnabled' in main and 'removeSonyIpControl' in main
+assert 'VelaSonyIpControl.get(context).send(key' in remote_native
+assert 'VelaRemoteClient.encrypt(psk)' in sony and 'psk_encrypted' in sony
+assert 'X-Auth-PSK' in sony and 'setInstanceFollowRedirects(false)' in sony
+assert '127.0.0.1' in sony and 'ip.isSiteLocalAddress()' in sony
+assert 'getActiveNetwork()' in sony and 'TRANSPORT_VPN' in sony
+assert 'http://' in sony and 'https://' not in sony
+assert 'play_pause' in codes and 'X_SendIRCC' in codes
+assert 'sonyIpSetup' not in remote_js and 'X-Auth-PSK' not in remote_js+remote_worker
+assert 'android.permission.ACCESS_NETWORK_STATE' in ET.tostring(m,encoding='unicode')
+assert 'usesCleartextTraffic' in ET.tostring(m,encoding='unicode')
+print('PASS Sony on-device PSK isolation, restricted HTTP hosts, opt-in IRCC and offline fallback')

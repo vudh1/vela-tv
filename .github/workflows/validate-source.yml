@@ -49,3 +49,9 @@ jobs:
           javac -source 8 -target 8 -classpath build/ci-classes \
             -d build/ci-classes tests/java/com/danielvu/quiethome/CalendarIcsTest.java
           java -cp build/ci-classes com.danielvu.quiethome.CalendarIcsTest
+      - name: Test Sony IRCC command encoding and key constraints
+        run: |
+          javac -source 8 -target 8 -d build/ci-classes \
+            app/src/main/java/com/danielvu/quiethome/SonyIrccMessage.java \
+            tests/java/com/danielvu/quiethome/SonyIrccMessageTest.java
+          java -cp build/ci-classes com.danielvu.quiethome.SonyIrccMessageTest

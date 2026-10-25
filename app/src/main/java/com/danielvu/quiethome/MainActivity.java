@@ -82,6 +82,9 @@ public final class MainActivity extends Activity {
     private VelaUpdateController updater;
     private VelaCalendarController calendar;
     private VelaPairingServer pairing;
+    // Only the on-TV PIN dialog is dismissed when an authenticated controller
+    // actually connects. The underlying Web remote settings remain unchanged.
+    private AlertDialog remotePinDialog;
     // Streaming-app returns reuse this Activity; a new launcher process is a
     // fresh viewing session. Some Sony standby paths never emit SCREEN_OFF.
     // A cold launch fallback covers those paths (at the cost of a prompt if
@@ -240,6 +243,10 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onDestroy() {
+        if (remotePinDialog != null) {
+            remotePinDialog.dismiss();
+            remotePinDialog = null;
+        }
         visibleActivity = new WeakReference<>(null);
         stopVolumeObservation();
         javascriptReady = false;
@@ -630,6 +637,11 @@ public final class MainActivity extends Activity {
         return true;
     }
 
+    static boolean isRemoteHomeVisible() {
+        MainActivity activity = visibleActivity.get();
+        return activity != null && activity.homeResumed && activity.javascriptReady && activity.web != null;
+    }
+
     private void requestAppsAsync() {
         synchronized (this) {
             if (catalogLoading) return;
@@ -686,7 +698,19 @@ public final class MainActivity extends Activity {
         runOnUiThread(() -> toast(message));
     }
 
+    static void remoteControllerConnected() {
+        MainActivity activity = visibleActivity.get();
+        if (activity != null) activity.runOnUiThread(() -> {
+            if (activity.remotePinDialog != null && activity.remotePinDialog.isShowing()) {
+                activity.remotePinDialog.dismiss();
+                activity.remotePinDialog = null;
+                activity.toast("Web remote connected");
+            }
+        });
+    }
+
     private void showRemotePin(String pin) {
+        if (remotePinDialog != null) remotePinDialog.dismiss();
         android.widget.TextView code = new android.widget.TextView(this);
         code.setText(pin);
         code.setTextSize(36);
@@ -695,12 +719,14 @@ public final class MainActivity extends Activity {
         int pad = (int) (getResources().getDisplayMetrics().density * 24);
         code.setPadding(pad, pad, pad, pad);
         code.setContentDescription("Your Vela remote PIN: " + pin);
-        new AlertDialog.Builder(this)
+        remotePinDialog = new AlertDialog.Builder(this)
             .setTitle("Vela remote PIN")
-            .setMessage("Enter this 10-digit PIN on your phone at vudh1.github.io/velatv/remote/. Only one controller can connect at a time.\n\nRegenerate the PIN here whenever you need to revoke access.")
+            .setMessage("Enter this 10-digit PIN at vudh1.github.io/velatv/remote/. This screen closes automatically when your phone connects. Only one controller can connect at a time.")
             .setView(code)
             .setPositiveButton("Done", (dialog, which) -> {})
-            .show();
+            .create();
+        remotePinDialog.setOnDismissListener(dialog -> remotePinDialog = null);
+        remotePinDialog.show();
     }
 
     private void generateRemotePin() {
@@ -723,18 +749,8 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public boolean remoteRevocationPending() {
             return VelaRemoteClient.get(MainActivity.this).revocationPending();
         }
-        @JavascriptInterface public boolean remoteHasPin() {
-            return VelaRemoteClient.get(MainActivity.this).currentPin().length() == 10;
-        }
         @JavascriptInterface public void pairWebRemote() {
             runOnUiThread(() -> generateRemotePin());
-        }
-        @JavascriptInterface public void showWebRemotePin() {
-            runOnUiThread(() -> {
-                String pin = VelaRemoteClient.get(MainActivity.this).currentPin();
-                if (pin.length() == 10) showRemotePin(pin);
-                else toast("Choose Regenerate PIN to create a TV-managed code.");
-            });
         }
         @JavascriptInterface public void rotateWebRemotePin() {
             runOnUiThread(() -> new AlertDialog.Builder(MainActivity.this)
@@ -752,6 +768,43 @@ public final class MainActivity extends Activity {
                 .setPositiveButton("Disable", (d, w) -> VelaRemoteClient.get(MainActivity.this)
                     .disable(message -> sendToJs("QH.remoteStatusReady(" + JSONObject.quote(message) + ")")))
                 .show());
+        }
+        @JavascriptInterface public boolean sonyIpControlEnabled() {
+            return VelaSonyIpControl.get(MainActivity.this).enabled();
+        }
+        @JavascriptInterface public void configureSonyIpControl() {
+            runOnUiThread(() -> {
+                EditText secret = new EditText(MainActivity.this);
+                secret.setSingleLine(true);
+                secret.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+                secret.setHint("8–20 character Sony Pre-Shared Key");
+                secret.setPadding(24, 18, 24, 18);
+                new AlertDialog.Builder(MainActivity.this)
+                    .setTitle("Sony native-app controls")
+                    .setMessage("Enter the key you created under Sony Settings → Network & Internet → Home network → IP control. Vela encrypts it on this TV. Sony's own IP-control protocol transmits the key over HTTP on this TV's local interface. Vela will test using one Up command.")
+                    .setView(secret)
+                    .setNegativeButton("Cancel", (d, w) -> {})
+                    .setPositiveButton("Save & test", (d, w) -> VelaSonyIpControl.get(MainActivity.this)
+                        .configure(secret.getText().toString(), message -> {
+                            secret.setText("");
+                            sendToJs("QH.remoteStatusReady(" + JSONObject.quote(message) + ")");
+                        }))
+                    .show();
+            });
+        }
+        @JavascriptInterface public void testSonyIpControl() {
+            VelaSonyIpControl.get(MainActivity.this).test(message ->
+                sendToJs("QH.remoteStatusReady(" + JSONObject.quote(message) + ")"));
+        }
+        @JavascriptInterface public void removeSonyIpControl() {
+            runOnUiThread(() -> new AlertDialog.Builder(MainActivity.this)
+                .setTitle("Remove Sony IP control?")
+                .setMessage("Delete the Sony key from Vela on this TV? The web remote can still control Vela Home and volume.")
+                .setNegativeButton("Cancel", (d, w) -> {})
+                .setPositiveButton("Remove", (d, w) -> {
+                    VelaSonyIpControl.get(MainActivity.this).disable();
+                    sendToJs("QH.remoteStatusReady('Sony IP control key removed')");
+                }).show());
         }
         @JavascriptInterface public boolean wakeProfilePromptEnabled() {
             return prefs.getBoolean("profile_prompt_enabled", true);

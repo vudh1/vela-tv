@@ -6,6 +6,7 @@ const SITE = 'https://vudh1.github.io';
 const LEASE_MS = 22_000;
 const TV_ONLINE_MS = 25_000;
 const UNCLAIMED_MS = 10 * 60_000;
+const RESUME_CHALLENGE_MS = 45_000;
 const MAX_FAILED = 5;
 const RATE_WINDOW_MS = 15 * 60_000;
 const KEYS = new Set(['up', 'down', 'left', 'right', 'select', 'back', 'home',
@@ -25,6 +26,23 @@ async function sha256(value) {
   const data = new TextEncoder().encode(value);
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', data)),
     b => b.toString(16).padStart(2, '0')).join('');
+}
+function validPublicKey(key) {
+  // The Worker stores only the controller's public key. Its non-extractable
+  // private key remains in the phone's WebCrypto/IndexedDB storage.
+  return !!key && typeof key === 'object' && !Array.isArray(key)
+    && key.kty === 'EC' && key.crv === 'P-256'
+    && typeof key.x === 'string' && /^[a-zA-Z0-9_-]{43}$/.test(key.x)
+    && typeof key.y === 'string' && /^[a-zA-Z0-9_-]{43}$/.test(key.y);
+}
+async function importPublicKey(jwk) {
+  return crypto.subtle.importKey('jwk',
+    { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y, ext: true },
+    { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+}
+function signatureBytes(hex) {
+  if (typeof hex !== 'string' || !/^[0-9a-f]{128}$/i.test(hex)) return null;
+  return Uint8Array.from(hex.match(/.{2}/g), h => parseInt(h, 16));
 }
 function sameString(a, b) {
   // No early return for mismatched lengths or characters.
@@ -91,7 +109,7 @@ export default {
     if (request.method === 'OPTIONS')
       return origin === SITE ? new Response(null, { status: 204, headers: cors })
         : json({ error: 'origin' }, 403);
-    if (!/^\/api\/(?:status|connect|heartbeat|command|release|tv\/(?:enroll|pin|poll|disable))$/.test(path))
+    if (!/^\/api\/(?:status|connect|challenge|resume|heartbeat|command|release|tv\/(?:enroll|pin|poll|disable))$/.test(path))
       return json({ error: 'not_found' }, 404, cors);
     const ip = request.headers.get('cf-connecting-ip');
     if (!ip) return json({ error: 'network_unavailable' }, 403, cors);
@@ -145,6 +163,8 @@ export class RemoteRoom {
       tvSeen: stored.tvSeen || 0, controllerHash: stored.controllerHash || '',
       controllerIp: stored.controllerIp || '', lease: stored.lease || 0,
       commands: stored.commands || [], lastCommandAt: stored.lastCommandAt || 0,
+      pairedKey: stored.pairedKey || null, pairedKeyId: stored.pairedKeyId || '',
+      challenges: stored.challenges || [],
       failures: stored.failures || {},
       globalFailures: stored.globalFailures || [] };
     // An unauthenticated first-time TV claim must not permanently squat on a
@@ -154,6 +174,7 @@ export class RemoteRoom {
       state.tvHash = ''; state.tvIp = ''; state.tvSeen = 0;
       state.pinSalt = ''; state.pinHash = ''; state.pendingUntil = 0;
       state.controllerHash = ''; state.controllerIp = ''; state.lease = 0;
+      state.pairedKey = null; state.pairedKeyId = ''; state.challenges = [];
       state.commands = [];
     }
     // Do not retain old attacker IP hashes forever in Durable Object storage.
@@ -168,6 +189,7 @@ export class RemoteRoom {
     const rateKey = await sha256(ip);
     const times = state.failures[rateKey] || [];
     state.globalFailures = state.globalFailures.filter(t => t > now - RATE_WINDOW_MS);
+    state.challenges = state.challenges.filter(ch => ch.expires > now).slice(-5);
     if (path === '/api/status')
       return json({ online, busy: active, sameNetwork });
 
@@ -205,8 +227,70 @@ export class RemoteRoom {
         await persist();
         return json({ error: 'incorrect_pin' }, 401);
       }
+      // Legacy clients may still pair using a PIN only, but modern clients
+      // register a public key for PIN-free return after sleep or tab restart.
+      let verifiedKey = null;
+      if (data.publicKey !== undefined) {
+        if (!validPublicKey(data.publicKey)) return json({ error: 'invalid_controller_key' }, 400);
+        try { await importPublicKey(data.publicKey); }
+        catch (_) { return json({ error: 'invalid_controller_key' }, 400); }
+        verifiedKey = { kty: 'EC', crv: 'P-256', x: data.publicKey.x, y: data.publicKey.y };
+      }
       delete state.failures[rateKey];
       state.pendingUntil = 0;
+      // Pairing codes authorize exactly one registration, not a permanent
+      // fallback credential after the lease has expired.
+      state.pinSalt = ''; state.pinHash = '';
+      const token = randomToken();
+      state.controllerHash = await sha256(token);
+      state.controllerIp = ip;
+      state.lease = now + LEASE_MS;
+      state.pairedKey = verifiedKey;
+      state.pairedKeyId = verifiedKey ? await sha256(verifiedKey.x + ':' + verifiedKey.y) : '';
+      state.challenges = [];
+      state.commands = [];
+      await persist();
+      return json({ token, leaseSeconds: LEASE_MS / 1000 });
+    }
+    if (path === '/api/challenge') {
+      if (!online) return json({ error: 'tv_offline' }, 503);
+      if (!sameNetwork) return json({ error: 'different_network' }, 403);
+      if (!state.pairedKey) return json({ error: 'pairing_required' }, 409);
+      if (times.length >= MAX_FAILED || state.globalFailures.length >= 40)
+        return json({ error: 'locked', retryAfterSeconds: 900 }, 429);
+      const challenge = randomToken();
+      state.challenges.push({ hash: await sha256(challenge), ipHash: rateKey,
+        expires: now + RESUME_CHALLENGE_MS });
+      state.challenges = state.challenges.slice(-5);
+      await persist();
+      return json({ challenge, keyId: state.pairedKeyId,
+        expiresSeconds: RESUME_CHALLENGE_MS / 1000 });
+    }
+    if (path === '/api/resume') {
+      if (!online) return json({ error: 'tv_offline' }, 503);
+      if (!sameNetwork) return json({ error: 'different_network' }, 403);
+      if (!state.pairedKey) return json({ error: 'pairing_required' }, 409);
+      if (times.length >= MAX_FAILED || state.globalFailures.length >= 40)
+        return json({ error: 'locked', retryAfterSeconds: 900 }, 429);
+      const bytes = signatureBytes(data.signature);
+      const hash = typeof data.challenge === 'string' && /^[a-f0-9]{64}$/i.test(data.challenge)
+        ? await sha256(data.challenge) : '';
+      const index = state.challenges.findIndex(ch => ch.ipHash === rateKey && sameString(ch.hash, hash));
+      if (!bytes || index < 0) return json({ error: 'session_expired' }, 401);
+      // Single-use, short-lived challenge. A stolen signature cannot be replayed.
+      state.challenges.splice(index, 1);
+      let verified = false;
+      try {
+        const key = await importPublicKey(state.pairedKey);
+        verified = await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' },
+          key, bytes, new TextEncoder().encode('vela-remote-v1:' + data.challenge));
+      } catch (_) { /* Treat malformed signature as authentication failure. */ }
+      if (!verified) {
+        state.failures[rateKey] = [...times, now]; state.globalFailures.push(now);
+        await persist();
+        return json({ error: 'session_expired' }, 401);
+      }
+      delete state.failures[rateKey];
       const token = randomToken();
       state.controllerHash = await sha256(token);
       state.controllerIp = ip;
@@ -227,6 +311,7 @@ export class RemoteRoom {
         if (state.pendingUntil) state.pendingUntil = now + UNCLAIMED_MS;
         // Regeneration immediately invalidates previously paired controllers.
         state.controllerHash = ''; state.controllerIp = ''; state.lease = 0;
+        state.pairedKey = null; state.pairedKeyId = ''; state.challenges = [];
         state.commands = []; state.tvIp = ip; state.tvSeen = now;
         await persist();
         return json({ ok: true });
@@ -238,6 +323,7 @@ export class RemoteRoom {
       if (!sameHomeNetwork(state.tvIp, ip)) {
         // Network changed; invalidate the old controller's authorization.
         state.controllerHash = ''; state.lease = 0; state.commands = [];
+        state.pairedKey = null; state.pairedKeyId = ''; state.challenges = [];
       }
       state.tvIp = ip;
       state.tvSeen = now;
@@ -254,6 +340,7 @@ export class RemoteRoom {
       return json({ error: 'session_expired' }, 401);
     if (path === '/api/release') {
       state.controllerHash = ''; state.lease = 0; state.commands = [];
+      state.pairedKey = null; state.pairedKeyId = ''; state.challenges = [];
       await persist();
       return json({ ok: true });
     }

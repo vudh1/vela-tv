@@ -69,6 +69,10 @@ assert.ok(!connected.includes('data-act="calendarSettings"'), 'connected view do
 assert.ok(connected.includes('focusable'), 'events are D-pad navigable');
 assert.ok(connected.includes('data-act="filterCalendar"'),'category filters are keyboard navigable');
 assert.ok(connected.includes('Oct 24'),'events show a date even on the current day');
+context.calEvents=[event(14*24*60,'Game in two weeks'),event(35*24*60,'Game in five weeks')];
+const monthView=context.calendarEventList();
+assert.ok(monthView.includes('Game in two weeks'),'fixtures beyond the old seven-day window appear');
+assert.ok(!monthView.includes('Game in five weeks'),'calendar remains bounded to 30 days');
 const playing={...event(40,'Pickup football'),kind:'play',uid:'play-1',location:'Jefferson Park Playfield',description:'RSVP to play'};
 const watching={...event(60,'Sounders match'),kind:'watch',uid:'watch-1',description:'Watching · professional sports'};
 const other={...event(90,'Family birthday'),kind:'other',uid:'other-1',description:'Bring cake'};

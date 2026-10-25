@@ -25,7 +25,7 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
-/** TV-initiated HTTPS relay. The TV generates the PIN and encrypts it at rest;
+/** TV-initiated HTTPS relay. The TV generates a one-time-displayed PIN;
  * Cloudflare holds a salted hash, not a PIN copied from GitHub Secrets.
  * A controller is granted by Cloudflare only after the right PIN, matching
  * public-IP exit, and an exclusive lease. Keys are accepted only from Cloudflare.
@@ -44,6 +44,9 @@ final class VelaRemoteClient {
     private VelaRemoteClient(Context c) {
         context = c.getApplicationContext();
         prefs = context.getSharedPreferences("vela-remote", Context.MODE_PRIVATE);
+        // Migration: old builds retained a reversible PIN for "Show PIN".
+        // The owner now generates a fresh PIN if pairing another phone.
+        if (prefs.contains("pin_encrypted")) prefs.edit().remove("pin_encrypted").apply();
     }
     static synchronized VelaRemoteClient get(Context context) {
         if (instance == null) instance = new VelaRemoteClient(context);
@@ -51,7 +54,6 @@ final class VelaRemoteClient {
     }
     boolean enabled() { return prefs.getBoolean("enabled", false) && token().length() == 64; }
     boolean revocationPending() { return !prefs.getBoolean("enabled", false) && token().length() == 64; }
-    String currentPin() { return enabled() ? decrypt(prefs.getString("pin_encrypted", "")) : ""; }
     private String token() {
         if (cachedToken != null) return cachedToken;
         cachedToken = decrypt(prefs.getString("token_encrypted", ""));
@@ -66,7 +68,7 @@ final class VelaRemoteClient {
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).setKeySize(256).build());
         return generator.generateKey();
     }
-    private static String encrypt(String plain) throws Exception {
+    static String encrypt(String plain) throws Exception {
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE, encryptionKey());
         byte[] iv = cipher.getIV(), bytes = cipher.doFinal(plain.getBytes(StandardCharsets.UTF_8));
@@ -75,7 +77,7 @@ final class VelaRemoteClient {
         System.arraycopy(bytes, 0, all, iv.length, bytes.length);
         return Base64.encodeToString(all, Base64.NO_WRAP);
     }
-    private static String decrypt(String stored) {
+    static String decrypt(String stored) {
         if (stored == null || stored.isEmpty()) return "";
         try {
             byte[] bytes = Base64.decode(stored, Base64.DEFAULT);
@@ -117,7 +119,6 @@ final class VelaRemoteClient {
                 // Encrypt before enrollment to avoid an unreachable enrollment
                 // if local secure storage is unavailable.
                 String sealedToken = encrypt(deviceToken);
-                String sealedPin = encrypt(pin);
                 JSONObject payload = new JSONObject();
                 payload.put("pin", pin);
                 if (!rotating) payload.put("tvToken", deviceToken);
@@ -125,7 +126,7 @@ final class VelaRemoteClient {
                     rotating ? deviceToken : "", payload);
                 if (!answer.optBoolean("ok")) throw new Exception("Enrollment rejected");
                 prefs.edit().putString("token_encrypted", sealedToken)
-                    .putString("pin_encrypted", sealedPin).putBoolean("enabled", true).apply();
+                    .remove("pin_encrypted").putBoolean("enabled", true).apply();
                 cachedToken = deviceToken;
                 start();
                 callback.done(pin, "");
@@ -164,6 +165,10 @@ final class VelaRemoteClient {
                 long next = 7_000; // idle: ~12k requests/day, below free-tier limits
                 try {
                     JSONObject answer = post("/api/tv/poll", token(), new JSONObject());
+                    // Check on every active poll: the owner might reopen the
+                    // PIN dialog while an already-paired controller is online.
+                    if (answer.optBoolean("active"))
+                        MainActivity.remoteControllerConnected();
                     JSONArray commands = answer.optJSONArray("commands");
                     if (commands != null) for (int i = 0; i < commands.length() && i < 16; i++) {
                         String key = commands.optJSONObject(i) == null ? "" : commands.optJSONObject(i).optString("key");
@@ -202,22 +207,26 @@ final class VelaRemoteClient {
                 AudioManager audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
                 if (audio != null) {
                     try {
-                        if ("mute".equals(key)) audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, 0);
-                        else audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
-                            "volume_up".equals(key) ? AudioManager.ADJUST_RAISE : AudioManager.ADJUST_LOWER, 0);
+                        // Use Android's chosen output volume instead of forcing
+                        // STREAM_MUSIC. Fixed-volume/HDMI-CEC outputs are still
+                        // controlled by Sony or the connected soundbar.
+                        if (!audio.isVolumeFixed()) {
+                            int direction = "mute".equals(key) ? AudioManager.ADJUST_TOGGLE_MUTE :
+                                "volume_up".equals(key) ? AudioManager.ADJUST_RAISE : AudioManager.ADJUST_LOWER;
+                            audio.adjustVolume(direction, AudioManager.FLAG_SHOW_UI);
+                        }
                     } catch (SecurityException ignored) { }
                 }
                 return;
             }
             if ("play_pause".equals(key)) {
-                AudioManager audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-                if (audio != null) {
-                    try {
-                        long now = android.os.SystemClock.uptimeMillis();
-                        audio.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, 0));
-                        audio.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, 0));
-                    } catch (SecurityException ignored) { }
+                // Once a streaming app owns focus, Sony IRCC offers distinct
+                // Play and Pause commands that Android media dispatch may ignore.
+                if (!MainActivity.isRemoteHomeVisible() && VelaSonyIpControl.get(context).enabled()) {
+                    VelaSonyIpControl.get(context).send(key, () -> androidPlayPause());
+                    return;
                 }
+                androidPlayPause();
                 return;
             }
             if ("home".equals(key)) {
@@ -229,9 +238,21 @@ final class VelaRemoteClient {
                 return;
             }
             if (MainActivity.acceptRemoteKey(key)) return;
-            VelaRemoteAccessibilityService service = VelaRemoteAccessibilityService.active();
-            if (service != null) service.applyKey(key);
+            VelaSonyIpControl.get(context).send(key, () -> {
+                VelaRemoteAccessibilityService service = VelaRemoteAccessibilityService.active();
+                if (service != null) service.applyKey(key);
+            });
         });
+    }
+    private void androidPlayPause() {
+        AudioManager audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        if (audio != null) {
+            try {
+                long now = android.os.SystemClock.uptimeMillis();
+                audio.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, 0));
+                audio.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, 0));
+            } catch (SecurityException ignored) { }
+        }
     }
     private JSONObject post(String path, String bearer, JSONObject body) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(API + path).openConnection();
