@@ -57,7 +57,6 @@ public final class VelaRemoteAccessibilityService extends AccessibilityService {
                         // not standard input focus. Both are best-effort only.
                         if (!next.performAction(AccessibilityNodeInfo.ACTION_FOCUS))
                             next.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS);
-                        next.performAction(AccessibilityNodeInfo.ACTION_SHOW_ON_SCREEN);
                     } finally { next.recycle(); }
                 } else {
                     // When the card is at a list boundary, permit scrolling
