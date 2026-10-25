@@ -21,7 +21,7 @@ var wallpapers=[
  {name:'Amber Dunes',src:'wallpapers/amber-dunes.webp',thumb:'wallpapers/thumb-amber-dunes.webp'},
  {name:'Lavender Bay',src:'wallpapers/lavender-bay.webp',thumb:'wallpapers/thumb-lavender-bay.webp'}
 ];
-var screen='',cursor=0,controls=[],geometry=[],listDirty=true,iconCache={},pendingIcons={};
+var screen='',cursor=0,controls=[],geometry=[],listDirty=true,focusedControl=null,iconCache={},pendingIcons={};
 var contextAppId='',contextFrom='',recentMax=5;
 var lastCatalog=0,clockValue='',customPhoto='',toastTimer=null,clockTimer=null,updateStatus=null;
 var $=function(s){return document.querySelector(s);};
@@ -147,8 +147,8 @@ function activeList(){if(!listDirty)return;var root=screen?$('#overlay'):$('.pag
 function labelSelected(el){var label=$('#focusLabel');if(screen||!el||!el.classList.contains('app-card')){label.classList.remove('visible');return;}
  var a=byId(el.getAttribute('data-id'));if(!a){label.classList.remove('visible');return;}var g=geometry[cursor];if(!g)return;
  label.textContent=a.name;label.style.left=g.x+'px';label.style.top=(g.top-39)+'px';label.classList.add('visible');}
-function select(i){activeList();if(!controls.length)return;var old=controls[cursor];cursor=Math.max(0,Math.min(controls.length-1,i));if(old){old.classList.remove('selected');old.setAttribute('tabindex','-1');}
- var el=controls[cursor];el.classList.add('selected');el.setAttribute('tabindex','0');if(document.activeElement!==el)el.focus({preventScroll:true});
+function select(i){activeList();if(!controls.length)return;var old=focusedControl;cursor=Math.max(0,Math.min(controls.length-1,i));if(old){old.classList.remove('selected');old.setAttribute('tabindex','-1');}
+ var el=controls[cursor];focusedControl=el;el.classList.add('selected');el.setAttribute('tabindex','0');if(document.activeElement!==el)el.focus({preventScroll:true});
  if(screen){var host=$('#panelContent'),r=el.getBoundingClientRect(),box=host.getBoundingClientRect();if(host.contains(el)&&(r.top<box.top+10||r.bottom>box.bottom-12)){el.scrollIntoView({block:'nearest',inline:'nearest',behavior:'auto'});listDirty=true;}}
  labelSelected(el);}
 function row(act,title,right,sub){return '<button class="panel-row focusable" data-act="'+act+'"><span><span class="row-title">'+esc(title)+'</span><span class="row-sub">'+esc(sub||'')+'</span></span><span class="row-right">'+esc(right||'')+' <span class="chevron">›</span></span></button>';}
@@ -230,12 +230,13 @@ function renderPanel(type,focusKey,retainScroll){var host=$('#panelContent'),scr
  }
  else if(type==='recovery'){title='About & recovery';subtitle='The original launcher stays installed and available.';var redirected=false;try{redirected=bridge?bridge.redirectEnabled():false;}catch(e){}
  body='<p class="library-footnote">Try pressing Home twice quickly to show original Sony Home. This shortcut depends on Sony firmware and may not work. You can always use Open Sony Home below.</p>'+row('sony','Open Sony Home','Open','Temporarily pauses redirect')+row('redirect','Home redirect',redirected?'On':'Off','Accessibility override')+row('accessibility','Accessibility service','Open','Recovery if Home shortcut fails');}
- else if(type==='updates'){title='Updates';subtitle='New Vela versions from the production branch.';var s=updateStatus;
- body='<div class="version-meta">'+esc(s&&s.current?'Installed: '+s.current:'Installed version: 2.4')+'</div>'+
- '<div class="version-meta">'+esc(s&&s.status?s.status:'Updates are available after your GitHub releases are configured.')+'</div>'+
- row('checkUpdates','Check for updates','Check','Fetch published release information')+
- (s&&s.available?row('installUpdate','Download & install','Install','Android will ask you to approve installation'):'')+
- row('autoUpdates','Automatic daily checks',s&&s.auto===false?'Off':'On','Checks in the background; installs are never silent');}
+ else if(type==='updates'){title='Updates';subtitle='Check, download and approve new Vela versions.';var s=updateStatus;
+ body='<div class="version-meta">'+esc(s&&s.current?'Installed: '+s.current:'Installed version: unknown')+'</div>'+
+ '<div class="version-meta">'+esc(s&&s.status?s.status:'Open Check for updates to retrieve the latest release.')+'</div>'+
+ row('checkUpdates','Check now','Check','Check GitHub Releases for the newest signed APK')+
+ (s&&s.available?row('installUpdate',s.downloaded?'Install downloaded update':'Download & install',s.downloaded?'Install':'Download','Android must approve the installation'):'')+
+ row('autoUpdates','Automatic daily checks',s&&s.auto===false?'Off':'On','Check when Vela is open, once per day')+
+ row('autoDownload','Download updates automatically',s&&s.autoDownload===false?'Off':'On','Save and SHA-256 verify new APKs in the background; installation requires approval');}
  $('#panelTitle').textContent=title;$('#panelDescription').textContent=subtitle;host.innerHTML=body;host.scrollTop=scrollTop;
  listDirty=true;activeList();var focusIndex=0;if(focusKey){for(var i=0;i<controls.length;i++){var b=controls[i];if(b.getAttribute('data-act')===focusKey.act&&(focusKey.id===undefined||b.getAttribute('data-id')===focusKey.id)&&(!focusKey.dir||b.getAttribute('data-dir')===focusKey.dir)){focusIndex=i;break;}}}
  if(!focusKey){focusIndex=type==='pairing'?0:controls.findIndex(function(b){return b.getAttribute('data-act')!=='close';});if(focusIndex<0)focusIndex=0;}select(focusIndex);if(type==='pairing')pairingTick();
@@ -297,6 +298,7 @@ function action(name,id,dir){
  if(name==='checkUpdates'){if(bridge&&bridge.checkUpdates)bridge.checkUpdates();else toast('Publish your GitHub release first');return;}
  if(name==='installUpdate'){if(bridge&&bridge.installUpdate)bridge.installUpdate();return;}
  if(name==='autoUpdates'){if(bridge&&bridge.setAutoUpdates){bridge.setAutoUpdates(!!updateStatus&&!updateStatus.auto);renderPanel('updates',{act:'autoUpdates'},true);}return;}
+ if(name==='autoDownload'){if(bridge&&bridge.setAutoDownload){bridge.setAutoDownload(!!updateStatus&&!updateStatus.autoDownload);renderPanel('updates',{act:'autoDownload'},true);}return;}
 }
 function trigger(){activeList();var b=controls[cursor];if(b)action(b.getAttribute('data-act'),b.getAttribute('data-id')||'',b.getAttribute('data-dir')||'');}
 function remote(key){if(key==='longselect'){activeList();var selected=controls[cursor];if(selected&&selected.classList.contains('app-card'))openAppMenu(selected.getAttribute('data-id'));return;}
@@ -355,7 +357,7 @@ function renderCalendarBody(){if(screen!=='calendar')return;var host=$('#panelCo
  host.scrollTop=old;listDirty=true;activeList();if(controls.length)select(Math.min(cursor,controls.length-1));}
 function wallpaperReady(uri){customPhoto=uri&&uri.indexOf('data:image/jpeg;base64,')===0?uri:'';setScenery();}
 function refreshWallpaper(){if(bridge&&bridge.requestWallpaper)bridge.requestWallpaper();}
-function receiveUpdateStatus(json){try{updateStatus=typeof json==='string'?JSON.parse(json):json;if(screen==='updates')renderPanel('updates',null,true);}catch(e){}}
+function receiveUpdateStatus(json){try{updateStatus=typeof json==='string'?JSON.parse(json):json;if(screen==='updates'){var key=focusedControl?{act:focusedControl.getAttribute('data-act'),id:focusedControl.getAttribute('data-id')||undefined,dir:focusedControl.getAttribute('data-dir')||undefined}:null;renderPanel('updates',key,true);}}catch(e){}}
 function pause(){hideVolume();if(calTimer){clearInterval(calTimer);calTimer=null;}if(rotationTimer){clearTimeout(rotationTimer);rotationTimer=null;}if(clockTimer){clearTimeout(clockTimer);clockTimer=null;}}
 function resume(){rescheduleClock();scheduleRotation();if(calTimer)clearInterval(calTimer);calTimer=setInterval(function(){updateCalendarView();if(!preview&&profileId!=='guest'&&Date.now()-calendarChecked>15*60000)requestCalendar(false);},60000);updateCalendarView();if(profileId!=='guest'&&Date.now()-calendarChecked>15*60000)requestCalendar(false);if(!preview&&Date.now()-lastCatalog>15*60000)refreshApps();}
 function init(){loadVolumePrefs();initProfiles();rescheduleClock();calTimer=setInterval(function(){updateCalendarView();if(!preview&&profileId!=='guest'&&Date.now()-calendarChecked>15*60000)requestCalendar(false);},60000);if(!preview&&bridge&&bridge.getCachedApps){try{var cached=bridge.getCachedApps();if(cached){receiveApps(cached);lastCatalog=Number(bridge.getCachedCatalogAt?bridge.getCachedCatalogAt():0)||0;}}catch(e){}}
