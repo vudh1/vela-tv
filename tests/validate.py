@@ -297,7 +297,8 @@ assert 'ACTION_SCROLL_FORWARD' in navigation and 'ACTION_SCROLL_BACKWARD' in nav
 assert '<body class="booting">' in (asset/'index.html').read_text()
 assert 'body.booting .scene,body.booting .page{visibility:hidden}' in css
 assert '.overlay.startup-panel{z-index:80;background:radial-gradient(' in css
-assert '#050607 100%' in css and 'border:1px solid rgba(255,255,255,.145)' in css
+assert '#050607 100%' in css and 'overflow-y:auto;contain:none;border:0;' in css
+assert 'background:transparent;box-shadow:none}' in css
 assert 'function uiTitle(text)' in js and "esc(uiTitle(title))" in js
 assert "row('lifeSettings','Daily Life'" in js and "title='Daily Life'" in js
 assert 'width:100vw;min-width:0;height:100vh' in css

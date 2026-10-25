@@ -25,8 +25,12 @@ assert.match(context.row('test', 'Home favorites', 'Edit', 'Original subtitle'),
 assert.ok(source.includes("type==='appMenu'||type==='calendarSettings'"), 'User app/profile names retain their original capitalization');
 
 assert.ok(css.includes('.overlay.startup-panel{z-index:80;background:radial-gradient('), 'Profile gate has opaque dark background');
-assert.ok(css.includes('background:linear-gradient(143deg,rgba(255,255,255,.095)'), 'Profile shelf has layered translucent glass');
+assert.ok(css.includes('overflow-y:auto;contain:none;border:0;\n background:transparent;box-shadow:none}'), 'Profile group has no enclosing border or shelf');
+assert.ok(css.includes('background:rgba(255,255,255,.016);border:0;outline:0;'), 'Inactive profile tiles have no borders');
 assert.ok(css.includes('.startup-avatar-card.selected,.startup-avatar-card:focus'), 'Focus remains visible with remote navigation');
+assert.ok(css.includes('0 0 38px rgba(181,235,222,.16)') && css.includes('0 0 42px rgba(176,237,225,.27)'), 'Selection is highlighted by light and glow');
+assert.ok(!/\.startup-avatar-card\.selected[^}]*border-color/.test(css), 'Selection never draws a focus border');
+assert.ok(!/\.startup-avatar-card\.selected \.startup-avatar[^}]*border-color/.test(css), 'Avatar selection never draws a border');
 assert.ok(!css.includes('backdrop-filter:'), 'Do not rely on TV GPU backdrop blur');
 assert.ok(!css.includes('background:linear-gradient(155deg,#608a88,#315252)'), 'Old colored profile blocks removed');
 console.log('PASS cinematic glass profile chooser, remote focus and consistent Settings Title Case');
