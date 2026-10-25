@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** Optional Sony IRCC-IP input in streaming apps on THIS TV.
  * Only loopback or the Android TV's own active-interface IPv4 is contacted.
@@ -38,6 +39,7 @@ final class VelaSonyIpControl {
         return worker;
     });
     private final AtomicInteger queued = new AtomicInteger();
+    private final AtomicLong configurationEpoch = new AtomicLong();
     private volatile String lastHost = "";
     private boolean pauseNext = true;
 
@@ -63,12 +65,14 @@ final class VelaSonyIpControl {
             ui.post(() -> callback.done("Use an 8–20 character printable ASCII key (no spaces)."));
             return;
         }
+        long epoch = configurationEpoch.incrementAndGet();
         io.execute(() -> {
             try {
                 // Sending Up is an intentional, low-impact real IRCC test;
                 // a public Sony discovery API can succeed even with a wrong PSK.
                 String host = deliver("up", psk);
                 String sealed = VelaRemoteClient.encrypt(psk);
+                if (configurationEpoch.get() != epoch) return; // Removed during test.
                 prefs.edit().putString("psk_encrypted", sealed).putBoolean("enabled", true).apply();
                 lastHost = host;
                 pauseNext = true;
@@ -93,6 +97,8 @@ final class VelaSonyIpControl {
     }
 
     void disable() {
+        // A pending Save & test must not re-enable a key after explicit removal.
+        configurationEpoch.incrementAndGet();
         // Pending jobs re-check enabled() before using the stored key.
         prefs.edit().putBoolean("enabled", false).remove("psk_encrypted").apply();
         lastHost = "";
@@ -113,7 +119,7 @@ final class VelaSonyIpControl {
         }
         io.execute(() -> {
             try {
-                if (!enabled()) { ui.post(fallback); return; }
+                if (!enabled() || !VelaRemoteClient.get(context).enabled()) { ui.post(fallback); return; }
                 String psk = VelaRemoteClient.decrypt(prefs.getString("psk_encrypted", ""));
                 String code = SonyIrccMessage.code(key, pauseNext);
                 lastHost = deliverCode(code, psk);
