@@ -176,7 +176,8 @@ assert 'setWakeProfilePromptEnabled(boolean enabled)' in main
 assert 'QH && QH.checkWakeProfilePrompt' in main
 assert 'function checkWakeProfilePrompt()' in js
 assert 'checkWakeProfilePrompt:checkWakeProfilePrompt' in js
-assert "else if(type==='startupProfiles')" in js and "'Who is watching?'" in js
+assert "else if(type==='startupProfiles')" in js and 'Who\'s watching?' in js
+assert 'startup-avatar-grid' in js and 'startup-footer' in js
 assert 'function goBack()' in js and "else if(key==='left'&&screen)goBack()" in js
 for screen in ['homeSettings','lifeSettings','appsSettings','deviceSettings','appSort','homeApps','screensaverSettingsPanel']:
     assert "type==='"+screen+"'" in js
@@ -287,9 +288,10 @@ assert 'ACTION_SCROLL_FORWARD' in navigation and 'ACTION_SCROLL_BACKWARD' in nav
 # A standby profile choice must never expose Home behind a translucent drawer.
 assert '<body class="booting">' in (asset/'index.html').read_text()
 assert 'body.booting .scene,body.booting .page{visibility:hidden}' in css
-assert '.overlay.startup-panel{z-index:80;background:#1c292d' in css
+assert '.overlay.startup-panel{z-index:80;background:#1b2328' in css
 assert 'width:100vw;min-width:0;height:100vh' in css
 assert 'startup-avatar-grid' in js and 'startup-profile-name' in js
+assert 'startup-footer' in css and 'background:transparent;border:0;border-radius:0' in css
 assert "if(screen==='startupProfiles')return;" in js
 assert "document.body.classList.remove('booting')" in js
 assert "document.body.classList.remove('booting');listDirty=true;activeList()" in js
@@ -306,6 +308,14 @@ codes=(r/'app/src/main/java/com/danielvu/quiethome/SonyIrccMessage.java').read_t
 assert "row('sonyIpSetup'" in js and 'configureSonyIpControl' in main
 assert 'sonyIpControlEnabled' in main and 'removeSonyIpControl' in main
 assert 'VelaSonyIpControl.get(context).send(key' in remote_native
+assert 'case "settings":' in remote_native
+assert 'openRemoteSettings(Context context)' in main
+assert "if(key==='settings')" in js
+assert 'data-key="settings"' in (r/'remote/index.html').read_text()
+assert "'settings'" in remote_worker and 'readyUntil' in remote_worker
+assert 'readyUntil > now' in remote_worker and 'next = answer.optBoolean("fast") ? 180 : 1_500' in remote_native
+for code in ['volume_up', 'volume_down', 'mute']:
+    assert 'case "'+code+'"' in codes
 assert 'VelaRemoteClient.encrypt(psk)' in sony and 'psk_encrypted' in sony
 assert 'X-Auth-PSK' in sony and 'setInstanceFollowRedirects(false)' in sony
 assert '127.0.0.1' in sony and 'ip.isSiteLocalAddress()' in sony
@@ -316,3 +326,29 @@ assert 'sonyIpSetup' not in remote_js and 'X-Auth-PSK' not in remote_js+remote_w
 assert 'android.permission.ACCESS_NETWORK_STATE' in ET.tostring(m,encoding='unicode')
 assert 'usesCleartextTraffic' in ET.tostring(m,encoding='unicode')
 print('PASS Sony on-device PSK isolation, restricted HTTP hosts, opt-in IRCC and offline fallback')
+
+# TV utilities: explicit Sony input/standby commands and non-password remote
+# typing. ECDH private material must never enter the public remote or Worker.
+mobile=(r/'remote/index.html').read_text()
+text_crypto=(r/'app/src/main/java/com/danielvu/quiethome/VelaRemoteText.java').read_text()
+assert 'Apps & Activity' in js and 'Device & Support' in js and 'Home & Profiles' in js
+assert 'Apps & activity' not in js and 'Device & support' not in js
+assert 'data-key="hdmi1"' in mobile and 'data-key="hdmi4"' in mobile
+assert 'id="wifiButton"' in mobile and 'id="powerOffButton"' in mobile
+assert 'id="remoteText"' in mobile and 'id="textForm"' in mobile
+assert 'id="deviceToggle"' in mobile and 'id="keyboardToggle"' in mobile
+assert 'openRemoteWifiSettings(Context context)' in main and 'Settings.ACTION_WIFI_SETTINGS' in main
+assert 'case "power_off"' in codes and 'case "hdmi4"' in codes and 'case "input"' in codes
+assert "window.confirm('Put Sony TV into standby?" in remote_js
+assert "window.confirm('Open Wi-Fi settings" in remote_js
+assert 'encryptText(value, state.textPublicKey)' in remote_js
+assert "'/api/command', { key: 'type_text', payload }" in remote_js
+assert 'KeyAgreement.getInstance("ECDH")' in text_crypto
+assert 'VelaRemoteClient.encrypt(' in text_crypto and 'AES/GCM/NoPadding' in text_crypto
+assert 'field.isEditable()' in navigation and 'field.isPassword()' in navigation
+assert 'ACTION_SET_TEXT' in navigation
+assert "data.key === 'type_text'" in remote_worker and 'textPublicKey' in remote_worker
+assert 'textPublicKey: state.textPublicKey' in remote_worker
+assert 'data.text ' not in remote_worker and 'plainText' not in remote_worker
+assert (r/'remote/ux.css').exists() and 'href="ux.css"' in mobile
+print('PASS TV source/standby/Wi-Fi and end-to-end encrypted focused text entry')

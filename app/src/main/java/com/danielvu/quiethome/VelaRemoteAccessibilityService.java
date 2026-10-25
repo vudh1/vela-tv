@@ -1,6 +1,7 @@
 package com.danielvu.quiethome;
 
 import android.accessibilityservice.AccessibilityService;
+import android.os.Bundle;
 import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
@@ -20,6 +21,25 @@ public final class VelaRemoteAccessibilityService extends AccessibilityService {
     @Override public void onAccessibilityEvent(AccessibilityEvent event) { }
     @Override public void onInterrupt() { }
     @Override public void onDestroy() { if (current == this) current = null; super.onDestroy(); }
+    /** Only an editable, currently focused, non-password node can receive text.
+     * No screen contents, existing text, or field labels are read or transmitted. */
+    void applyText(String text) {
+        if (text == null || text.length() > 160) return;
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return;
+        try {
+            AccessibilityNodeInfo field = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+            if (field == null) field = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY);
+            if (field == null) return;
+            try {
+                if (!field.isEditable() || field.isPassword()
+                    || (field.getActions() & AccessibilityNodeInfo.ACTION_SET_TEXT) == 0) return;
+                Bundle arguments = new Bundle();
+                arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text);
+                field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments);
+            } finally { field.recycle(); }
+        } finally { root.recycle(); }
+    }
     void applyKey(String key) {
         if ("back".equals(key)) { performGlobalAction(GLOBAL_ACTION_BACK); return; }
         AccessibilityNodeInfo root = getRootInActiveWindow();

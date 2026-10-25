@@ -35,6 +35,7 @@ final class VelaRemoteClient {
     private static final String KEY_ALIAS = "VelaRemoteCredential_v1";
     private static volatile VelaRemoteClient instance;
     private final Context context;
+    private final VelaRemoteText secureText;
     private final SharedPreferences prefs;
     private volatile boolean polling;
     private volatile long generation;
@@ -43,6 +44,7 @@ final class VelaRemoteClient {
 
     private VelaRemoteClient(Context c) {
         context = c.getApplicationContext();
+        secureText = new VelaRemoteText(context);
         prefs = context.getSharedPreferences("vela-remote", Context.MODE_PRIVATE);
         // Migration: old builds retained a reversible PIN for "Show PIN".
         // The owner now generates a fresh PIN if pairing another phone.
@@ -164,7 +166,10 @@ final class VelaRemoteClient {
             while (polling && generation == epoch && enabled()) {
                 long next = 7_000; // idle: ~12k requests/day, below free-tier limits
                 try {
-                    JSONObject answer = post("/api/tv/poll", token(), new JSONObject());
+                    JSONObject poll = new JSONObject();
+                    String textPublicKey = secureText.publicKey();
+                    if (!textPublicKey.isEmpty()) poll.put("textPublicKey", textPublicKey);
+                    JSONObject answer = post("/api/tv/poll", token(), poll);
                     // Check on every active poll: the owner might reopen the
                     // PIN dialog while an already-paired controller is online.
                     if (answer.optBoolean("active"))
@@ -172,11 +177,17 @@ final class VelaRemoteClient {
                     JSONArray commands = answer.optJSONArray("commands");
                     if (commands != null) for (int i = 0; i < commands.length() && i < 16; i++) {
                         String key = commands.optJSONObject(i) == null ? "" : commands.optJSONObject(i).optString("key");
-                        if (allowed(key)) handleKey(key);
+                        if ("type_text".equals(key)) {
+                            String plain = secureText.decrypt(commands.optJSONObject(i).optJSONObject("payload"));
+                            if (plain != null) handleText(plain);
+                        } else if (allowed(key)) handleKey(key);
                     }
                     // Full speed briefly after an input, economical otherwise.
                     if (answer.optBoolean("active"))
-                        next = answer.optBoolean("fast") ? 400 : 1_500;
+                        // Low latency only during a recent remote interaction
+                        // or when the phone has just opened the controller.
+                        // Idle clients keep the free-tier-friendly cadence.
+                        next = answer.optBoolean("fast") ? 180 : 1_500;
                 } catch (Exception ex) {
                     if ("Remote HTTP 401".equals(ex.getMessage())) {
                         // An unconfirmed pairing may have expired, or the TV
@@ -197,26 +208,43 @@ final class VelaRemoteClient {
         switch (key) {
             case "up": case "down": case "left": case "right": case "select":
             case "back": case "home": case "volume_up": case "volume_down":
-            case "mute": case "play_pause": return true;
+            case "mute": case "play_pause": case "settings":
+            case "wifi_settings": case "power_off": case "input":
+            case "hdmi1": case "hdmi2": case "hdmi3": case "hdmi4": return true;
             default: return false;
         }
+    }
+    private void handleText(String text) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            VelaRemoteAccessibilityService service = VelaRemoteAccessibilityService.active();
+            if (service != null) service.applyText(text);
+        });
     }
     private void handleKey(String key) {
         new Handler(Looper.getMainLooper()).post(() -> {
             if ("volume_up".equals(key) || "volume_down".equals(key) || "mute".equals(key)) {
-                AudioManager audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-                if (audio != null) {
-                    try {
-                        // Use Android's chosen output volume instead of forcing
-                        // STREAM_MUSIC. Fixed-volume/HDMI-CEC outputs are still
-                        // controlled by Sony or the connected soundbar.
-                        if (!audio.isVolumeFixed()) {
-                            int direction = "mute".equals(key) ? AudioManager.ADJUST_TOGGLE_MUTE :
-                                "volume_up".equals(key) ? AudioManager.ADJUST_RAISE : AudioManager.ADJUST_LOWER;
-                            audio.adjustVolume(direction, AudioManager.FLAG_SHOW_UI);
-                        }
-                    } catch (SecurityException ignored) { }
-                }
+                // The Sony remote protocol traverses the TV's native ARC/CEC
+                // audio path and may display its real indicator. Only use
+                // Android volume as fallback; never apply both (double step).
+                VelaSonyIpControl.get(context).send(key, () -> androidVolume(key));
+                return;
+            }
+            if ("settings".equals(key)) {
+                MainActivity.openRemoteSettings(context);
+                return;
+            }
+            if ("wifi_settings".equals(key)) {
+                MainActivity.openRemoteWifiSettings(context);
+                return;
+            }
+            if ("power_off".equals(key) || "input".equals(key) || key.startsWith("hdmi")) {
+                // Remote device controls are deliberately unavailable without
+                // an owner-configured Sony key. Never pretend an action worked.
+                VelaSonyIpControl sony = VelaSonyIpControl.get(context);
+                if (sony.enabled()) sony.send(key, () ->
+                    android.widget.Toast.makeText(context, "Sony TV control unavailable. Check Vela Settings.", android.widget.Toast.LENGTH_SHORT).show());
+                else android.widget.Toast.makeText(context,
+                    "Set up Sony IP control in Vela Settings first.", android.widget.Toast.LENGTH_SHORT).show();
                 return;
             }
             if ("play_pause".equals(key)) {
@@ -243,6 +271,16 @@ final class VelaRemoteClient {
                 if (service != null) service.applyKey(key);
             });
         });
+    }
+    private void androidVolume(String key) {
+        AudioManager audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        if (audio == null) return;
+        try {
+            if (audio.isVolumeFixed()) return;
+            int direction = "mute".equals(key) ? AudioManager.ADJUST_TOGGLE_MUTE :
+                "volume_up".equals(key) ? AudioManager.ADJUST_RAISE : AudioManager.ADJUST_LOWER;
+            audio.adjustVolume(direction, AudioManager.FLAG_SHOW_UI);
+        } catch (RuntimeException ignored) { /* TV audio remains authoritative. */ }
     }
     private void androidPlayPause() {
         AudioManager audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
