@@ -637,6 +637,11 @@ public final class MainActivity extends Activity {
         return true;
     }
 
+    static boolean isRemoteHomeVisible() {
+        MainActivity activity = visibleActivity.get();
+        return activity != null && activity.homeResumed && activity.javascriptReady && activity.web != null;
+    }
+
     private void requestAppsAsync() {
         synchronized (this) {
             if (catalogLoading) return;
@@ -763,6 +768,43 @@ public final class MainActivity extends Activity {
                 .setPositiveButton("Disable", (d, w) -> VelaRemoteClient.get(MainActivity.this)
                     .disable(message -> sendToJs("QH.remoteStatusReady(" + JSONObject.quote(message) + ")")))
                 .show());
+        }
+        @JavascriptInterface public boolean sonyIpControlEnabled() {
+            return VelaSonyIpControl.get(MainActivity.this).enabled();
+        }
+        @JavascriptInterface public void configureSonyIpControl() {
+            runOnUiThread(() -> {
+                EditText secret = new EditText(MainActivity.this);
+                secret.setSingleLine(true);
+                secret.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+                secret.setHint("8–20 character Sony Pre-Shared Key");
+                secret.setPadding(24, 18, 24, 18);
+                new AlertDialog.Builder(MainActivity.this)
+                    .setTitle("Sony native-app controls")
+                    .setMessage("Enter the key you created under Sony Settings → Network & Internet → Home network → IP control. Vela encrypts it on this TV. Sony's own IP-control protocol transmits the key over HTTP on this TV's local interface. Vela will test using one Up command.")
+                    .setView(secret)
+                    .setNegativeButton("Cancel", (d, w) -> {})
+                    .setPositiveButton("Save & test", (d, w) -> VelaSonyIpControl.get(MainActivity.this)
+                        .configure(secret.getText().toString(), message -> {
+                            secret.setText("");
+                            sendToJs("QH.remoteStatusReady(" + JSONObject.quote(message) + ")");
+                        }))
+                    .show();
+            });
+        }
+        @JavascriptInterface public void testSonyIpControl() {
+            VelaSonyIpControl.get(MainActivity.this).test(message ->
+                sendToJs("QH.remoteStatusReady(" + JSONObject.quote(message) + ")"));
+        }
+        @JavascriptInterface public void removeSonyIpControl() {
+            runOnUiThread(() -> new AlertDialog.Builder(MainActivity.this)
+                .setTitle("Remove Sony IP control?")
+                .setMessage("Delete the Sony key from Vela on this TV? The web remote can still control Vela Home and volume.")
+                .setNegativeButton("Cancel", (d, w) -> {})
+                .setPositiveButton("Remove", (d, w) -> {
+                    VelaSonyIpControl.get(MainActivity.this).disable();
+                    sendToJs("QH.remoteStatusReady('Sony IP control key removed')");
+                }).show());
         }
         @JavascriptInterface public boolean wakeProfilePromptEnabled() {
             return prefs.getBoolean("profile_prompt_enabled", true);

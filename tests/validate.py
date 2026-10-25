@@ -299,3 +299,20 @@ assert 'CalendarIcs.upcoming(feed,zone,day,30)' in calendar
 assert 'refreshed==total' in calendar and 'Refresh failed · showing saved calendar events' in calendar
 assert 'now+30*86400000' in js
 print('PASS remote auto-dismiss, best-effort native control, immersive startup profiles and 30-day calendar refresh')
+
+# Sony IRCC keys are never in the public browser assets or Cloudflare relay.
+sony=(r/'app/src/main/java/com/danielvu/quiethome/VelaSonyIpControl.java').read_text()
+codes=(r/'app/src/main/java/com/danielvu/quiethome/SonyIrccMessage.java').read_text()
+assert "row('sonyIpSetup'" in js and 'configureSonyIpControl' in main
+assert 'sonyIpControlEnabled' in main and 'removeSonyIpControl' in main
+assert 'VelaSonyIpControl.get(context).send(key' in remote_native
+assert 'VelaRemoteClient.encrypt(psk)' in sony and 'psk_encrypted' in sony
+assert 'X-Auth-PSK' in sony and 'setInstanceFollowRedirects(false)' in sony
+assert '127.0.0.1' in sony and 'ip.isSiteLocalAddress()' in sony
+assert 'getActiveNetwork()' in sony and 'TRANSPORT_VPN' in sony
+assert 'http://' in sony and 'https://' not in sony
+assert 'play_pause' in codes and 'X_SendIRCC' in codes
+assert 'sonyIpSetup' not in remote_js and 'X-Auth-PSK' not in remote_js+remote_worker
+assert 'android.permission.ACCESS_NETWORK_STATE' in ET.tostring(m,encoding='unicode')
+assert 'usesCleartextTraffic' in ET.tostring(m,encoding='unicode')
+print('PASS Sony on-device PSK isolation, restricted HTTP hosts, opt-in IRCC and offline fallback')

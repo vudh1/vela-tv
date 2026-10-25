@@ -68,7 +68,7 @@ final class VelaRemoteClient {
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).setKeySize(256).build());
         return generator.generateKey();
     }
-    private static String encrypt(String plain) throws Exception {
+    static String encrypt(String plain) throws Exception {
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE, encryptionKey());
         byte[] iv = cipher.getIV(), bytes = cipher.doFinal(plain.getBytes(StandardCharsets.UTF_8));
@@ -77,7 +77,7 @@ final class VelaRemoteClient {
         System.arraycopy(bytes, 0, all, iv.length, bytes.length);
         return Base64.encodeToString(all, Base64.NO_WRAP);
     }
-    private static String decrypt(String stored) {
+    static String decrypt(String stored) {
         if (stored == null || stored.isEmpty()) return "";
         try {
             byte[] bytes = Base64.decode(stored, Base64.DEFAULT);
@@ -220,14 +220,13 @@ final class VelaRemoteClient {
                 return;
             }
             if ("play_pause".equals(key)) {
-                AudioManager audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-                if (audio != null) {
-                    try {
-                        long now = android.os.SystemClock.uptimeMillis();
-                        audio.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, 0));
-                        audio.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, 0));
-                    } catch (SecurityException ignored) { }
+                // Once a streaming app owns focus, Sony IRCC offers distinct
+                // Play and Pause commands that Android media dispatch may ignore.
+                if (!MainActivity.isRemoteHomeVisible() && VelaSonyIpControl.get(context).enabled()) {
+                    VelaSonyIpControl.get(context).send(key, () -> androidPlayPause());
+                    return;
                 }
+                androidPlayPause();
                 return;
             }
             if ("home".equals(key)) {
@@ -239,9 +238,21 @@ final class VelaRemoteClient {
                 return;
             }
             if (MainActivity.acceptRemoteKey(key)) return;
-            VelaRemoteAccessibilityService service = VelaRemoteAccessibilityService.active();
-            if (service != null) service.applyKey(key);
+            VelaSonyIpControl.get(context).send(key, () -> {
+                VelaRemoteAccessibilityService service = VelaRemoteAccessibilityService.active();
+                if (service != null) service.applyKey(key);
+            });
         });
+    }
+    private void androidPlayPause() {
+        AudioManager audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        if (audio != null) {
+            try {
+                long now = android.os.SystemClock.uptimeMillis();
+                audio.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, 0));
+                audio.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, 0));
+            } catch (SecurityException ignored) { }
+        }
     }
     private JSONObject post(String path, String bearer, JSONObject body) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(API + path).openConnection();

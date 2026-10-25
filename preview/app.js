@@ -270,6 +270,10 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  row('remoteDisable','Disable remote','Revoke','Disconnect controllers and revoke this TV key'):
  row('remotePair','Enable remote','Generate PIN','Generate a new private 10-digit PIN on this TV'))+
  row('remoteAccessibility','Control other apps','Sony settings','Optional accessibility service; app compatibility varies')+
+ row('sonyIpSetup','Sony native-app controls',bridge&&bridge.sonyIpControlEnabled&&bridge.sonyIpControlEnabled()?'Connected':'Set up','Optional IP control for Netflix/YouTube navigation; key stays on the TV')+
+ (bridge&&bridge.sonyIpControlEnabled&&bridge.sonyIpControlEnabled()?
+ row('sonyIpTest','Test Sony controls','Test','Send one Up command to check Sony IP control')+
+ row('sonyIpRemove','Remove Sony key','Remove','Delete the encrypted Sony control key from this TV'):'')+
  '<p class="library-footnote">Generate a one-time PIN here, then enter it on your phone. The code cannot be shown again. A trusted phone reconnects automatically after idle; generating a new PIN revokes the old phone. Both devices must share the home Internet connection. Only one remote can be active at a time.</p>';
  }
  else if(type==='about'){title='About Vela';subtitle='A calmer TV launcher.';
@@ -415,6 +419,9 @@ function action(name,id,dir){
  if(name==='remoteRotate'){if(bridge&&bridge.rotateWebRemotePin)bridge.rotateWebRemotePin();return;}
  if(name==='remoteDisable'){if(bridge&&bridge.disableWebRemote)bridge.disableWebRemote();return;}
  if(name==='remoteAccessibility'){if(bridge&&bridge.accessibilitySettings)bridge.accessibilitySettings();return;}
+ if(name==='sonyIpSetup'){if(bridge&&bridge.configureSonyIpControl)bridge.configureSonyIpControl();return;}
+ if(name==='sonyIpTest'){if(bridge&&bridge.testSonyIpControl)bridge.testSonyIpControl();return;}
+ if(name==='sonyIpRemove'){if(bridge&&bridge.removeSonyIpControl)bridge.removeSonyIpControl();return;}
  if(name==='chooseSort'){var p=currentProfile();p.appSort=id;if(profileId!=='guest')persistProfiles();renderPanel('appSort',{act:'chooseSort',id:id},true);return;}
  if(name==='wakeProfileToggle'){if(bridge&&bridge.setWakeProfilePromptEnabled){bridge.setWakeProfilePromptEnabled(!bridge.wakeProfilePromptEnabled());}renderPanel('homeSettings',{act:'wakeProfileToggle'},true);return;}
  if(name==='filterCalendar'){calendarFilter=['all','play','watch','other'].indexOf(id)>=0?id:'all';renderPanel('calendar',{act:'filterCalendar',id:calendarFilter},true);return;}
