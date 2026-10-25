@@ -22,6 +22,8 @@ jobs:
         run: sdkmanager --install 'platforms;android-35'
       - name: Validate TV UI and assets
         run: python3 tests/validate.py
+      - name: Test calendar event navigation and Home reminders
+        run: node tests/calendar_ui_test.js
       - name: Test LAN pairing form over local HTTP
         run: python3 tests/pairing_http_test.py
       - name: Compile native Java sources
