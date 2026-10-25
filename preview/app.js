@@ -2,6 +2,7 @@
 (function () {
 'use strict';
 var bridge=window.QuietTV||null, preview=!bridge;
+var tizenMode=!!(window.VelaPlatform&&window.VelaPlatform.kind==='tizen');
 var apps=[],appsById={},catalogSignature='',fav=[],mode='dock',theme='dark',scenery='0';
 var profiles=[],profileId='duong',fontStyle='classic',clockFormat='auto',rotationMinutes=0,rotationTimer=null;
 var monitorEnabled=false; // profile-scoped, hidden by default; no background streaming
@@ -121,7 +122,7 @@ function profileChooser(){var s='<div class="profiles-list">';profiles.forEach(f
 var editingAvatar='';
 function avatarPicker(){var p=profiles.filter(function(x){return x.id===editingAvatar;})[0],b='<div class="avatar-grid">';avatarList.forEach(function(a){b+='<button class="avatar-option focusable'+(p&&p.avatar===a?' is-current':'')+'" data-act="chooseAvatar" data-id="'+esc(a)+'" aria-label="'+esc(a)+' avatar">'+avatarSvg(a,p&&p.name||'Guest')+'<span>'+esc(a.charAt(0).toUpperCase()+a.slice(1))+'</span></button>';});return b+'</div>';}
 function appFallback(){return '<svg class="fallback-app-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M8 8h8v8H8z"/></svg>';}
-function icon(a){var uri=preview?'':'https://vela-icons.local/icon/'+encodeURIComponent(a.id)+'?quality=hq192-v2';return '<span class="app-icon-frame">'+appFallback()+(uri?'<img class="app-icon" loading="eager" decoding="async" alt="" src="'+esc(uri)+'" onerror="this.style.display=\'none\'">':'')+'</span>';}
+function icon(a){var uri=preview?'':tizenMode?(a.icon&&/^file:\/\//.test(a.icon)?a.icon:''):'https://vela-icons.local/icon/'+encodeURIComponent(a.id)+'?quality=hq192-v2';return '<span class="app-icon-frame">'+appFallback()+(uri?'<img class="app-icon" loading="eager" decoding="async" alt="" src="'+esc(uri)+'" onerror="this.style.display=\'none\'">':'')+'</span>';}
 
 function tile(a,act){return '<button class="app-card focusable" data-act="'+act+'" data-id="'+esc(a.id)+'" data-name="'+esc(a.name)+'" title="'+esc(a.name)+'" aria-label="'+esc(a.name)+'">'+icon(a)+'</button>';}
 function populateCatalog(incoming,fromCache){if(!Array.isArray(incoming))return;
@@ -198,14 +199,14 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  var title='',subtitle='',body='';
  if(type==='settings'){title='Settings';subtitle='Four simple sections.';
  body=row('homeSettings','Home & profiles','Open','Appearance, favorites and profile selection')+
- row('lifeSettings','Daily life','Open','Calendar, screensaver and baby monitor')+
+ (tizenMode?'':row('lifeSettings','Daily life','Open','Calendar, screensaver and baby monitor'))+
  row('appsSettings','Apps & activity','Open','Browse and sort installed apps')+
  row('deviceSettings','Device & support','Open','Updates, recovery and about');}
  else if(type==='homeSettings'){title='Home & profiles';subtitle='Personalize the Vela Home experience.';
  body=row('customize','Appearance','Open','Theme, wallpapers and clock')+
  row('homeApps','Home favorites','Edit','Add and arrange pinned apps')+
  row('profiles','Profiles',currentProfile().name,'Manage profiles')+
- row('wakeProfileToggle','Ask for profile on TV wake',bridge&&bridge.wakeProfilePromptEnabled&&!bridge.wakeProfilePromptEnabled()?'Off':'On','After standby; not when returning from a streaming app');}
+ row('wakeProfileToggle',tizenMode?'Ask for profile on Vela launch':'Ask for profile on TV wake',bridge&&bridge.wakeProfilePromptEnabled&&!bridge.wakeProfilePromptEnabled()?'Off':'On',tizenMode?'When you open Vela; Samsung controls TV startup':'After standby; not when returning from a streaming app');}
  else if(type==='lifeSettings'){title='Daily life';subtitle='Small conveniences, no Home clutter.';
  body=row('calendarSettings','Calendar',calVerified?'Verified':calConnected?'Saved':'Connect','Today events and subscriptions')+
  row('screensaverSettingsPanel','Screensaver','Open','Moving clock and current events')+
@@ -224,12 +225,15 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  row('chooseSort','Most opened · 30 days',currentProfile().appSort==='month'?'✓':'','Last month','month')+
  row('chooseSort','Most opened · 90 days',currentProfile().appSort==='quarter'?'✓':'','Last three months','quarter');}
  else if(type==='deviceSettings'){title='Device & support';subtitle='System controls in one place.';
- body=row('updates','Software updates','Open','Download and approve Vela updates')+
+ body=tizenMode?row('about','About Vela on Samsung','Info','Tizen capabilities and privacy'):
+ row('updates','Software updates','Open','Download and approve Vela updates')+
  row('recovery','Recovery','Open','Return to Sony Home and restore controls')+
  row('about','About Vela','Info','Version and privacy');
  }
  else if(type==='about'){title='About Vela';subtitle='A calmer TV launcher.';
- body='<p class="library-footnote">Version: '+esc(updateStatus&&updateStatus.current?updateStatus.current:'See Updates')+'</p>'+ 
+ body=tizenMode?
+ '<p class="library-footnote">Samsung Tizen build. Profiles, favorites and app history are local to this TV. Samsung owns the power-on Home screen and system screensaver; Vela opens as a regular app. Calendar, private pairing and automatic updates are not yet supported on Tizen.</p>':
+ '<p class="library-footnote">Version: '+esc(updateStatus&&updateStatus.current?updateStatus.current:'See Updates')+'</p>'+
  '<p class="library-footnote">Profiles and app activity stay on this TV. Calendar links and events are stored locally with Android Keystore encryption. Returning to Sony Home remains available under Recovery.</p>';}
  else if(type==='homeApps'){title='Home favorites';subtitle='Pin up to eight apps and reorder with arrows.';body=favoritesEditor();}
  else if(type==='startupProfiles'){title='Who is watching?';subtitle='Choose a profile to continue.';
@@ -240,10 +244,10 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  body='<div class="app-grid">'+orderedApps().map(function(a){return tile(a,'launch');}).join('')+'</div>'+(apps.length?'<p class="library-footnote">Sorted by '+esc(sortLabel())+' · Change under Gear → Apps</p>':'<p>Loading installed apps…</p>');}
  else if(type==='recent'){title='Recently opened';subtitle='Just your last five Vela launches, on this profile.';body=recentPanel();}
  else if(type==='appMenu'){var app=byId(contextAppId),pinned=fav.indexOf(contextAppId)>=0;title=app?app.name:'App actions';subtitle='Hold OK on an app to open these quick actions.';
- body=app?'<div class="context-app">'+icon(app)+'<span>'+esc(app.name)+'</span></div>'+appRow('launch','Open app','Open','Launch this application',contextAppId)+appRow('togglePin',pinned?'Remove from Home':'Add to Home',pinned?'Unpin':'Pin',pinned?'Keep in All apps':'Show in your favorites dock',contextAppId)+appRow('appInfo','App information','Settings','Open the Android app settings for this app',contextAppId):'<p>App no longer installed.</p>';}
+ body=app?'<div class="context-app">'+icon(app)+'<span>'+esc(app.name)+'</span></div>'+appRow('launch','Open app','Open','Launch this application',contextAppId)+appRow('togglePin',pinned?'Remove from Home':'Add to Home',pinned?'Unpin':'Pin',pinned?'Keep in All apps':'Show in your favorites dock',contextAppId)+(tizenMode?'':appRow('appInfo','App information','Settings','Open the Android app settings for this app',contextAppId)):'<p>App no longer installed.</p>';}
 
  else if(type==='customize'){title='Personalize';subtitle='Changes appear behind this panel immediately.';
- body=row('volumeSettings','Volume indicator',volumeMode==='off'?'Native only':volumeMode==='glass'?'Glass':'Minimal','Sony native by default; optional custom preview')+row('layout','Home layout',mode==='dock'?'Dock':'List','Switch between dock and list')+row('theme','Contrast',theme==='dark'?'Dark':'Light','Match your wallpaper')+row('wallpapers','Wallpaper library',wallpapers[parseInt(scenery,10)||0].name,'Browse eight bundled backgrounds')+row('rotate','Wallpaper rotation',rotationMinutes?'Every 30 min':'Off','Only rotates while Home is visible')+row('font','Clock type',fontStyle==='modern'?'Modern':'Classic','Change the clock font without extra downloads')+row('clockFormat','Time format',clockFormat==='auto'?'TV setting':clockFormat==='24'?'24-hour':'12-hour','Automatically follow Sony time settings')+row('photo','Custom photo','Choose','Use a picture stored on this TV')+row('resetPhoto','Reset photo','Restore','Return to the selected built-in wallpaper');}
+ body=(tizenMode?'':row('volumeSettings','Volume indicator',volumeMode==='off'?'Native only':volumeMode==='glass'?'Glass':'Minimal','Sony native by default; optional custom preview'))+row('layout','Home layout',mode==='dock'?'Dock':'List','Switch between dock and list')+row('theme','Contrast',theme==='dark'?'Dark':'Light','Match your wallpaper')+row('wallpapers','Wallpaper library',wallpapers[parseInt(scenery,10)||0].name,'Browse eight bundled backgrounds')+row('rotate','Wallpaper rotation',rotationMinutes?'Every 30 min':'Off','Only rotates while Home is visible')+row('font','Clock type',fontStyle==='modern'?'Modern':'Classic','Change the clock font without extra downloads')+row('clockFormat','Time format',clockFormat==='auto'?'TV setting':clockFormat==='24'?'24-hour':'12-hour','Use TV setting when available')+(tizenMode?'':row('photo','Custom photo','Choose','Use a picture stored on this TV')+row('resetPhoto','Reset photo','Restore','Return to the selected built-in wallpaper'));}
  else if(type==='volumeSettings'){title='Volume overlay';subtitle='Experimental Home-only overlay. Streaming apps continue using Sony’s native volume controls.';
  body=row('volumeStyle','Appearance',volumeMode==='glass'?'Glass':volumeMode==='minimal'?'Minimal':'Native only','Switch Glass → Minimal → Native only')+
  row('volumePercent','Show percentage',volumePercent?'On':'Off','Bar only is the cleanest look')+

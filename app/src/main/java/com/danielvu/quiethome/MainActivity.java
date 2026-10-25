@@ -24,6 +24,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.text.format.DateFormat;
 import android.util.Base64;
@@ -79,14 +80,22 @@ public final class MainActivity extends Activity {
     private VelaUpdateController updater;
     private VelaCalendarController calendar;
     private VelaPairingServer pairing;
-    // TV standby is not the same as leaving Vela to use a streaming app.
-    // Receiver lives for the launcher process; an Android kill during standby
-    // may prevent wake detection, so a guaranteed wake prompt is not possible.
+    // Streaming-app returns reuse this Activity; a new launcher process is a
+    // fresh viewing session. Some Sony standby paths never emit SCREEN_OFF.
+    // A cold launch fallback covers those paths (at the cost of a prompt if
+    // Android killed the launcher while an app was in the foreground).
     private boolean homeResumed = false;
+    private void markNextViewingSession() {
+        prefs.edit().putBoolean("profile_choose_on_next_home", true).apply();
+    }
+    private boolean screenIsInteractive() {
+        PowerManager power = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        return power == null || power.isInteractive();
+    }
     private final BroadcastReceiver tvPower = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
             if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
-                prefs.edit().putBoolean("profile_choose_on_next_home", true).apply();
+                markNextViewingSession();
             } else if (Intent.ACTION_SCREEN_ON.equals(intent.getAction()) && homeResumed) {
                 sendToJs("QH && QH.checkWakeProfilePrompt && QH.checkWakeProfilePrompt()");
             }
@@ -117,6 +126,9 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        // Crucially, don't depend on Sony broadcasting SCREEN_OFF: after a TV
+        // restart the launcher may be created only *after* the wake occurred.
+        if (b == null) markNextViewingSession();
         // Sony's system volume HUD cannot reliably be hidden by a regular TV app.
         // One-time migration prevents the new observer from drawing a second HUD over Sony's.
         // Do not reapply: an explicit later user selection of Glass/Minimal is respected.
@@ -201,6 +213,7 @@ public final class MainActivity extends Activity {
     @Override public void onResume() {
         super.onResume();
         homeResumed = true;
+        if (!screenIsInteractive()) markNextViewingSession();
         startVolumeObservation();
         if (web != null && javascriptReady) {
             // Clock and stale app catalog refresh when Android resumes a throttled WebView.
@@ -210,6 +223,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onPause() {
+        if (!screenIsInteractive()) markNextViewingSession();
         homeResumed = false;
         stopVolumeObservation();
         if (pendingLongSelect != null) longSelectHandler.removeCallbacks(pendingLongSelect);

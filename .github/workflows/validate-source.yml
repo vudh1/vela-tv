@@ -24,6 +24,12 @@ jobs:
         run: python3 tests/validate.py
       - name: Test calendar event navigation and Home reminders
         run: node tests/calendar_ui_test.js
+      - name: Test Samsung adapter and staged shared app
+        run: |
+          node tests/tizen_bridge_test.js
+          bash scripts/build-tizen.sh stage
+          test -f build/tizen/config.xml
+          cmp app/src/main/assets/app.js build/tizen/app.js
       - name: Test LAN pairing form over local HTTP
         run: python3 tests/pairing_http_test.py
       - name: Compile native Java sources

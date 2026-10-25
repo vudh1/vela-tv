@@ -177,8 +177,10 @@ assert 'Number(e.end)>Math.max(start,Date.now())' in js
 assert "e.start<=n+3600000?'soon'" in js and 'e.start<=n+2*3600000?' in js
 dream=(r/'app/src/main/java/com/danielvu/quiethome/VelaDreamService.java').read_text()
 calendar=(r/'app/src/main/java/com/danielvu/quiethome/VelaCalendarController.java').read_text()
-assert 'cachedEventsForDream(this,currentProfile())' in dream
-assert 'positionContent()' in dream and 'Math.min(3,events.size())' in dream
+assert 'cachedEventsForDream(this, currentProfile())' in dream
+assert 'positionContent()' in dream and 'Math.min(3, events.size())' in dream
+assert 'Gravity.START | Gravity.BOTTOM' in dream and 'Gravity.END | Gravity.BOTTOM' in dream
+assert 'eventBlock.setTranslationX(x)' in dream and 'clockGroup.setTranslationX(x)' in dream
 assert 'static JSONArray cachedEventsForDream(Context ctx, String profile)' in calendar
 assert 'success_'+ '"+profile' in calendar and 'day_'+ '"+profile' in calendar
 assert 'url_'+ '"+profile' not in dream
@@ -188,3 +190,29 @@ assert 'Intent.ACTION_BOOT_COMPLETED' in boot
 assert any(x.get(a+'name')=='.VelaBootReceiver' for x in app.findall('receiver'))
 assert 'android.permission.RECEIVE_BOOT_COMPLETED' in ET.tostring(m,encoding='unicode')
 print('PASS grouped settings, wake profile choice, app sorting, ongoing events, screensaver privacy and remote left exit')
+
+# Sony must show the chooser on cold process startup even when no screen-off
+# broadcast was delivered; ordinary streaming-app returns should not re-arm it.
+assert 'if (b == null) markNextViewingSession();' in main
+assert 'if (!screenIsInteractive()) markNextViewingSession();' in main
+onresume=main.split('@Override public void onResume()')[1].split('@Override protected void onPause()')[0]
+assert 'markNextViewingSession();' in onresume
+assert 'markNextViewingSession();' not in onresume.split('if (!screenIsInteractive())')[0]
+assert 'Intent.ACTION_SCREEN_OFF' in main
+
+# Samsung uses the same UI with a separate Tizen adapter, not Android APK APIs.
+for f in ['app.js','style.css','index.html','tizen-bridge.js']:
+    assert (asset/f).read_bytes()==(r/'preview'/f).read_bytes(),f
+tizen=(asset/'tizen-bridge.js').read_text()
+assert "window.VelaPlatform = {kind:'tizen'}" in tizen
+assert 'tizen.application.getAppsInfo' in tizen and 'tizen.application.launch' in tizen
+assert '10009' in tizen and 'window.QH.remote(key)' in tizen
+assert 'tizenMode' in js and 'Calendar, private pairing and automatic updates are not yet supported' in js
+config=ET.parse(r/'samsung/config.xml').getroot()
+t='{http://tizen.org/ns/widgets}'
+assert config.find(t+'application') is not None
+assert config.find(t+'profile').get('name')=='tv'
+assert any(p.get('name')=='http://tizen.org/privilege/appmanager.launch' for p in config.findall(t+'privilege'))
+subprocess.run(['bash','-n',str(r/'scripts/build-tizen.sh')],check=True)
+subprocess.run(['bash','-n',str(r/'scripts/device.sh')],check=True)
+print('PASS cold-process profile fallback, calm two-column screensaver and Samsung Tizen staging')

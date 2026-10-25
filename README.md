@@ -1,6 +1,55 @@
 # Vela TV
 
-Minimalist Android TV launcher for Sony BRAVIA.
+Minimalist TV Home experience. One shared interface with platform-specific
+integration and installation targets.
+
+| Device | Target | Build | Capability |
+| --- | --- | --- | --- |
+| Sony BRAVIA / Android TV | Signed `.apk` | `bash scripts/build.sh` | Launcher, native clock/screensaver, private calendar, updater |
+| Samsung Neo QLED / Tizen | Signed `.wgt` | `bash scripts/build-tizen.sh package` | Regular TV app: Home dashboard, profiles, favorites, app browser |
+
+For Samsung setup, certificate signing, developer installation and its
+platform limitations, see [Samsung Tizen instructions](samsung/README.md).
+The Android APK **cannot** be installed on a Samsung Tizen TV.
+
+The platform-aware command is `scripts/device.sh`:
+
+```bash
+bash scripts/device.sh sony build
+bash scripts/device.sh sony install TV_IP
+bash scripts/device.sh samsung stage
+VELA_TIZEN_PROFILE=YOUR_PROFILE bash scripts/device.sh samsung build
+bash scripts/device.sh samsung install TV_SERIAL /path/to/signed.wgt
+```
+
+Android and Tizen signing credentials are separate. Neither the TV's own
+network address nor the signing certificate is committed to the repository.
+
+### Profiles after power-on
+
+On Sony, a new Vela launcher process asks for a profile; screen-off and reboot
+signals also arm the chooser. Returning from an app to an existing Vela process
+does not. Some TV firmware hides standby signals, and Android killing the
+launcher during streaming can create an extra cold-start prompt. A third-party
+app cannot guarantee detecting every physical Sony power wake.
+
+On consumer Samsung TVs, Vela cannot replace the system Home or automatically
+appear at power-on. It can ask for a profile when the user opens the Vela app.
+
+### Changing your home Wi-Fi
+
+Vela keeps its profiles, favorites, artwork and history on the TV. Its Sony
+calendar subscription and encrypted cache are tied to the Android app's local
+keystore, not to a Wi-Fi name, router, or fixed TV address; they refresh when
+the TV has Internet access. Pairing generates a fresh private-LAN address every
+time. App update checks use HTTPS, not your home-network IP.
+
+**You still must connect the TV itself to the new network** if its SSID or
+password changes. Using the same SSID/password on the new router can avoid
+that step, provided the TV joins successfully. Phone pairing and developer
+installation require the phone/computer to be on the appropriate local network.
+No re-entry of the saved Google iCal secret is required solely because Wi-Fi
+changes.
 
 ## Release branches
 
