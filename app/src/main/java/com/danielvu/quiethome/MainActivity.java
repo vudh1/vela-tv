@@ -27,6 +27,8 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.text.format.DateFormat;
 import android.util.Base64;
+import android.util.DisplayMetrics;
+import android.content.res.Resources;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -427,8 +429,20 @@ public final class MainActivity extends Activity {
     private String iconData(ResolveInfo r, String pkg, File cached) {
         PackageManager pm = getPackageManager();
         Drawable drawable = null;
-        // Leanback/launcher activity art takes precedence when available.
-        if (r != null) try { drawable = r.loadIcon(pm); } catch (Exception ignored) { }
+        // Prefer the highest-density packaged source resource, not the TV's
+        // possibly small default-density application icon.
+        if (r != null && r.activityInfo != null) {
+            try {
+                int iconRes = r.activityInfo.getIconResource();
+                if (iconRes == 0) iconRes = r.activityInfo.applicationInfo.icon;
+                if (iconRes != 0) {
+                    Resources resources = pm.getResourcesForApplication(pkg);
+                    drawable = resources.getDrawableForDensity(
+                        iconRes, DisplayMetrics.DENSITY_XXXHIGH, null);
+                }
+            } catch (Exception ignored) { }
+        }
+        if (drawable == null && r != null) try { drawable = r.loadIcon(pm); } catch (Exception ignored) { }
         if (drawable == null) try { drawable = pm.getApplicationIcon(pkg); } catch (Exception ignored) { }
         if (drawable == null) return "";
         try {
