@@ -948,6 +948,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public long getCachedCatalogAt() { return prefs.getLong("cached_catalog_at", 0L); }
         @JavascriptInterface public void checkUpdates() { updater.check(); }
         @JavascriptInterface public void installUpdate() { updater.install(); }
+        @JavascriptInterface public void installUpdateSession() { updater.installViaSession(); }
         @JavascriptInterface public void updateStatus() { updater.send(); }
         @JavascriptInterface public void setAutoUpdates(boolean enabled) { updater.setAutoEnabled(enabled); }
         @JavascriptInterface public void setAutoDownload(boolean enabled) { updater.setAutoDownloadEnabled(enabled); }

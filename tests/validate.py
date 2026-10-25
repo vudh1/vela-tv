@@ -130,7 +130,18 @@ assert 'private void prefetch()' in updater and 'private File cacheApk(' in upda
 assert 'sha256(temp).equals(digest)' in updater
 prefetch=updater.split('private void prefetch()')[1].split('private File cachedApk()')[0]
 assert 'promptInstaller(' not in prefetch and 'cacheApk(address, digest, length)' in prefetch
-assert 'activity.runOnUiThread(() -> promptInstaller(apk))' in updater.split('void install()')[1]
+assert 'activity.runOnUiThread(() -> promptInstaller(apk, route))' in updater
+assert 'void install() { install(InstallRoute.DIRECT); }' in updater
+assert 'void installViaSession() { install(InstallRoute.SESSION); }' in updater
+assert 'Intent.ACTION_VIEW, Intent.ACTION_INSTALL_PACKAGE' in updater
+assert 'ClipData.newRawUri("Vela verified update", apkUri)' in updater
+assert 'Intent.FLAG_GRANT_READ_URI_PERMISSION' in updater
+assert 'activity.startActivity(prompt)' in updater
+assert 'if (route == InstallRoute.DIRECT)' in updater
+assert 'if (installSubmitted && installRoute == InstallRoute.DIRECT)' in updater
+assert 'Android returned without installing. Try Alternative installer' in updater
+assert 'installUpdateSession()' in main
+assert "row('installUpdateSession','Alternative installer'" in js
 assert 's&&s.autoDownload===false' in js and 's.downloaded?' in js
 assert 'VelaInstallPermissionFlow.Action action = permissionFlow.onResume(canInstallPackages())' in updater
 assert 'PackageInstaller.SessionParams.MODE_FULL_INSTALL' in updater
@@ -141,6 +152,15 @@ result=(r/'app/src/main/java/com/danielvu/quiethome/VelaInstallResultActivity.ja
 assert 'STATUS_PENDING_USER_ACTION' in result and 'STATUS_FAILURE_BLOCKED' in result
 assert any(s.get(a+'name')=='.VelaInstallResultActivity' and s.get(a+'exported')=='false' for s in app.findall('activity'))
 print('PASS focus selection scope and opt-in Android installation after cached APK download')
+
+manual=(r/'scripts/install-latest-tv.sh').read_text()
+assert 'releases/latest/download' in manual
+assert 'shasum -a 256 -c Vela-release.apk.sha256' in manual
+assert 'install -r Vela-release.apk' in manual
+assert 'uninstall' not in manual or 'no uninstall' in manual
+assert 'adb -s "$target_serial"' in manual
+assert 'install-latest-tv.sh' in (r/'.github/workflows/production-apk.yml').read_text()
+print('PASS published manual update script checksum, selected TV safety and release instructions')
 
 # Sony volume indicator is owned by the OS. Avoid duplicate native + Vela popups.
 # The one-time migration keeps all other preferences and permits later opt-in.
