@@ -49,7 +49,7 @@ public final class VelaInstallResultActivity extends Activity {
             record("Installation cancelled; the downloaded update is still available");
         } else if (status == PackageInstaller.STATUS_FAILURE_CONFLICT) {
             record("Android rejected the update because its package or signing certificate conflicts with the installed app");
-        } else if (status == PackageInstaller.STATUS_FAILURE_INSUFFICIENT_STORAGE) {
+        } else if (status == PackageInstaller.STATUS_FAILURE_STORAGE) {
             record("Not enough TV storage for the update. Free space and retry.");
         } else {
             Log.w("VelaUpdate", "Android installation returned status " + status);
