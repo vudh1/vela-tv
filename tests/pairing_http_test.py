@@ -72,16 +72,21 @@ public final class PairingHttpTest {
     }
     public static void main(String[] args)throws Exception {
         expect(call("GET",null,""),"200","name='nonce' value='"+NONCE+"'");
-        expect(call("POST",payload(NONCE,"label"),"Origin: https://malicious.example\r\n"),"403","Request rejected");
-        expect(call("POST",payload(NONCE,"label"),"Sec-Fetch-Site: cross-site\r\n"),"403","Request rejected");
-        expect(call("POST",payload("invalid","label"),""),"403","Request rejected");
-        // Browsers such as Safari may omit Origin for same-page forms.
+        // The form nonce, not unreliable browser Origin metadata, is the
+        // authorization check. Cross-site attempts without it remain rejected.
+        expect(call("POST",payload("invalid","label"),"Origin: https://malicious.example\r\n"),"403","Pairing form expired");
+        expect(call("POST",payload("invalid","label"),"Sec-Fetch-Site: cross-site\r\n"),"403","Pairing form expired");
+        expect(call("POST",payload("invalid","label"),""),"403","Pairing form expired");
+        // Mobile QR webviews may supply an opaque Origin or alternate
+        // Fetch Metadata and must still work if the form nonce is genuine.
+        expect(call("POST",payload(NONCE,"opaque"),"Origin: null\r\nSec-Fetch-Site: same-site\r\n"),"200","Link transferred to Vela");
+        expect(call("POST",payload(NONCE,"mobile"),"Sec-Fetch-Site: cross-site\r\n"),"200","Link transferred to Vela");
         String unicodeLabel="Dương · Gia đình";
         expect(call("POST",payload(NONCE,unicodeLabel),""),"200","Link transferred to Vela");
         if(!unicodeLabel.equals(calendar.label)||!CAL.equals(calendar.url)||!activity.saved)
             throw new AssertionError("UTF-8 form or saved callback was incorrect");
-        expect(call("POST",payload(NONCE,"normal"),"Origin: http://127.0.0.1:1\r\n"),"403","Request rejected");
-        System.out.println("PASS GET nonce, absent Origin, CSRF rejection, cross-site rejection, UTF-8 POST framing");
+        expect(call("POST",payload(NONCE,"normal"),"Origin: http://127.0.0.1:1\r\n"),"200","Link transferred to Vela");
+        System.out.println("PASS GET nonce, opaque/absent Origin, CSRF nonce rejection, cross-site metadata compatibility, UTF-8 POST framing");
     }
 }
 """
