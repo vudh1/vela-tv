@@ -225,7 +225,12 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  row('chooseSort','Most opened · 90 days',currentProfile().appSort==='quarter'?'✓':'','Last three months','quarter');}
  else if(type==='deviceSettings'){title='Device & support';subtitle='System controls in one place.';
  body=row('updates','Software updates','Open','Download and approve Vela updates')+
- row('recovery','Recovery & about','Open','Return to Sony Home and restore controls');}
+ row('recovery','Recovery','Open','Return to Sony Home and restore controls')+
+ row('about','About Vela','Info','Version and privacy');
+ }
+ else if(type==='about'){title='About Vela';subtitle='A calmer TV launcher.';
+ body='<p class="library-footnote">Version: '+esc(updateStatus&&updateStatus.current?updateStatus.current:'See Updates')+'</p>'+ 
+ '<p class="library-footnote">Profiles and app activity stay on this TV. Calendar links and events are stored locally with Android Keystore encryption. Returning to Sony Home remains available under Recovery.</p>';}
  else if(type==='homeApps'){title='Home favorites';subtitle='Pin up to eight apps and reorder with arrows.';body=favoritesEditor();}
  else if(type==='startupProfiles'){title='Who is watching?';subtitle='Choose a profile to continue.';
  body='<div class="startup-list">'+profiles.map(function(p){
@@ -338,7 +343,7 @@ function action(name,id,dir){
  if(name==='font'){fontStyle=fontStyle==='modern'?'classic':'modern';document.body.classList.toggle('modern-clock',fontStyle==='modern');persistAppearance();rerenderWithFocus('font');return;}
  if(name==='clockFormat'){clockFormat=clockFormat==='auto'?'12':clockFormat==='12'?'24':'auto';clockValue='';clock();persistAppearance();rerenderWithFocus('clockFormat');return;}
  if(name==='launch'){rememberApp(id);if(preview){toast('App launch is available on your TV.');return;}if(bridge)bridge.launchApp(id);return;}
- if(['settings','homeSettings','lifeSettings','appsSettings','deviceSettings','appSort','homeApps','screensaverSettingsPanel','all','customize','recovery','updates','profiles','wallpapers','calendar','calendarSettings','monitor','monitorSettings','volumeSettings','recent'].indexOf(name)>=0){navigatePanel(name);if(name==='updates'&&bridge&&bridge.updateStatus)bridge.updateStatus();return;}
+ if(['settings','homeSettings','lifeSettings','appsSettings','deviceSettings','about','appSort','homeApps','screensaverSettingsPanel','all','customize','recovery','updates','profiles','wallpapers','calendar','calendarSettings','monitor','monitorSettings','volumeSettings','recent'].indexOf(name)>=0){navigatePanel(name);if(name==='updates'&&bridge&&bridge.updateStatus)bridge.updateStatus();return;}
  if(name==='monitorToggle'){monitorEnabled=!monitorEnabled;$('#monitorButton').classList.toggle('hidden',!monitorEnabled);persistAppearance();renderPanel('monitorSettings',{act:'monitorToggle'},true);return;}
  if(name==='nanitWeb'){if(bridge&&bridge.openNanitWeb)bridge.openNanitWeb();else toast('Open https://my.nanit.com in your TV browser');return;}
  if(name==='cameraApps'){navigatePanel('all');return;}
@@ -389,7 +394,7 @@ function remote(key){
  else if(key==='left'&&screen)goBack();
 }
 function calendarTime(ms,allDay){if(allDay)return 'All day';var d=new Date(ms);return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}
-function calendarState(e){var n=Date.now();return e.start<=n&&e.end>n?'ongoing':e.start>n&&e.start<=n+3600000?'soon':e.start>n&&e.start<=n+2*3600000?'later':'';}
+function calendarState(e){if(e.allDay)return '';var n=Date.now();return e.start<=n&&e.end>n?'ongoing':e.start>n&&e.start<=n+3600000?'soon':e.start>n&&e.start<=n+2*3600000?'later':'';}
 function calendarToday(){var now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
  var end=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1).getTime();
  return calEvents.filter(function(e){return Number(e.start)<end&&Number(e.end)>Math.max(start,Date.now());}).sort(function(a,b){return a.start-b.start;});}
@@ -428,7 +433,7 @@ function maybeShowUpcomingReminder(){
 }
 function updateCalendarView(){var n=Date.now(),today=calendarToday();
  var badge=$('#calendarBadge'),button=$('#calendarButton');badge.textContent=today.length>9?'9+':String(today.length);badge.classList.toggle('hidden',!today.length);button.classList.toggle('has-events',!!today.length);
- button.classList.toggle('calendar-attention',today.some(function(e){return !!calendarState(e);}));button.setAttribute('aria-label','Calendar: '+today.length+' event'+(today.length===1?'':'s')+' today');
+ button.classList.toggle('calendar-attention',today.some(function(e){var state=calendarState(e);return state==='ongoing'||state==='soon';}));button.setAttribute('aria-label','Calendar: '+today.length+' event'+(today.length===1?'':'s')+' today');
  var peek=$('#calendarPeek');var next=today.filter(function(e){return e.end>n&&(!e.allDay||e.start>n);}).slice(0,2);peek.innerHTML=calConnected&&next.length?'<div class="peek-heading">TODAY</div>'+next.map(function(e){return eventHTML(e,true);}).join(''):'';
  if(screen==='calendar')renderCalendarBody();else maybeShowUpcomingReminder();}
 function receiveCalendar(json){try{var obj=typeof json==='string'?JSON.parse(json):json;if(!obj||obj.profile!==profileId)return;
