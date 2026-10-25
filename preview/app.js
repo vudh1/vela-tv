@@ -45,7 +45,7 @@ function loadVolumePrefs(){
 }
 function applyVolumePrefs(){
  var hud=$('#volumeHud');if(!hud)return;
- hud.classList.toggle('glass',volumeMode==='glass');hud.classList.toggle('minimal',volumeMode==='minimal');
+ hud.classList.toggle('glass',volumeMode==='glass'||volumeMode==='off');hud.classList.toggle('minimal',volumeMode==='minimal');
  hud.classList.toggle('bottom-right',volumePosition==='right');hud.classList.toggle('bottom-center',volumePosition!=='right');
  hud.classList.toggle('with-number',volumePercent);
  if(volumeMode==='off')hideVolume();
@@ -55,8 +55,8 @@ function saveVolumePrefs(){save('volume_ui',volumeMode);save('volume_percent',St
  save('volume_position',volumePosition);save('volume_delay',volumeDelay===800?'short':'normal');applyVolumePrefs();}
 function hideVolume(){if(volumeTimer)clearTimeout(volumeTimer);volumeTimer=null;var hud=$('#volumeHud');
  if(hud){hud.classList.remove('visible');hud.setAttribute('aria-hidden','true');}}
-function volumeChanged(payload){
- if(volumeMode==='off')return;
+function volumeChanged(payload,previewOnly){
+ if(volumeMode==='off'&&!previewOnly)return;
  try {var v=typeof payload==='string'?JSON.parse(payload):payload||{};
   var p=Math.max(0,Math.min(100,Math.round(Number(v.percent)||0)));
   var mute=!!v.muted||p===0;lastVolume={percent:p,muted:mute};
@@ -180,13 +180,13 @@ function renderPanel(type,focusKey,retainScroll){var host=$('#panelContent'),scr
  body=app?'<div class="context-app">'+icon(app)+'<span>'+esc(app.name)+'</span></div>'+appRow('launch','Open app','Open','Launch this application',contextAppId)+appRow('togglePin',pinned?'Remove from Home':'Add to Home',pinned?'Unpin':'Pin',pinned?'Keep in All apps':'Show in your favorites dock',contextAppId)+appRow('appInfo','App information','Settings','Open the Android app settings for this app',contextAppId):'<p>App no longer installed.</p>';}
 
  else if(type==='customize'){title='Personalize';subtitle='Changes appear behind this panel immediately.';
- body=row('volumeSettings','Volume overlay',volumeMode==='off'?'Off':volumeMode==='glass'?'Glass':'Minimal','Lightweight on-screen volume animation')+row('layout','Home layout',mode==='dock'?'Dock':'List','Switch between dock and list')+row('theme','Contrast',theme==='dark'?'Dark':'Light','Match your wallpaper')+row('wallpapers','Wallpaper library',wallpapers[parseInt(scenery,10)||0].name,'Browse eight bundled backgrounds')+row('rotate','Wallpaper rotation',rotationMinutes?'Every 30 min':'Off','Only rotates while Home is visible')+row('font','Clock type',fontStyle==='modern'?'Modern':'Classic','Change the clock font without extra downloads')+row('clockFormat','Time format',clockFormat==='auto'?'TV setting':clockFormat==='24'?'24-hour':'12-hour','Automatically follow Sony time settings')+row('photo','Custom photo','Choose','Use a picture stored on this TV')+row('resetPhoto','Reset photo','Restore','Return to the selected built-in wallpaper')+row('screensaver','Screensaver','Choose','Optional Vela Clock screensaver')+favoritesEditor();}
+ body=row('volumeSettings','Volume indicator',volumeMode==='off'?'Native only':volumeMode==='glass'?'Glass':'Minimal','Sony native by default; optional custom preview')+row('layout','Home layout',mode==='dock'?'Dock':'List','Switch between dock and list')+row('theme','Contrast',theme==='dark'?'Dark':'Light','Match your wallpaper')+row('wallpapers','Wallpaper library',wallpapers[parseInt(scenery,10)||0].name,'Browse eight bundled backgrounds')+row('rotate','Wallpaper rotation',rotationMinutes?'Every 30 min':'Off','Only rotates while Home is visible')+row('font','Clock type',fontStyle==='modern'?'Modern':'Classic','Change the clock font without extra downloads')+row('clockFormat','Time format',clockFormat==='auto'?'TV setting':clockFormat==='24'?'24-hour':'12-hour','Automatically follow Sony time settings')+row('photo','Custom photo','Choose','Use a picture stored on this TV')+row('resetPhoto','Reset photo','Restore','Return to the selected built-in wallpaper')+row('screensaver','Screensaver','Choose','Optional Vela Clock screensaver')+favoritesEditor();}
  else if(type==='volumeSettings'){title='Volume overlay';subtitle='A quiet indicator for Vela. Native Sony audio controls remain available when needed.';
- body=row('volumeStyle','Appearance',volumeMode==='glass'?'Glass':volumeMode==='minimal'?'Minimal':'Off','Switch Glass → Minimal → Off')+
+ body=row('volumeStyle','Appearance',volumeMode==='glass'?'Glass':volumeMode==='minimal'?'Minimal':'Native only','Switch Glass → Minimal → Native only')+
  row('volumePercent','Show percentage',volumePercent?'On':'Off','Bar only is the cleanest look')+
  row('volumePosition','Position',volumePosition==='center'?'Bottom center':'Bottom right','Keep it away from the clock')+
  row('volumeDelay','Hide delay',volumeDelay===800?'Short · 0.8 s':'Normal · 1.2 s','Automatically disappears after input')+
- row('volumeDemo','Preview overlay','Play','Preview without changing the TV audio')+
+ row('volumeDemo','Preview Vela overlay','Play','Works in Native only mode; does not change TV audio')+
  '<p class="library-footnote">'+esc(bridge&&bridge.volumeSupportMessage?bridge.volumeSupportMessage():'On some TVs, the OEM intercepts remote volume keys before Vela. The Preview overlay is always available; it does not change system audio.')+'</p>';
  }
  else if(type==='wallpapers'){title='Wallpapers';subtitle='Select to preview immediately on Home.';body=wallpaperGallery();}
@@ -282,7 +282,7 @@ function action(name,id,dir){
  if(name==='volumePercent'){volumePercent=!volumePercent;saveVolumePrefs();rerenderWithFocus('volumePercent');return;}
  if(name==='volumePosition'){volumePosition=volumePosition==='center'?'right':'center';saveVolumePrefs();rerenderWithFocus('volumePosition');return;}
  if(name==='volumeDelay'){volumeDelay=volumeDelay===1200?800:1200;saveVolumePrefs();rerenderWithFocus('volumeDelay');return;}
- if(name==='volumeDemo'){if(volumeMode==='off'){toast('Enable the overlay to preview it');return;}volumeChanged(lastVolume);return;}
+ if(name==='volumeDemo'){volumeChanged(lastVolume,true);return;}
  if(name==='theme'){theme=theme==='dark'?'light':'dark';persistAppearance();document.body.classList.toggle('light',theme==='light');rerenderWithFocus('theme');return;}
  if(name==='scenery'){scenery=String((parseInt(scenery,10)+1)%wallpapers.length);persistAppearance();setScenery();rerenderWithFocus('scenery');return;}
  if(name==='swap'){var n=fav.indexOf(id),to=n+parseInt(dir||'0',10);if(n>=0&&to>=0&&to<fav.length){fav.splice(n,1);fav.splice(to,0,id);persistAppearance();home();rerenderWithFocus('swap',id,dir);}return;}

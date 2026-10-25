@@ -56,7 +56,7 @@ print('PASS monitor shortcut with zero background streams and profile isolation'
 
 # Vela 2.3: volume is a non-blocking foreground-only feature.
 assert 'id="volumeHud"' in (asset/'index.html').read_text()
-assert 'function volumeChanged(payload)' in js and 'volumeSettings' in js and 'volumeDemo' in js
+assert 'function volumeChanged(payload,previewOnly)' in js and 'volumeSettings' in js and 'volumeDemo' in js
 assert 'setCustomVolumeEnabled' in main and 'adjustVelaVolume' in main
 assert 'AudioManager.STREAM_MUSIC' in main and 'a.isVolumeFixed()' in main
 assert 'QH.volumeChanged' in main and 'sendToJs(' in main
@@ -124,3 +124,18 @@ assert 'promptInstaller(' not in prefetch and 'cacheApk(address, digest, length)
 assert 'activity.runOnUiThread(() -> promptInstaller(apk))' in updater.split('void install()')[1]
 assert 's&&s.autoDownload===false' in js and 's.downloaded?' in js
 print('PASS focus selection scope and opt-in Android installation after cached APK download')
+
+# Sony volume indicator is owned by the OS. Avoid duplicate native + Vela popups.
+# The one-time migration keeps all other preferences and permits later opt-in.
+assert 'private volatile boolean customVolumeEnabled = false;' in main
+assert 'sony_native_volume_hud_v1' in main
+assert 'prefersNativeVolumeHud()' in main and 'info.contains("bravia")' in main
+assert 'prefs.edit().putString("ui_volume_ui", "off")' in main
+assert 'putBoolean("sony_native_volume_hud_v1", true)' in main
+assert 'if (prefersNativeVolumeHud() && !prefs.getBoolean' in main
+assert "if(volumeMode==='off'&&!previewOnly)return;" in js
+assert "if(name==='volumeDemo'){volumeChanged(lastVolume,true);return;}" in js
+assert "volumeMode==='off'?'Native only'" in js
+assert 'Enabling Glass or Minimal for live volume changes can display both indicators.' in main
+assert 'setCustomVolumeEnabled(volumeMode!==\'off\')' in js
+print('PASS Sony native volume HUD migration and opt-in Vela HUD preview')
