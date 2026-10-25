@@ -30,7 +30,7 @@ public final class VelaInstallResultActivity extends Activity {
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
             Intent approval = intent.getParcelableExtra(Intent.EXTRA_INTENT);
             if (approval == null) {
-                record("Android did not provide an installation confirmation screen. Use manual APK installation.");
+                record("Android did not provide an installation confirmation. Try Open Android installer or ADB.");
                 return;
             }
             try {
@@ -39,12 +39,12 @@ public final class VelaInstallResultActivity extends Activity {
                 record("Waiting for your approval in the Android installer…");
             } catch (RuntimeException error) {
                 Log.w("VelaUpdate", "Android install confirmation unavailable", error);
-                record("Android could not open its installation confirmation. Use manual APK installation.");
+                record("Android could not open its confirmation. Try Open Android installer or ADB.");
             }
         } else if (status == PackageInstaller.STATUS_SUCCESS) {
             record("Vela update installed successfully");
         } else if (status == PackageInstaller.STATUS_FAILURE_BLOCKED) {
-            record("Android blocked installation. Check the Sony TV install policy or install the signed APK manually.");
+            record("Android blocked installation. Check Sony's install policy or try the direct installer.");
         } else if (status == PackageInstaller.STATUS_FAILURE_ABORTED) {
             record("Installation cancelled; the downloaded update is still available");
         } else if (status == PackageInstaller.STATUS_FAILURE_CONFLICT) {

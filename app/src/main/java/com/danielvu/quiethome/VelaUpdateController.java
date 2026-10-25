@@ -1,11 +1,13 @@
 package com.danielvu.quiethome;
 
 import android.content.Intent;
+import android.content.ClipData;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageInstaller;
 import android.net.Uri;
 import android.os.Build;
+import android.os.SystemClock;
 import android.os.StatFs;
 import android.provider.Settings;
 import android.app.Activity;
@@ -42,8 +44,11 @@ final class VelaUpdateController {
     private final SharedPreferences prefs;
     private final VelaInstallPermissionFlow permissionFlow = new VelaInstallPermissionFlow();
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private enum InstallRoute { DIRECT, SESSION }
     private volatile boolean busy = false;
     private volatile boolean installSubmitted = false;
+    private volatile InstallRoute installRoute = InstallRoute.DIRECT;
+    private volatile long installRequestedAt = 0L;
     private volatile boolean available = false;
     private volatile boolean downloaded = false;
     private volatile String status = "Not checked";
@@ -103,11 +108,21 @@ final class VelaUpdateController {
             if (!result.startsWith("Waiting for your approval")) installSubmitted = false;
             send();
         }
+        // ACTION_VIEW does not send a PackageInstaller callback. Returning to
+        // Vela means the user dismissed the installer or Sony failed to show it.
+        // Don't strand the Update button in a permanent "awaiting" state.
+        if (installSubmitted && installRoute == InstallRoute.DIRECT) {
+            installSubmitted = false;
+            status = latestCode > 0 && installedCode() >= latestCode
+                ? "Vela update installed successfully"
+                : "Android returned without installing. Try Alternative installer below, or use ADB.";
+            send();
+        }
         VelaInstallPermissionFlow.Action action = permissionFlow.onResume(canInstallPackages());
         if (action == VelaInstallPermissionFlow.Action.INSTALL) {
             status = "Install permission granted · preparing Android confirmation…";
             send();
-            install();
+            installViaSession();
         } else if (action == VelaInstallPermissionFlow.Action.BLOCKED) {
             showPermissionBlocked();
         }
@@ -118,9 +133,9 @@ final class VelaUpdateController {
     }
 
     private void showPermissionBlocked() {
-        status = "Sony Android still reports that Vela cannot install apps, even if the switch looks enabled. "
-            + "Check Sony Settings → Apps → Special app access → Install unknown apps → Vela. "
-            + "If already enabled, install the signed GitHub APK manually once. Vela will not reopen Settings in a loop.";
+        status = "Sony still reports that Vela cannot install apps, even if the switch looks enabled. "
+            + "Try Open Android installer above, which delegates permission prompts to Sony directly. "
+            + "Otherwise use the signed GitHub APK with ADB. Vela will not reopen Settings in a loop.";
         send();
     }
     void maybeCheck() {
@@ -266,11 +281,21 @@ final class VelaUpdateController {
         }
     }
 
-    /** Deliberate TV interaction is required before Android installer is launched. */
-    void install() {
-        if (installSubmitted) {
+    /** Primary Sony path: show the system APK installer directly from a verified content URI. */
+    void install() { install(InstallRoute.DIRECT); }
+
+    /** Optional fallback if Sony firmware ignores an install-session confirmation. */
+    void installViaSession() { install(InstallRoute.SESSION); }
+
+    /** Deliberate TV interaction is required before either Android installer path. */
+    private void install(InstallRoute route) {
+        if (installSubmitted && installRoute == route
+                && SystemClock.elapsedRealtime() - installRequestedAt < 10_000L) {
             status = "Android installation is already awaiting confirmation"; send(); return;
         }
+        // An explicit alternative action must be able to recover from a lost
+        // Android confirmation callback instead of trapping the user forever.
+        installSubmitted = false;
         if (busy || !available || url.isEmpty() || sha.isEmpty()) {
             status = "Check for an available update first"; send(); return;
         }
@@ -285,7 +310,7 @@ final class VelaUpdateController {
                 downloaded = true;
                 status = "Ready for Android installation approval";
                 send();
-                activity.runOnUiThread(() -> promptInstaller(apk));
+                activity.runOnUiThread(() -> promptInstaller(apk, route));
             } catch (Exception e) {
                 Log.w("VelaUpdate", "Update download failed", e);
                 status = "Download failed: " + e.getMessage();
@@ -293,8 +318,12 @@ final class VelaUpdateController {
             } finally { busy = false; send(); }
         });
     }
-    private void promptInstaller(File apk) {
+    private void promptInstaller(File apk, InstallRoute route) {
         try {
+            if (route == InstallRoute.DIRECT) {
+                openDirectInstaller();
+                return;
+            }
             VelaInstallPermissionFlow.Action action = permissionFlow.onInstallRequest(canInstallPackages());
             if (action == VelaInstallPermissionFlow.Action.BLOCKED) {
                 showPermissionBlocked();
@@ -306,6 +335,8 @@ final class VelaUpdateController {
                 activity.startActivity(settings);
             } else {
                 installSubmitted = true;
+                installRoute = InstallRoute.SESSION;
+                installRequestedAt = SystemClock.elapsedRealtime();
                 status = "Preparing Android installation confirmation…";
                 send();
                 // Staging a verified APK in the package manager must not block WebView/TV keys.
@@ -330,7 +361,44 @@ final class VelaUpdateController {
         }
     }
 
-    /** Use Android's own install-session approval instead of an OEM-dependent APK VIEW intent. */
+    /**
+     * Sony-compatible, user-visible APK installer. Unlike Session.commit(),
+     * this does not rely on a later PendingIntent callback bringing a second
+     * activity to the foreground. The system still enforces the per-source
+     * install permission and requires explicit confirmation on the television.
+     */
+    private void openDirectInstaller() {
+        Uri apkUri = new Uri.Builder().scheme("content")
+            .authority(activity.getPackageName() + ".updates")
+            .appendPath("updates").appendPath("vela-update.apk").build();
+        installRoute = InstallRoute.DIRECT;
+        installSubmitted = true;
+        installRequestedAt = SystemClock.elapsedRealtime();
+        RuntimeException failure = null;
+        for (String action : new String[]{ Intent.ACTION_VIEW, Intent.ACTION_INSTALL_PACKAGE }) {
+            Intent prompt = new Intent(action);
+            prompt.setDataAndType(apkUri, "application/vnd.android.package-archive");
+            prompt.setClipData(ClipData.newRawUri("Vela verified update", apkUri));
+            prompt.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            try {
+                activity.startActivity(prompt);
+                status = "APK sent to Sony's installer. If no approval appears, choose Alternative installer.";
+                send();
+                return;
+            } catch (RuntimeException error) {
+                failure = error;
+                Log.w("VelaUpdate", "Direct Android APK installer action unavailable: " + action,
+                    error);
+            }
+        }
+        installSubmitted = false;
+        status = "Sony could not open either Android APK installer action"
+            + (failure == null ? "" : " (" + failure.getClass().getSimpleName() + ")")
+            + ". Try Alternative installer, or use ADB.";
+        send();
+    }
+
+    /** Secondary install-session route for firmware that rejects direct APK intents. */
     private void commitInstallerSession(File apk) throws Exception {
         PackageInstaller installer = activity.getPackageManager().getPackageInstaller();
         PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(

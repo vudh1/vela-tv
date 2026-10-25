@@ -43,6 +43,8 @@ jobs:
         run: |
           node --check remote/app.js
           node tests/remote_phone_test.js
+      - name: Test manual Sony update recovery script
+        run: python3 tests/install_latest_script_test.py
       - name: Compile native Java sources
         run: |
           mkdir -p build/ci-classes

@@ -56,6 +56,14 @@ jobs:
           CODE: ${{ steps.build.outputs.code }}
           NAME: ${{ steps.build.outputs.name }}
         run: |
+          {
+            printf '%s\n' "Signed production build from ${GITHUB_SHA}. Android will request installation approval." ''
+            printf '%s\n' 'Mac / Sony TV manual recovery (keeps existing Vela data):' ''
+            printf '%s\n' '```bash' \
+              'curl -fsSLo install-latest-tv.sh https://raw.githubusercontent.com/vudh1/velatv/main/scripts/install-latest-tv.sh' \
+              'bash install-latest-tv.sh' '```' ''
+            printf '%s\n' 'ADB must be installed, paired and connected to one Sony TV. Pass its serial if multiple TVs are attached. The script verifies the latest release checksum and installs over Vela without uninstalling.'
+          } > "$RUNNER_TEMP/vela-release-notes.md"
           gh release create "v${CODE}" Vela-release.apk Vela-release.apk.sha256 \
             --target "$GITHUB_SHA" --title "Vela ${NAME}" \
-            --notes "Signed production build from ${GITHUB_SHA}. Android will request installation approval." --latest
+            --notes-file "$RUNNER_TEMP/vela-release-notes.md" --latest

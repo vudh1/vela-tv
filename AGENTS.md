@@ -30,3 +30,7 @@ Follow the [FRIDAY cardless cost policy](https://github.com/vudh1/friday/blob/ma
 ## Verification
 
 Use a focused PR; run applicable source validators/builds. Test timezone/DST, ongoing events, duplicate feeds, revocation, stale/offline behavior and display privacy for an integration. Distinguish source merge, signed artifact, cloud deployment, TV installation and actual Sony/Samsung feature verification. Never promote to production only for documentation changes.
+
+## Licensing and provenance
+
+Preserve the canonical root [Apache-2.0 license](LICENSE), [third-party notices](THIRD-PARTY-NOTICES.md) and [wallpaper credits](WALLPAPER-CREDITS.md). Check original source/asset rights before importing CleanFrame components, TV screenshots, artwork, fonts, QR libraries or external data; the repository license does not grant rights to those works or to Vela marks. Licensing-only changes must not trigger signed TV builds or production promotion.

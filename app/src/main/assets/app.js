@@ -372,7 +372,8 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  body='<div class="version-meta">'+esc(s&&s.current?'Installed: '+s.current:'Installed version: unknown')+'</div>'+
  '<div class="version-meta">'+esc(s&&s.status?s.status:'Open Check for updates to retrieve the latest release.')+'</div>'+
  row('checkUpdates','Check now','Check','Check GitHub Releases for the newest signed APK')+
- (s&&s.available?row('installUpdate',s.downloaded?'Install downloaded update':'Download & install',s.downloaded?'Install':'Download','Android must approve the installation'):'')+
+ (s&&s.available?row('installUpdate',s.downloaded?'Open Android installer':'Download & install',s.downloaded?'Install':'Download','Opens the Sony package installer for your approval'):'')+
+ (s&&s.available&&s.downloaded?row('installUpdateSession','Alternative installer','Retry','If the first installer does not appear, try the Android session method'):'')+
  row('autoUpdates','Automatic daily checks',s&&s.auto===false?'Off':'On','Check when Vela is open, once per day')+
  row('autoDownload','Download updates automatically',s&&s.autoDownload===false?'Off':'On','Save and SHA-256 verify new APKs in the background; installation requires approval');}
  $('#panelTitle').textContent=(type==='appMenu'||type==='calendarSettings')?title:uiTitle(title);$('#panelDescription').textContent=subtitle;host.innerHTML=body;host.scrollTop=scrollTop;
@@ -473,6 +474,7 @@ function action(name,id,dir){
  if(name==='redirect'){if(bridge){bridge.setRedirect(!bridge.redirectEnabled());rerenderWithFocus('redirect');}return;}
  if(name==='checkUpdates'){if(bridge&&bridge.checkUpdates)bridge.checkUpdates();else toast('Publish your GitHub release first');return;}
  if(name==='installUpdate'){if(bridge&&bridge.installUpdate)bridge.installUpdate();return;}
+ if(name==='installUpdateSession'){if(bridge&&bridge.installUpdateSession)bridge.installUpdateSession();return;}
  if(name==='autoUpdates'){if(bridge&&bridge.setAutoUpdates){bridge.setAutoUpdates(!!updateStatus&&!updateStatus.auto);renderPanel('updates',{act:'autoUpdates'},true);}return;}
  if(name==='autoDownload'){if(bridge&&bridge.setAutoDownload){bridge.setAutoDownload(!!updateStatus&&!updateStatus.autoDownload);renderPanel('updates',{act:'autoDownload'},true);}return;}
 }
