@@ -11,8 +11,11 @@ import java.util.*;
  */
 final class CalendarIcs {
     static final class Event {
-        final String title; final long start, end; final boolean allDay;
-        Event(String t,long s,long e,boolean d){title=t;start=s;end=e;allDay=d;}
+        final String title, uid, kind, location, description, channel, url;
+        final long start, end; final boolean allDay;
+        Event(String t,long s,long e,boolean d,String id,String type,String place,String details,String station,String link){
+            title=t;start=s;end=e;allDay=d;uid=id;kind=type;location=place;description=details;channel=station;url=link;
+        }
     }
     private static final class Prop {
         String value, attrs;
@@ -49,6 +52,32 @@ final class CalendarIcs {
         }catch(Exception ignored){return null;}
     }
     private static String unescape(String v){return v.replace("\\n","\n").replace("\\N","\n").replace("\\,",",").replace("\\;",";").replace("\\\\","\\").trim();}
+    private static String clip(String text,int max){String clean=unescape(text==null?"":text).replace('\r',' ');return clean.substring(0,Math.min(max,clean.length()));}
+    private static String kind(Item item,String description){
+        String explicit=item.val("X-VELA-KIND").toLowerCase(Locale.ROOT);
+        String categories=item.val("CATEGORIES").toLowerCase(Locale.ROOT);
+        if("watch".equals(explicit)||"watching".equals(explicit)||categories.contains("watching")||
+            description.startsWith("Watching · professional sports"))return "watch";
+        if("play".equals(explicit)||"playing".equals(explicit)||categories.contains("playing")||
+            description.startsWith("Playing · BallerWatch")||item.val("UID").endsWith("@ballerwatch"))return "play";
+        return "other";
+    }
+    private static String channel(Item item,String description){
+        String raw=item.val("X-VELA-CHANNEL");if(raw.isEmpty())raw=item.val("X-TV-CHANNEL");
+        if(raw.isEmpty())for(String line:description.split("\n")){
+            if(line.matches("(?i)^(TV|Channel|Broadcast|Network):\\s*.+")){
+                raw=line.substring(line.indexOf(':')+1).trim();break;
+            }
+        }
+        return clip(raw,80).replace('\n',' ');
+    }
+    private static String link(Item item,String description){
+        String raw=clip(item.val("URL"),512);
+        if(raw.isEmpty())for(String line:description.split("\n")){
+            if(line.startsWith("https://")){raw=line.trim();break;}
+        }
+        return raw.startsWith("https://")&&raw.length()<=512?raw:"";
+    }
     private static Map<String,String> rule(String v){Map<String,String> m=new HashMap<>();for(String part:v.split(";")){int x=part.indexOf('=');if(x>0)m.put(part.substring(0,x).toUpperCase(Locale.ROOT),part.substring(x+1).toUpperCase(Locale.ROOT));}return m;}
     private static boolean contains(String csv,String candidate){if(csv==null||csv.isEmpty())return false;return Arrays.asList(csv.split(",")).contains(candidate);}
     private static String dayCode(DayOfWeek d){return new String[]{"MO","TU","WE","TH","FR","SA","SU"}[d.getValue()-1];}
@@ -78,7 +107,9 @@ final class CalendarIcs {
         if(span>20000)return Integer.MAX_VALUE;
         int n=0;LocalDate d=orig;while(!d.isAfter(candidate)){if(recurring(orig,d,r))n++;d=d.plusDays(1);}return n;
     }
-    static List<Event> today(String ics,ZoneId displayZone,LocalDate day){
+    static List<Event> today(String ics,ZoneId displayZone,LocalDate day){return upcoming(ics,displayZone,day,1);}
+    static List<Event> upcoming(String ics,ZoneId displayZone,LocalDate day,int days){
+        days=Math.max(1,Math.min(14,days));
         List<Item> items=new ArrayList<>();Item current=null;
         String unfolded=ics.replace("\r\n","\n").replace("\r","\n").replaceAll("\n[ \\t]","");
         for(String line:unfolded.split("\n")){
@@ -89,7 +120,7 @@ final class CalendarIcs {
             current.data.computeIfAbsent(key,k->new ArrayList<>()).add(new Prop(head,line.substring(colon+1)));
             if(items.size()>10000)break;
         }
-        long startDay=day.atStartOfDay(displayZone).toInstant().toEpochMilli(),endDay=day.plusDays(1).atStartOfDay(displayZone).toInstant().toEpochMilli();
+        long startDay=day.atStartOfDay(displayZone).toInstant().toEpochMilli(),endDay=day.plusDays(days).atStartOfDay(displayZone).toInstant().toEpochMilli();
         // RECURRENCE-ID overrides suppress the original master occurrence.
         Set<String> overridden=new HashSet<>();
         for(Item item:items){Prop rid=item.first("RECURRENCE-ID");When w=date(rid,displayZone);if(w!=null)overridden.add(item.val("UID")+"/"+w.dt.toInstant().toEpochMilli());}
@@ -100,6 +131,8 @@ final class CalendarIcs {
             long duration=end==null?(original.allDay?86400000L:3600000L):end.dt.toInstant().toEpochMilli()-original.dt.toInstant().toEpochMilli();
             if(duration<=0||duration>7L*86400000)duration=original.allDay?86400000L:3600000L;
             String title=unescape(item.val("SUMMARY"));if(title.isEmpty())title="Untitled event";if(title.length()>120)title=title.substring(0,120);
+            String description=clip(item.val("DESCRIPTION"),1400),location=clip(item.val("LOCATION"),180).replace('\n',' ');
+            String uid=clip(item.val("UID"),180),type=kind(item,description),station=channel(item,description),url=link(item,description);
             Map<String,String> r=rule(item.val("RRULE"));boolean isOverride=item.first("RECURRENCE-ID")!=null;
             LocalDate begins=startDay>0?Instant.ofEpochMilli(startDay-duration).atZone(original.dt.getZone()).toLocalDate().minusDays(1):day.minusDays(2);
             LocalDate finishes=Instant.ofEpochMilli(endDay).atZone(original.dt.getZone()).toLocalDate().plusDays(1);
@@ -118,10 +151,10 @@ final class CalendarIcs {
                     }
                     if(excluded)continue;
                 }
-                out.add(new Event(title,st,en,original.allDay));if(out.size()>120)break;
+                out.add(new Event(title,st,en,original.allDay,uid.isEmpty()?title+":"+st:uid,type,location,description,station,url));if(out.size()>250)break;
             }
-            if(out.size()>120)break;
+            if(out.size()>250)break;
         }
-        out.sort((a,b)->Long.compare(a.start,b.start));if(out.size()>60)return new ArrayList<>(out.subList(0,60));return out;
+        out.sort((a,b)->Long.compare(a.start,b.start));if(out.size()>150)return new ArrayList<>(out.subList(0,150));return out;
     }
 }

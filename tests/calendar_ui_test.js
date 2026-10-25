@@ -34,7 +34,7 @@ let calls=[],cleared=[];
 const context={
   Date:FakeDate,console,Math,Number,String,Object,
   document:{hidden:false},
-  screen:'',profileId:'duong',calConnected:true,calVerified:true,calEvents:[],
+  screen:'',profileId:'duong',calConnected:true,calVerified:true,calEvents:[],calendarFilter:'all',calendarViewEvents:[],
   reminderTimer:null,remindedEvents:{},reminderWindowMs:15*60000,reminderVisibleMs:7000,
   $:element,
   setTimeout(fn,ms){calls.push({fn,ms});return calls.length;},
@@ -44,6 +44,15 @@ const context={
 };
 vm.createContext(context);
 vm.runInContext(source.slice(start,end),context,{filename:'calendar.js'});
+const detailsStart=source.indexOf('function eventKey(e){');
+const detailsEnd=source.indexOf('function recentApps(){',detailsStart);
+assert.ok(detailsStart>0&&detailsEnd>detailsStart,'event details functions present');
+context.currentProfile=()=>context.profile;
+context.persistProfiles=()=>{};
+context.renderPanel=()=>{};
+context.toast=()=>{};
+context.profile={channels:{}};
+vm.runInContext(source.slice(detailsStart,detailsEnd),context,{filename:'event-details.js'});
 function event(offset,title,allDay=false){
   return {title,start:fixed+offset*60000,end:fixed+(offset+30)*60000,allDay};
 }
@@ -58,6 +67,42 @@ const connected=context.calendarEventList();
 assert.equal((connected.match(/data-act="eventInfo"/g)||[]).length,4, 'completed events are hidden; ongoing ones remain');
 assert.ok(!connected.includes('data-act="calendarSettings"'), 'connected view does not expose settings');
 assert.ok(connected.includes('focusable'), 'events are D-pad navigable');
+assert.ok(connected.includes('data-act="filterCalendar"'),'category filters are keyboard navigable');
+assert.ok(connected.includes('Oct 24'),'events show a date even on the current day');
+const playing={...event(40,'Pickup football'),kind:'play',uid:'play-1',location:'Jefferson Park Playfield',description:'RSVP to play'};
+const watching={...event(60,'Sounders match'),kind:'watch',uid:'watch-1',description:'Watching · professional sports'};
+const other={...event(90,'Family birthday'),kind:'other',uid:'other-1',description:'Bring cake'};
+context.calEvents=[playing,watching,other];
+context.calendarFilter='play';
+const playList=context.calendarEventList();
+assert.ok(playList.includes('Pickup football')&&!playList.includes('Sounders match'),'play tab isolates playing events');
+assert.ok(!playList.includes('Jefferson Park Playfield'),'the calendar listing hides field details');
+context.calendarFilter='watch';
+const watchList=context.calendarEventList();
+assert.ok(watchList.includes('Sounders match')&&!watchList.includes('Family birthday'),'watch tab isolates watched fixtures');
+assert.ok(!watchList.includes('professional sports'),'the calendar listing hides descriptions');
+context.calendarFilter='other';
+assert.ok(context.calendarEventList().includes('data-id="other">Life</button>'),'non-sports events use the Life label');
+assert.ok(context.calendarEventList().includes('Family birthday'),'Life tab includes non-sports events');
+context.selectedEvent=playing;
+assert.ok(context.eventDetailsBody().includes('Jefferson Park Playfield'),'playing detail shows the field');
+assert.ok(context.eventDetailsBody().includes('RSVP to play'),'playing detail shows notes');
+context.selectedEvent=watching;
+assert.ok(context.eventDetailsBody().includes('Assign Drogon TV channel'),'watched detail offers channel assignment');
+assert.ok(context.eventDetailsBody().includes('Open Perfect Player'),'watched detail opens IPTV player');
+context.watchChannelReady(context.eventKey(watching),'Drogon Sports HD');
+assert.ok(context.eventDetailsBody().includes('Drogon Sports HD'),'saved channel appears in watched detail');
+context.selectedEvent=other;
+assert.ok(context.eventDetailsBody().includes('Bring cake'),'other detail shows freeform context');
+assert.ok(!context.eventDetailsBody().includes('Perfect Player'),'other event does not show IPTV actions');
+context.calEvents=[
+  event(7,'Reminder event'),
+  event(12,'Another soon'),
+  event(31,'Too distant'),
+  event(5,'All-day',true),
+  event(-45,'Already started')
+];
+context.calendarFilter='all';
 context.calConnected=false;
 assert.ok(context.calendarEventList().includes('data-act="calendarSettings"'), 'disconnected users can set up calendar');
 context.calConnected=true;
@@ -96,4 +141,4 @@ assert.equal(calls.length,2,'deduplicate alert per event per profile');
 context.calEvents=[event(8,'<script>alert(1)</script>')];
 assert.ok(context.calendarEventList().includes('&lt;script>'),'event titles are HTML escaped');
 assert.ok(!context.calendarEventList().includes('<script>'),'event titles are never injected as markup');
-console.log('PASS calendar viewer settings, navigable events, 15-minute reminder, 7-second dismissal, dedup, profile scoping, escaping');
+console.log('PASS calendar date, categories, private event details, saved TV channels, reminders, profile scoping and escaping');

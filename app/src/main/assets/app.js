@@ -2,12 +2,14 @@
 (function () {
 'use strict';
 var bridge=window.QuietTV||null, preview=!bridge;
-var apps=[],appsById={},catalogSignature='',fav=[],mode='dock',theme='dark',scenery='0';
+var tizenMode=!!(window.VelaPlatform&&window.VelaPlatform.kind==='tizen');
+var apps=[],appsById={},catalogSignature='',fav=[],mode='dock',theme='dark',scenery='0',appLabelMode='focus';
 var profiles=[],profileId='duong',fontStyle='classic',clockFormat='auto',rotationMinutes=0,rotationTimer=null;
 var monitorEnabled=false; // profile-scoped, hidden by default; no background streaming
 // Volume settings are device-wide, not profile-specific: the TV audio output is shared.
 var volumeMode='glass',volumePercent=false,volumePosition='center',volumeDelay=1200,volumeTimer=null,lastVolume={percent:45,muted:false};
 var calEvents=[],calConnected=false,calVerified=false,calStatus='',calLabel='',calName='',calAccount='',calLastSuccess=0,calLastAttempt=0,calTimer=null,calendarProfile='',calendarChecked=0,pairingUrl='',pairingExpiresAt=0,pairTimer=null;
+var calSources=[],calendarFilter='all',calendarViewEvents=[],selectedEvent=null,selectedSource='google';
 var reminderTimer=null,remindedEvents={},reminderWindowMs=15*60000,reminderVisibleMs=7000,lastCalendarMarkup='';
 var avatars={orbit:'<circle cx="12" cy="12" r="3.5"/><ellipse cx="12" cy="12" rx="10" ry="5" transform="rotate(-30 12 12)"/><path d="M20 4l-1 3"/>',flower:'<circle cx="12" cy="12" r="2.5"/><path d="M12 3c2 0 3 3 0 6-3-3-2-6 0-6Zm0 18c-2 0-3-3 0-6 3 3 2 6 0 6ZM3 12c0-2 3-3 6 0-3 3-6 2-6 0Zm18 0c0 2-3 3-6 0 3-3 6-2 6 0Z"/>',guest:'<circle cx="12" cy="8" r="3.6"/><path d="M5 21v-1c0-7 14-7 14 0v1"/>',mountain:'<path d="m2 20 7.5-13 4 7 2.5-4L22 20Z"/><path d="m7 11 2.5 2.5 2.2-2"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/>',moon:'<path d="M20 14.5A8.8 8.8 0 0 1 9.5 4 8.7 8.7 0 1 0 20 14.5Z"/><path d="m17 4 .6 1.6L19 6l-1.4.5L17 8l-.5-1.5L15 6l1.5-.4Z"/>',wave:'<path d="M2 15c3-4 6 4 10 0s7-4 10 0M2 20c3-4 6 4 10 0s7-4 10 0M4 9c2-4 4-5 8-5"/>',star:'<path d="m12 2 2.9 6.9 7.4.6-5.7 4.9 1.8 7.2L12 17.7l-6.4 3.9 1.8-7.2-5.7-4.9 7.4-.6Z"/>',leaf:'<path d="M20 3C7 3 3 9 4 17c7 5 17-2 16-14Z"/><path d="M4 21c3-8 7-10 12-13"/>',cat:'<path d="m4 11 1-7 5 4c1-.4 3-.4 4 0l5-4 1 7c2 8-2 11-8 11S2 19 4 11Z"/><path d="M8 15h.1M16 15h.1m-5 3h2m-1 0-2 1m2-1 2 1"/>'};
 var avatarList=['initial','orbit','flower','guest','mountain','sun','moon','wave','star','leaf','cat'];
@@ -17,16 +19,17 @@ function avatarSvg(id,name){if(id==='initial')return '<span class="avatar-initia
 var wallpapers=[
  {name:'Alpine',src:'landscape.svg'}, {name:'Dusk',src:'landscape-1.svg'},
  {name:'Dawn',src:'landscape-2.svg'}, {name:'Moonlight',src:'landscape-3.svg'},
- {name:'Misty Lake',src:'wallpapers/mist-lake.webp',thumb:'wallpapers/thumb-mist-lake.webp'},
- {name:'Blue Coast',src:'wallpapers/blue-coast.webp',thumb:'wallpapers/thumb-blue-coast.webp'},
- {name:'Amber Dunes',src:'wallpapers/amber-dunes.webp',thumb:'wallpapers/thumb-amber-dunes.webp'},
- {name:'Lavender Bay',src:'wallpapers/lavender-bay.webp',thumb:'wallpapers/thumb-lavender-bay.webp'}
+ {name:'Misty Lake',src:'wallpapers/mist-lake.webp',src4k:'wallpapers/mist-lake-4k.webp',thumb:'wallpapers/thumb-mist-lake.webp'},
+ {name:'Blue Coast',src:'wallpapers/blue-coast.webp',src4k:'wallpapers/blue-coast-4k.webp',thumb:'wallpapers/thumb-blue-coast.webp'},
+ {name:'Amber Dunes',src:'wallpapers/amber-dunes.webp',src4k:'wallpapers/amber-dunes-4k.webp',thumb:'wallpapers/thumb-amber-dunes.webp'},
+ {name:'Lavender Bay',src:'wallpapers/lavender-bay.webp',src4k:'wallpapers/lavender-bay-4k.webp',thumb:'wallpapers/thumb-lavender-bay.webp'}
 ];
 var screen='',cursor=0,controls=[],geometry=[],listDirty=true,focusedControl=null,iconCache={},pendingIcons={};
 var contextAppId='',contextFrom='',recentMax=5,panelHistory=[],startupChooserOpen=false;
 var lastCatalog=0,clockValue='',customPhoto='',toastTimer=null,clockTimer=null,updateStatus=null;
 var $=function(s){return document.querySelector(s);};
 var defaults=['com.google.android.youtube.tv','com.netflix.ninja','com.apple.atve.androidtv.appletv','com.niklabs.pp','com.wbd.stream','com.spotify.tv.android','com.disney.disneyplus','com.amazon.amazonvideo.livingroom'];
+var tizenDefaults=['org.tizen.netflix-app','9Ur5IzDKqV.TizenYouTube','com.samsung.tv.aria-video','org.tizen.primevideo','MCmYXNxgcu.DisneyPlus','rJeHak5zRg.Spotify','3KA0pm7a7V.TubiTV'];
 var demo=[['YouTube','com.google.android.youtube.tv'],['Netflix','com.netflix.ninja'],['Apple TV','com.apple.atve.androidtv.appletv'],['Perfect Player','com.niklabs.pp'],['Spotify','com.spotify.tv.android'],['Max','com.wbd.stream'],['Disney+','com.disney.disneyplus'],['Prime Video','com.amazon.amazonvideo.livingroom'],['Tubi','com.tubitv'],['Peacock','com.peacocktv.peacockandroid'],['Crunchyroll','com.crunchyroll.crunchyroid']];
 function esc(s){return String(s||'').replace(/[&<>"']/g,function(x){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x];});}
 function get(k){try{return bridge?bridge.getSetting(k):localStorage.getItem('vela_'+k)||'';}catch(e){return '';}}
@@ -73,16 +76,19 @@ function volumeChanged(payload,previewOnly){
 function rescheduleClock(){clock();if(clockTimer)clearTimeout(clockTimer);clockTimer=setTimeout(rescheduleClock,60000-(Date.now()%60000)+40);}
 function setScenery(){var n=parseInt(scenery,10)||0;if(n<0||n>=wallpapers.length)n=0;scenery=String(n);
  document.body.setAttribute('data-scenery',scenery);
- $('#wallpaper').style.backgroundImage=customPhoto?'url("'+customPhoto+'")':'url("'+wallpapers[n].src+'")';}
+ // Keep UHD artwork for 1080p+ and true 4K screens; 720p sets avoid a 4K decode.
+ var effectiveWidth=Math.max(window.screen&&window.screen.width||0,window.innerWidth||0)*(window.devicePixelRatio||1);
+ var artwork=wallpapers[n].src4k&&effectiveWidth>=1280?wallpapers[n].src4k:wallpapers[n].src;
+ $('#wallpaper').style.backgroundImage=customPhoto?'url("'+customPhoto+'")':'url("'+artwork+'")';}
 function makeProfile(id,name,legacy){return {id:id,name:name,avatar:id==='tram'?'flower':id==='guest'?'guest':'initial',favorites:legacy&&legacy.favorites?legacy.favorites:null,
- layout:legacy&&legacy.layout||'dock',theme:legacy&&legacy.theme||'dark',scenery:legacy&&legacy.scenery||'0',font:'classic',clockFormat:'auto',recent:[],usage:[],appSort:'name',rotate:0,monitorEnabled:false};}
+ layout:legacy&&legacy.layout||'dock',theme:legacy&&legacy.theme||'dark',scenery:legacy&&legacy.scenery||'0',font:'classic',clockFormat:'auto',recent:[],usage:[],appSort:'name',labels:'focus',channels:{},rotate:0,monitorEnabled:false};}
 function currentProfile(){for(var i=0;i<profiles.length;i++)if(profiles[i].id===profileId)return profiles[i];return profiles[0];}
 function persistProfiles(){save('profile_data_v2',JSON.stringify({profiles:profiles.filter(function(p){return p.id!=='guest';})}));save('active_profile_v2',profileId==='guest'?'duong':profileId);}
-function persistAppearance(){var p=currentProfile();if(!p)return;p.favorites=fav.slice(0,8);p.layout=mode;p.theme=theme;p.scenery=scenery;p.font=fontStyle;p.rotate=rotationMinutes;p.monitorEnabled=monitorEnabled;p.clockFormat=clockFormat;persistProfiles();}
+function persistAppearance(){var p=currentProfile();if(!p)return;p.favorites=fav.slice(0,8);p.layout=mode;p.theme=theme;p.scenery=scenery;p.font=fontStyle;p.rotate=rotationMinutes;p.monitorEnabled=monitorEnabled;p.clockFormat=clockFormat;p.labels=appLabelMode;persistProfiles();}
 function initProfiles(){var parsed=null;try{parsed=JSON.parse(get('profile_data_v2')||'null');}catch(e){}
  if(parsed&&Array.isArray(parsed.profiles)&&parsed.profiles.length){profiles=parsed.profiles.filter(function(p){return p&&p.id!=='guest'&&typeof p.id==='string'&&typeof p.name==='string';}).map(function(p){
    return {id:p.id,name:p.name.slice(0,24),avatar:p.avatar==='initial'?'initial':avatars[p.avatar]?p.avatar:(p.id==='tram'?'flower':'initial'),favorites:Array.isArray(p.favorites)?p.favorites.slice(0,8):null,
-    layout:p.layout==='list'?'list':'dock',theme:p.theme==='light'?'light':'dark',scenery:String(p.scenery||'0'),font:p.font==='modern'?'modern':'classic',clockFormat:['auto','12','24'].indexOf(p.clockFormat)>=0?p.clockFormat:'auto',recent:Array.isArray(p.recent)?p.recent.filter(function(v){return typeof v==='string';}).slice(0,5):[],usage:Array.isArray(p.usage)?p.usage.filter(function(v){return v&&typeof v.id==='string'&&Number.isFinite(v.at);}).slice(-750):[],appSort:['name','recent','week','month','quarter'].indexOf(p.appSort)>=0?p.appSort:'name',rotate:p.rotate===30?30:0,monitorEnabled:p.monitorEnabled===true};
+    layout:p.layout==='list'?'list':'dock',theme:p.theme==='light'?'light':'dark',scenery:String(p.scenery||'0'),font:p.font==='modern'?'modern':'classic',clockFormat:['auto','12','24'].indexOf(p.clockFormat)>=0?p.clockFormat:'auto',recent:Array.isArray(p.recent)?p.recent.filter(function(v){return typeof v==='string';}).slice(0,5):[],usage:Array.isArray(p.usage)?p.usage.filter(function(v){return v&&typeof v.id==='string'&&Number.isFinite(v.at);}).slice(-750):[],appSort:['name','recent','week','month','quarter'].indexOf(p.appSort)>=0?p.appSort:'name',labels:['focus','both','names'].indexOf(p.labels)>=0?p.labels:'focus',channels:Object.fromEntries(Object.entries(p.channels&&typeof p.channels==='object'&&!Array.isArray(p.channels)?p.channels:{}).filter(function(e){return e[0].length<=240&&typeof e[1]==='string'&&e[1].length<=80;}).slice(-100)),rotate:p.rotate===30?30:0,monitorEnabled:p.monitorEnabled===true};
  });}
  if(!profiles.length){var oldFav=null;try{var f=JSON.parse(get('favorites')||'null');if(Array.isArray(f)&&f.length)oldFav=f;}catch(e){}
    var legacy={favorites:oldFav,layout:get('layout')||'dock',theme:get('theme')||'dark',scenery:get('scenery')||'0'};
@@ -92,12 +98,13 @@ function initProfiles(){var parsed=null;try{parsed=JSON.parse(get('profile_data_
  profileId=get('active_profile_v2')||'duong';if(profileId==='guest')profileId='duong';if(!profiles.some(function(p){return p.id===profileId;}))profileId=profiles[0].id;
  applyProfile(false);persistProfiles();}
 function applyProfile(showHome){var p=currentProfile();if(!p)return;
- fav=Array.isArray(p.favorites)?p.favorites.slice(0,8):[];if(p.favorites===null&&apps.length){var seeded=[];defaults.forEach(function(pkg){apps.forEach(function(a){if(a.package===pkg&&seeded.indexOf(a.id)<0)seeded.push(a.id);});});if(!seeded.length)seeded=apps.slice(0,7).map(function(a){return a.id;});fav=seeded.slice(0,8);p.favorites=fav.slice();if(profileId!=='guest')persistProfiles();}mode=p.layout==='list'?'list':'dock';theme=p.theme==='light'?'light':'dark';
+ fav=Array.isArray(p.favorites)?p.favorites.slice(0,8):[];if(p.favorites===null&&apps.length){var seeded=[];(tizenMode?tizenDefaults:defaults).forEach(function(pkg){apps.forEach(function(a){if((tizenMode?a.id:a.package)===pkg&&seeded.indexOf(a.id)<0)seeded.push(a.id);});});if(!seeded.length)seeded=apps.slice(0,7).map(function(a){return a.id;});fav=seeded.slice(0,8);p.favorites=fav.slice();if(profileId!=='guest')persistProfiles();}mode=p.layout==='list'?'list':'dock';theme=p.theme==='light'?'light':'dark';
  scenery=p.scenery||'0';fontStyle=p.font==='modern'?'modern':'classic';clockFormat=['auto','12','24'].indexOf(p.clockFormat)>=0?p.clockFormat:'auto';clockValue='';clock();rotationMinutes=p.rotate===30?30:0;
+ appLabelMode=['focus','both','names'].indexOf(p.labels)>=0?p.labels:'focus';document.body.setAttribute('data-app-labels',appLabelMode);
  monitorEnabled=p.monitorEnabled===true;$('#monitorButton').classList.toggle('hidden',!monitorEnabled);
  document.body.classList.toggle('light',theme==='light');document.body.classList.toggle('modern-clock',fontStyle==='modern');
  var btn=$('#profileButton');btn.innerHTML=avatarSvg(p.avatar,p.name);btn.title=p.name+' — Switch profile';btn.setAttribute('aria-label','Profile: '+p.name+'. Switch profile');
- customPhoto='';setScenery();calendarProfile='';calEvents=[];calConnected=false;calVerified=false;calStatus='';calLabel='';calName='';calAccount='';calLastSuccess=0;calLastAttempt=0;updateCalendarView();if(profileId!=='guest')requestCalendar(false);if(showHome){home();scheduleRotation();}}
+ customPhoto='';setScenery();calendarProfile='';calEvents=[];calSources=[];selectedEvent=null;calendarFilter='all';calConnected=false;calVerified=false;calStatus='';calLabel='';calName='';calAccount='';calLastSuccess=0;calLastAttempt=0;updateCalendarView();if(profileId!=='guest')requestCalendar(false);if(showHome){home();scheduleRotation();}}
 function scheduleRotation(){if(rotationTimer)clearTimeout(rotationTimer);rotationTimer=null;
  if(!rotationMinutes||screen||document.hidden)return;
  rotationTimer=setTimeout(function(){if(!screen&&!document.hidden){scenery=String(((parseInt(scenery,10)||0)+1)%wallpapers.length);customPhoto='';setScenery();persistAppearance();}
@@ -121,14 +128,14 @@ function profileChooser(){var s='<div class="profiles-list">';profiles.forEach(f
 var editingAvatar='';
 function avatarPicker(){var p=profiles.filter(function(x){return x.id===editingAvatar;})[0],b='<div class="avatar-grid">';avatarList.forEach(function(a){b+='<button class="avatar-option focusable'+(p&&p.avatar===a?' is-current':'')+'" data-act="chooseAvatar" data-id="'+esc(a)+'" aria-label="'+esc(a)+' avatar">'+avatarSvg(a,p&&p.name||'Guest')+'<span>'+esc(a.charAt(0).toUpperCase()+a.slice(1))+'</span></button>';});return b+'</div>';}
 function appFallback(){return '<svg class="fallback-app-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M8 8h8v8H8z"/></svg>';}
-function icon(a){var uri=preview?'':'https://vela-icons.local/icon/'+encodeURIComponent(a.id)+'?quality=hq192-v2';return '<span class="app-icon-frame">'+appFallback()+(uri?'<img class="app-icon" loading="eager" decoding="async" alt="" src="'+esc(uri)+'" onerror="this.style.display=\'none\'">':'')+'</span>';}
+function icon(a){var uri=preview?'':tizenMode?(a.icon&&/^file:\/\//.test(a.icon)?a.icon:''):'https://vela-icons.local/icon/'+encodeURIComponent(a.id)+'?quality=hq384-v3';return '<span class="app-icon-frame">'+appFallback()+(uri?'<img class="app-icon" loading="eager" decoding="async" alt="" src="'+esc(uri)+'" onerror="this.style.display=\'none\'">':'')+'</span>';}
 
-function tile(a,act){return '<button class="app-card focusable" data-act="'+act+'" data-id="'+esc(a.id)+'" data-name="'+esc(a.name)+'" title="'+esc(a.name)+'" aria-label="'+esc(a.name)+'">'+icon(a)+'</button>';}
+function tile(a,act){return '<button class="app-card focusable" data-act="'+act+'" data-id="'+esc(a.id)+'" data-name="'+esc(a.name)+'" title="'+esc(a.name)+'" aria-label="'+esc(a.name)+'">'+icon(a)+'<span class="app-name home-tile-name">'+esc(a.name)+'</span></button>';}
 function populateCatalog(incoming,fromCache){if(!Array.isArray(incoming))return;
  var signature=JSON.stringify(incoming);if(signature===catalogSignature){lastCatalog=Date.now();return;}
  catalogSignature=signature;apps=incoming;appsById={};for(var i=0;i<apps.length;i++)appsById[apps[i].id]=apps[i];
  var p=currentProfile();var next=fav.filter(function(id){return !!byId(id);});
- if(p&&p.favorites===null){defaults.forEach(function(pkg){apps.forEach(function(a){if(a.package===pkg&&next.indexOf(a.id)<0)next.push(a.id);});});
+ if(p&&p.favorites===null){(tizenMode?tizenDefaults:defaults).forEach(function(pkg){apps.forEach(function(a){if((tizenMode?a.id:a.package)===pkg&&next.indexOf(a.id)<0)next.push(a.id);});});
  if(!next.length)next=apps.slice(0,7).map(function(a){return a.id;});}
  fav=next.slice(0,8);if(p){p.favorites=fav.slice();if(profileId!=='guest')persistProfiles();}lastCatalog=Date.now();home();if(screen){renderPanel(screen,null,true);}
 }
@@ -145,7 +152,7 @@ function home(){var arr=fav.map(byId).filter(Boolean),f=$('#favorites');f.classN
 /* Geometry is calculated only when markup, scroll or viewport changes—not for every remote key. */
 function activeList(){if(!listDirty)return;var root=screen?$('#overlay'):$('.page');controls=Array.prototype.slice.call(root.querySelectorAll('button.focusable:not([disabled])'));
  geometry=controls.map(function(el){var r=el.getBoundingClientRect();return {x:(r.left+r.right)/2,y:(r.top+r.bottom)/2,top:r.top};});listDirty=false;}
-function labelSelected(el){var label=$('#focusLabel');if(screen||!el||!el.classList.contains('app-card')){label.classList.remove('visible');return;}
+function labelSelected(el){var label=$('#focusLabel');if(screen||appLabelMode!=='focus'||!el||!el.classList.contains('app-card')){label.classList.remove('visible');return;}
  var a=byId(el.getAttribute('data-id'));if(!a){label.classList.remove('visible');return;}var g=geometry[cursor];if(!g)return;
  label.textContent=a.name;label.style.left=g.x+'px';label.style.top=(g.top-39)+'px';label.classList.add('visible');}
 function select(i){activeList();if(!controls.length)return;var old=focusedControl;cursor=Math.max(0,Math.min(controls.length-1,i));if(old){old.classList.remove('selected');old.setAttribute('tabindex','-1');}
@@ -154,6 +161,30 @@ function select(i){activeList();if(!controls.length)return;var old=focusedContro
  labelSelected(el);}
 function row(act,title,right,sub,id){return '<button class="panel-row focusable" data-act="'+act+'"'+(id?' data-id="'+esc(id)+'"':'')+'><span><span class="row-title">'+esc(title)+'</span><span class="row-sub">'+esc(sub||'')+'</span></span><span class="row-right">'+esc(right||'')+' <span class="chevron">›</span></span></button>';}
 function appRow(act,title,right,sub,id){return row(act,title,right,sub).replace('data-act="'+act+'"','data-act="'+act+'" data-id="'+esc(id)+'"');}
+function eventKey(e){return e?String(e.uid||e.title).slice(0,180)+'/'+e.start:'';}
+function savedChannel(e){var p=currentProfile();return e&&p&&p.channels&&p.channels[eventKey(e)]||e&&e.channel||'';}
+function watchChannelReady(key,value){if(!selectedEvent||eventKey(selectedEvent)!==key)return;
+ var p=currentProfile();if(!p)return;if(!p.channels)p.channels={};
+ var station=String(value||'').replace(/[\r\n<>]/g,' ').trim().slice(0,80);
+ if(station)p.channels[key]=station;else delete p.channels[key];
+ var keys=Object.keys(p.channels);if(keys.length>100)keys.slice(0,keys.length-100).forEach(function(id){delete p.channels[id];});
+ if(profileId!=='guest')persistProfiles();renderPanel('eventDetails');toast(station?'Channel saved':'Channel cleared');}
+function detailRow(label,value){return value?'<div class="event-detail-row"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong></div>':'';}
+function eventDetailsBody(){var e=selectedEvent;if(!e)return '<p class="calendar-empty">Event is no longer available.</p>';
+ var kind=e.kind==='play'?'Playing':e.kind==='watch'?'Watching':'Life';
+ var date=new Date(e.start).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+ var time=e.allDay?'All day':calendarTime(e.start,false)+' – '+calendarTime(e.end,false);
+ var body='<div class="event-details">'+detailRow('TYPE',kind)+detailRow('DATE',date)+detailRow('TIME',time);
+ if(e.location)body+=detailRow(e.kind==='play'?'FIELD':'LOCATION',e.location);
+ if(e.kind==='watch'){
+  var channel=savedChannel(e);
+  body+=detailRow('DROGON TV CHANNEL',channel||'Not assigned');
+  body+=row('editWatchChannel',channel?'Edit channel':'Assign Drogon TV channel','Edit','Use the exact name in your configured Perfect Player playlist');
+  body+=row('openPerfectPlayer','Open Perfect Player','Open','Choose '+(channel||'the match channel')+' in your playlist');
+ }
+ if(e.description)body+='<div class="event-details-copy"><span>NOTES</span><p>'+esc(e.description)+'</p></div>';
+ if(e.url)body+='<div class="event-details-copy"><span>EVENT LINK</span><p>'+esc(e.url)+'</p></div>';
+ return body+'</div>';}
 function recentApps(){var p=currentProfile();return p&&Array.isArray(p.recent)?p.recent.map(byId).filter(Boolean):[];}
 function rememberApp(id){if(!byId(id))return;var p=currentProfile();if(!p)return;
  p.recent=[id].concat((p.recent||[]).filter(function(x){return x!==id&&!!byId(x);})).slice(0,recentMax);
@@ -198,18 +229,18 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  var title='',subtitle='',body='';
  if(type==='settings'){title='Settings';subtitle='Four simple sections.';
  body=row('homeSettings','Home & profiles','Open','Appearance, favorites and profile selection')+
- row('lifeSettings','Daily life','Open','Calendar, screensaver and baby monitor')+
+ row('lifeSettings','Daily life','Open',tizenMode?'Private calendar':'Calendar, screensaver and baby monitor')+
  row('appsSettings','Apps & activity','Open','Browse and sort installed apps')+
  row('deviceSettings','Device & support','Open','Updates, recovery and about');}
  else if(type==='homeSettings'){title='Home & profiles';subtitle='Personalize the Vela Home experience.';
  body=row('customize','Appearance','Open','Theme, wallpapers and clock')+
  row('homeApps','Home favorites','Edit','Add and arrange pinned apps')+
  row('profiles','Profiles',currentProfile().name,'Manage profiles')+
- row('wakeProfileToggle','Ask for profile on TV wake',bridge&&bridge.wakeProfilePromptEnabled&&!bridge.wakeProfilePromptEnabled()?'Off':'On','After standby; not when returning from a streaming app');}
+ row('wakeProfileToggle',tizenMode?'Ask for profile on Vela launch':'Ask for profile on TV wake',bridge&&bridge.wakeProfilePromptEnabled&&!bridge.wakeProfilePromptEnabled()?'Off':'On',tizenMode?'When you open Vela; Samsung controls TV startup':'After standby; not when returning from a streaming app');}
  else if(type==='lifeSettings'){title='Daily life';subtitle='Small conveniences, no Home clutter.';
  body=row('calendarSettings','Calendar',calVerified?'Verified':calConnected?'Saved':'Connect','Today events and subscriptions')+
- row('screensaverSettingsPanel','Screensaver','Open','Moving clock and current events')+
- row('monitorSettings','Baby monitor',monitorEnabled?'Visible':'Hidden','Optional camera shortcut');}
+ (tizenMode?'':row('screensaverSettingsPanel','Screensaver','Open','Moving clock and current events')+
+ row('monitorSettings','Baby monitor',monitorEnabled?'Visible':'Hidden','Optional camera shortcut'));}
  else if(type==='screensaverSettingsPanel'){title='Screensaver';subtitle='Vela Clock moves gently and shows up to three cached events.';
  body=row('screensaver','Choose Vela Clock','Sony settings','Set Vela Clock as your preferred screensaver')+
  '<p class="library-footnote">Current and upcoming events appear from the selected profile’s verified calendar cache. No network request is made by the screensaver.</p>';}
@@ -224,13 +255,18 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  row('chooseSort','Most opened · 30 days',currentProfile().appSort==='month'?'✓':'','Last month','month')+
  row('chooseSort','Most opened · 90 days',currentProfile().appSort==='quarter'?'✓':'','Last three months','quarter');}
  else if(type==='deviceSettings'){title='Device & support';subtitle='System controls in one place.';
- body=row('updates','Software updates','Open','Download and approve Vela updates')+
+ body=tizenMode?row('samsungHome','Samsung Home','Open','Return to the native Samsung interface')+
+ row('samsungSettings','TV settings','Open','Open Samsung settings if supported')+
+ row('about','About Vela on Samsung','Info','Tizen capabilities and privacy'):
+ row('updates','Software updates','Open','Download and approve Vela updates')+
  row('recovery','Recovery','Open','Return to Sony Home and restore controls')+
  row('about','About Vela','Info','Version and privacy');
  }
  else if(type==='about'){title='About Vela';subtitle='A calmer TV launcher.';
- body='<p class="library-footnote">Version: '+esc(updateStatus&&updateStatus.current?updateStatus.current:'See Updates')+'</p>'+ 
- '<p class="library-footnote">Profiles and app activity stay on this TV. Calendar links and events are stored locally with Android Keystore encryption. Returning to Sony Home remains available under Recovery.</p>';}
+ body=tizenMode?
+ '<p class="library-footnote">Samsung Tizen build. Profiles, favorites and app history stay on this TV. Private iCal subscriptions and cached events use AES-GCM with a Samsung KeyManager-protected key. Samsung owns the system screensaver and power-on interface; Vela opens as an app. A Samsung device certificate is required for installation. Automatic WGT updates are not yet available. Weather: Open-Meteo (CC BY 4.0), approximate location by IP Info.</p>':
+ '<p class="library-footnote">Version: '+esc(updateStatus&&updateStatus.current?updateStatus.current:'See Updates')+'</p>'+
+ '<p class="library-footnote">Profiles and app activity stay on this TV. Calendar links and events are stored locally with Android Keystore encryption. Returning to Sony Home remains available under Recovery. Weather: Open-Meteo (CC BY 4.0), approximate location by IP Info.</p>';}
  else if(type==='homeApps'){title='Home favorites';subtitle='Pin up to eight apps and reorder with arrows.';body=favoritesEditor();}
  else if(type==='startupProfiles'){title='Who is watching?';subtitle='Choose a profile to continue.';
  body='<div class="startup-list">'+profiles.map(function(p){
@@ -240,10 +276,10 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  body='<div class="app-grid">'+orderedApps().map(function(a){return tile(a,'launch');}).join('')+'</div>'+(apps.length?'<p class="library-footnote">Sorted by '+esc(sortLabel())+' · Change under Gear → Apps</p>':'<p>Loading installed apps…</p>');}
  else if(type==='recent'){title='Recently opened';subtitle='Just your last five Vela launches, on this profile.';body=recentPanel();}
  else if(type==='appMenu'){var app=byId(contextAppId),pinned=fav.indexOf(contextAppId)>=0;title=app?app.name:'App actions';subtitle='Hold OK on an app to open these quick actions.';
- body=app?'<div class="context-app">'+icon(app)+'<span>'+esc(app.name)+'</span></div>'+appRow('launch','Open app','Open','Launch this application',contextAppId)+appRow('togglePin',pinned?'Remove from Home':'Add to Home',pinned?'Unpin':'Pin',pinned?'Keep in All apps':'Show in your favorites dock',contextAppId)+appRow('appInfo','App information','Settings','Open the Android app settings for this app',contextAppId):'<p>App no longer installed.</p>';}
+ body=app?'<div class="context-app">'+icon(app)+'<span>'+esc(app.name)+'</span></div>'+appRow('launch','Open app','Open','Launch this application',contextAppId)+appRow('togglePin',pinned?'Remove from Home':'Add to Home',pinned?'Unpin':'Pin',pinned?'Keep in All apps':'Show in your favorites dock',contextAppId)+(tizenMode?'':appRow('appInfo','App information','Settings','Open the Android app settings for this app',contextAppId)):'<p>App no longer installed.</p>';}
 
  else if(type==='customize'){title='Personalize';subtitle='Changes appear behind this panel immediately.';
- body=row('volumeSettings','Volume indicator',volumeMode==='off'?'Native only':volumeMode==='glass'?'Glass':'Minimal','Sony native by default; optional custom preview')+row('layout','Home layout',mode==='dock'?'Dock':'List','Switch between dock and list')+row('theme','Contrast',theme==='dark'?'Dark':'Light','Match your wallpaper')+row('wallpapers','Wallpaper library',wallpapers[parseInt(scenery,10)||0].name,'Browse eight bundled backgrounds')+row('rotate','Wallpaper rotation',rotationMinutes?'Every 30 min':'Off','Only rotates while Home is visible')+row('font','Clock type',fontStyle==='modern'?'Modern':'Classic','Change the clock font without extra downloads')+row('clockFormat','Time format',clockFormat==='auto'?'TV setting':clockFormat==='24'?'24-hour':'12-hour','Automatically follow Sony time settings')+row('photo','Custom photo','Choose','Use a picture stored on this TV')+row('resetPhoto','Reset photo','Restore','Return to the selected built-in wallpaper');}
+ body=(tizenMode?'':row('volumeSettings','Volume indicator',volumeMode==='off'?'Native only':volumeMode==='glass'?'Glass':'Minimal','Sony native by default; optional custom preview'))+row('layout','Home layout',mode==='dock'?'Dock':'List','Switch between dock and list')+row('appLabels','App labels',appLabelMode==='focus'?'On focus':appLabelMode==='both'?'Icon + name':'Name only','Cycle three clean launcher styles')+row('theme','Contrast',theme==='dark'?'Dark':'Light','Match your wallpaper')+row('wallpapers','Wallpaper library',wallpapers[parseInt(scenery,10)||0].name,'Browse eight bundled backgrounds')+row('rotate','Wallpaper rotation',rotationMinutes?'Every 30 min':'Off','Only rotates while Home is visible')+row('font','Clock type',fontStyle==='modern'?'Modern':'Classic','Change the clock font without extra downloads')+row('clockFormat','Time format',clockFormat==='auto'?'TV setting':clockFormat==='24'?'24-hour':'12-hour','Use TV setting when available')+(tizenMode?'':row('photo','Custom photo','Choose','Use a picture stored on this TV')+row('resetPhoto','Reset photo','Restore','Return to the selected built-in wallpaper'));}
  else if(type==='volumeSettings'){title='Volume overlay';subtitle='Experimental Home-only overlay. Streaming apps continue using Sony’s native volume controls.';
  body=row('volumeStyle','Appearance',volumeMode==='glass'?'Glass':volumeMode==='minimal'?'Minimal':'Native only','Switch Glass → Minimal → Native only')+
  row('volumePercent','Show percentage',volumePercent?'On':'Off','Bar only is the cleanest look')+
@@ -268,20 +304,42 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  row('cameraApps','Other camera apps','Browse','Choose a TV-installed camera or network monitor app')+
  row('monitorSettings','Monitor settings','Edit','Show/hide this button and read PiP compatibility');
  }
- else if(type==='calendar'){title='Today';subtitle=calConnected?'Events for '+currentProfile().name+' · Manage under Gear → Calendar':'Connect a private calendar in Gear → Calendar.';
+ else if(type==='calendar'){title='Calendar';subtitle=calConnected?'Upcoming events for '+currentProfile().name:'Connect Google and BallerWatch under Gear → Calendar.';
  body=calendarEventList();}
  else if(type==='calendarSettings'){title='Calendar · '+currentProfile().name;subtitle='Private read-only iCal subscription, not Google sign-in.';
  var stamp=calLastSuccess?new Date(calLastSuccess).toLocaleString():'Never';var badge=calVerified?'VERIFIED':calConnected?'NOT VERIFIED':'NOT CONNECTED';
  body='<div class="calendar-connection"><span class="connection-pill '+(calVerified?'verified':calConnected?'pending':'')+'">'+badge+'</span>'+
- '<div class="connection-name">'+esc(calLabel||calName||'No calendar selected')+'</div>'+(calName?'<div class="connection-detail">Calendar: '+esc(calName)+'</div>':'')+'<div class="connection-detail">Calendar ID: '+esc(calAccount||'Not provided by iCal')+'</div>'+
+ '<div class="connection-name">'+esc(calSources.length?calSources.map(function(s){return s.kind==='sport'?'BallerWatch':'Google';}).join(' + '):'No calendar selected')+'</div>'+
  '<div class="connection-detail">'+esc(calStatus||'No refresh attempted')+'</div><div class="connection-detail">Last successful sync: '+esc(stamp)+'</div></div>';
  if(profileId==='guest')body+='<p class="calendar-help">Guest is temporary: no calendar addresses or events are saved.</p>';
- else body+=row('pairCalendar',calConnected?'Replace calendar via phone':'Connect with phone','QR','Scan on trusted home Wi-Fi and paste a Google or BallerWatch iCal link')+
- row('connectCalendar',calConnected?'Replace link on TV':'Enter on TV',calConnected?'Replace':'Enter','Paste a Google or BallerWatch iCal address')+
+ else body+=row('calendarSource','Google Calendar',calSources.some(function(s){return s.kind==='google';})?'Connected':'Connect','Birthdays, appointments, tasks and other events','google')+
+ row('calendarSource','BallerWatch',calSources.some(function(s){return s.kind==='sport';})?'Connected':'Connect','Matches you play and professional sports you watch','sport')+
  row('refreshCalendar','Refresh now','↻','Normally auto-refreshes about every 15 minutes while Vela is open')+
- (calConnected?row('disconnectCalendar','Disconnect','Remove','Delete this profile’s saved link and cache'):'')+
- '<p class="library-footnote">Verified means the selected source returned a valid calendar feed. Zero events is still a successful connection. Calendar labels are for display only; subscriptions do not authenticate user identity. One encrypted feed per profile currently; connecting another replaces it. Use private iCal addresses only on a trusted device.</p>';
+  (calConnected?row('disconnectCalendar','Disconnect both calendars','Remove','Delete both subscriptions and caches for this profile'):'')+
+ '<p class="library-footnote">Both feeds are read-only and encrypted separately. Each can be replaced without removing the other. '+(tizenMode?'Samsung requires direct HTTPS access from this TV; no proxy receives your private link.':'Only use private iCal addresses on a trusted device.')+'</p>';
  }
+ else if(type==='calendarSource'){var isSport=selectedSource==='sport',attached=calSources.some(function(s){return s.kind===selectedSource;});
+ title=isSport?'BallerWatch sports':'Google Calendar';subtitle=isSport?'Your playing and watched sports fixtures.':'Your birthdays, reminders, appointments and tasks.';
+ body=(tizenMode?row('tizenCalendarEntry',attached?'Replace subscription':'Connect subscription','Enter','Paste the private read-only iCal URL'):
+ row('pairCalendar','Connect using phone','QR','Scan on your trusted Wi-Fi and paste the subscription URL')+
+ row('connectCalendar',attached?'Replace on TV':'Enter on TV','Enter','Paste the iCal URL on your Sony TV'))+
+ (attached?row('removeCalendarSource','Remove this source','Remove','Keep the other calendar connected'):'')+
+ '<p class="library-footnote">'+(isSport?'Copy the feed under BallerWatch → Settings → Share my calendar. The ICS marks playing versus watching, but does not currently include Drogon TV channels.':'Get your secret iCal link from Google Calendar settings. You do not need to sign into Google on this TV.')+'</p>';}
+ else if(type==='tizenCalendarEntry'){title='Private calendar';subtitle='Samsung · saved under this profile only';
+ body='<p class="library-footnote">Paste your '+(selectedSource==='sport'?'BallerWatch sports':'Google Calendar secret')+' iCal address using the Samsung keyboard or SmartThings remote. Press Down after editing to reach Save. Vela encrypts the link before saving.</p>'+
+ '<label class="calendar-input-label" for="tizenCalendarUrl">Secret HTTPS iCal URL</label>'+
+ '<input class="calendar-url-input" id="tizenCalendarUrl" type="url" inputmode="url" maxlength="4096" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="'+(selectedSource==='sport'?'https://ballerwatch-web.vudhone.workers.dev/web/calendar.ics':'https://calendar.google.com/calendar/ical/…/basic.ics')+'">'+
+ row('focusCalendarInput','Enter or paste calendar address','Edit','Opens the Samsung keyboard')+
+ row('saveTizenCalendar','Save and verify','Save','Encrypt locally and check today’s events')+
+ '<p class="library-footnote">Only approved direct HTTPS feeds are accepted. The TV stores no Google login or IPTV credentials.</p>';}
+ else if(type==='eventDetails'){title=selectedEvent?selectedEvent.title:'Event details';subtitle='Full context stays here, away from Home and screensaver.';
+ body=eventDetailsBody();}
+ else if(type==='watchChannelEditor'){title='Drogon TV channel';subtitle='Just a display name for this watched match.';
+ body='<p class="library-footnote">Enter the channel name exactly as it appears in your own Perfect Player playlist. This does not access IPTV credentials or the playlist.</p>'+
+ '<label class="calendar-input-label" for="eventChannelName">Channel name</label>'+
+ '<input class="calendar-url-input" id="eventChannelName" maxlength="80" autocomplete="off" placeholder="e.g. USA Network HD" value="'+esc(savedChannel(selectedEvent))+'">'+
+ row('focusChannelInput','Edit channel name','Edit','Open the Samsung keyboard')+
+ row('saveWatchChannel','Save channel','Save','Show this channel in the event details');}
  else if(type==='pairing'){title='Connect using phone';subtitle='Scan QR on the same home Wi-Fi.';
  body='<div class="pair-stage"><div class="pair-qr" id="pairQr">'+(pairingUrl?qrSvg(pairingUrl):'<span class="pair-loading">'+(pairingExpiresAt?'Pairing expired — generate a new code':'Starting local pairing…')+'</span>')+'</div>'+
   '<p class="pair-countdown" id="pairCountdown" aria-live="off"></p>'+
@@ -332,21 +390,40 @@ function action(name,id,dir){
  if(name==='pairCalendar'){if(profileId==='guest'){toast('Guest has no saved calendar');return;}startPairing();return;}
   if(name==='renewPair'){startPairing();return;}
  if(name==='cancelPair'){stopPairClock();pairingUrl='';pairingExpiresAt=0;if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();renderPanel('calendarSettings');return;}
- if(name==='connectCalendar'){if(profileId==='guest'){toast('Guest has no saved calendar');return;}if(bridge&&bridge.editCalendar)bridge.editCalendar(profileId);else toast('Connect a calendar on your TV');return;}
+ if(name==='calendarSource'){selectedSource=id==='sport'?'sport':'google';navigatePanel('calendarSource');return;}
+ if(name==='connectCalendar'){if(profileId==='guest'){toast('Guest has no saved calendar');return;}if(bridge&&bridge.editCalendarSource)bridge.editCalendarSource(profileId,selectedSource);else if(bridge&&bridge.editCalendar)bridge.editCalendar(profileId);else toast('Connect a calendar on your TV');return;}
+ if(name==='removeCalendarSource'){if(bridge&&bridge.removeCalendarSource){bridge.removeCalendarSource(profileId,selectedSource);renderPanel('calendarSettings');}return;}
  if(name==='disconnectCalendar'){if(bridge&&bridge.removeCalendar){bridge.removeCalendar(profileId);requestCalendar(false);}return;}
  if(name==='refreshCalendar'){requestCalendar(true);toast('Refreshing calendar…');return;}
+ if(name==='focusCalendarInput'){var input=$('#tizenCalendarUrl');if(input)input.focus();return;}
+ if(name==='saveTizenCalendar'){var field=$('#tizenCalendarUrl'),url=field?field.value.trim():'';
+  var valid=window.VelaCalendarSecurity&&window.VelaCalendarSecurity.approved(url);
+  if(!valid||(selectedSource==='sport'?!/^https:\/\/ballerwatch-web\.vudhone\.workers\.dev\//i.test(url):!/^https:\/\/calendar\.google\.com\//i.test(url))){toast('Paste a valid link for this source');return;}
+  if(bridge&&bridge.saveCalendar)bridge.saveCalendar(profileId,url,selectedSource==='sport'?'BallerWatch':'Google Calendar');return;}
+ if(name==='samsungHome'||name==='samsungSettings'){if(bridge&&bridge[name])bridge[name]();return;}
  if(name==='chooseSort'){var p=currentProfile();p.appSort=id;if(profileId!=='guest')persistProfiles();renderPanel('appSort',{act:'chooseSort',id:id},true);return;}
  if(name==='wakeProfileToggle'){if(bridge&&bridge.setWakeProfilePromptEnabled){bridge.setWakeProfilePromptEnabled(!bridge.wakeProfilePromptEnabled());}renderPanel('homeSettings',{act:'wakeProfileToggle'},true);return;}
- if(name==='eventInfo'){var chosen=calendarToday()[Number(id)];if(chosen){toast(chosen.allDay?'All-day event':calendarTime(chosen.start,false)+' – '+calendarTime(chosen.end,false));}return;}
+ if(name==='filterCalendar'){calendarFilter=['all','play','watch','other'].indexOf(id)>=0?id:'all';renderPanel('calendar',{act:'filterCalendar',id:calendarFilter},true);return;}
+ if(name==='eventInfo'){var chosen=calendarViewEvents[Number(id)];if(chosen){selectedEvent=chosen;navigatePanel('eventDetails');}return;}
+ if(name==='editWatchChannel'){if(!selectedEvent||selectedEvent.kind!=='watch')return;
+  if(bridge&&bridge.editWatchChannel)bridge.editWatchChannel(eventKey(selectedEvent),savedChannel(selectedEvent));
+  else navigatePanel('watchChannelEditor');return;}
+ if(name==='focusChannelInput'){var input=$('#eventChannelName');if(input)input.focus();return;}
+ if(name==='saveWatchChannel'){var entry=$('#eventChannelName');if(entry&&selectedEvent)watchChannelReady(eventKey(selectedEvent),entry.value);return;}
+ if(name==='openPerfectPlayer'){if(!selectedEvent||selectedEvent.kind!=='watch')return;
+  var pp=apps.filter(function(a){return a.package==='com.niklabs.pp'||/perfect player/i.test(a.name);})[0];
+  if(!pp){toast('Install or open Perfect Player from your TV apps');return;}
+  rememberApp(pp.id);if(bridge&&bridge.launchApp)bridge.launchApp(pp.id);else toast('Open Perfect Player on your TV');return;}
  if(name==='addProfile'){requestProfileEdit('add','');return;}
  if(name==='renameProfile'){requestProfileEdit('rename',id);return;}
  if(name==='deleteProfile'){requestProfileDeletion(id);return;}
  if(name==='chooseWallpaper'){var num=parseInt(id,10);if(num>=0&&num<wallpapers.length){scenery=String(num);if(customPhoto){customPhoto='';if(bridge)bridge.resetWallpaper();}persistAppearance();setScenery();rerenderWithFocus('chooseWallpaper',id);}return;}
  if(name==='rotate'){rotationMinutes=rotationMinutes?0:30;persistAppearance();scheduleRotation();rerenderWithFocus('rotate');return;}
+ if(name==='appLabels'){appLabelMode=appLabelMode==='focus'?'both':appLabelMode==='both'?'names':'focus';document.body.setAttribute('data-app-labels',appLabelMode);persistAppearance();home();rerenderWithFocus('appLabels');return;}
  if(name==='font'){fontStyle=fontStyle==='modern'?'classic':'modern';document.body.classList.toggle('modern-clock',fontStyle==='modern');persistAppearance();rerenderWithFocus('font');return;}
  if(name==='clockFormat'){clockFormat=clockFormat==='auto'?'12':clockFormat==='12'?'24':'auto';clockValue='';clock();persistAppearance();rerenderWithFocus('clockFormat');return;}
  if(name==='launch'){rememberApp(id);if(preview){toast('App launch is available on your TV.');return;}if(bridge)bridge.launchApp(id);return;}
- if(['settings','homeSettings','lifeSettings','appsSettings','deviceSettings','about','appSort','homeApps','screensaverSettingsPanel','all','customize','recovery','updates','profiles','wallpapers','calendar','calendarSettings','monitor','monitorSettings','volumeSettings','recent'].indexOf(name)>=0){navigatePanel(name);if(name==='updates'&&bridge&&bridge.updateStatus)bridge.updateStatus();return;}
+ if(['settings','homeSettings','lifeSettings','appsSettings','deviceSettings','about','appSort','homeApps','screensaverSettingsPanel','all','customize','recovery','updates','profiles','wallpapers','calendar','calendarSettings','tizenCalendarEntry','monitor','monitorSettings','volumeSettings','recent'].indexOf(name)>=0){navigatePanel(name);if(name==='updates'&&bridge&&bridge.updateStatus)bridge.updateStatus();return;}
  if(name==='monitorToggle'){monitorEnabled=!monitorEnabled;$('#monitorButton').classList.toggle('hidden',!monitorEnabled);persistAppearance();renderPanel('monitorSettings',{act:'monitorToggle'},true);return;}
  if(name==='nanitWeb'){if(bridge&&bridge.openNanitWeb)bridge.openNanitWeb();else toast('Open https://my.nanit.com in your TV browser');return;}
  if(name==='cameraApps'){navigatePanel('all');return;}
@@ -397,21 +474,28 @@ function remote(key){
  else if(key==='left'&&screen)goBack();
 }
 function calendarTime(ms,allDay){if(allDay)return 'All day';var d=new Date(ms);return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}
+function calendarDate(ms){return new Date(ms).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});}
 function calendarState(e){if(e.allDay)return '';var n=Date.now();return e.start<=n&&e.end>n?'ongoing':e.start>n&&e.start<=n+3600000?'soon':e.start>n&&e.start<=n+2*3600000?'later':'';}
 function calendarToday(){var now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
  var end=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1).getTime();
  return calEvents.filter(function(e){return Number(e.start)<end&&Number(e.end)>Math.max(start,Date.now());}).sort(function(a,b){return a.start-b.start;});}
-function eventHTML(e,compact,index){var state=calendarState(e),meta=e.allDay?'All day':state==='ongoing'?'NOW · '+calendarTime(e.start,false):state==='soon'?'NEXT HOUR · '+calendarTime(e.start,false):state==='later'?'WITHIN 2H · '+calendarTime(e.start,false):calendarTime(e.start,false);
+function calendarUpcoming(){var now=Date.now(),until=now+7*86400000;
+ return calEvents.filter(function(e){return e.end>now&&e.start<until&&(calendarFilter==='all'||(e.kind||'other')===calendarFilter);}).sort(function(a,b){return a.start-b.start;});}
+function eventHTML(e,compact,index){var state=calendarState(e),when=calendarDate(e.start)+' · '+calendarTime(e.start,e.allDay);
+ var type=e.kind==='play'?'PLAY · ':e.kind==='watch'?'WATCH · ':'';
+ var meta=type+(state==='ongoing'?'NOW · ':state==='soon'?'NEXT HOUR · ':'')+when;
  var content='<span class="event-meta">'+esc(meta)+'</span><span class="event-summary">'+esc(e.title||'Untitled event')+'</span>'+(compact?'':'<span class="event-when">'+esc(e.allDay?'':calendarTime(e.start,false)+' – '+calendarTime(e.end,false))+'</span>');
  return compact?'<div class="event-item '+(state||'')+' event-peek">'+content+'</div>':
  '<button type="button" class="event-item focusable '+(state||'')+'" data-act="eventInfo" data-id="'+index+'" aria-label="'+esc((e.title||'Untitled event')+', '+meta)+'">'+content+'</button>';}
 function calendarEventList(){
- if(!calConnected)return '<p class="calendar-empty">No calendar linked for this profile. Set one up in Gear → Calendar.</p>'+
- '<div class="calendar-tools">'+row('calendarSettings','Calendar settings','Open','Connect a read-only Google Calendar')+'</div>';
- var events=calendarToday();
- return events.length?events.map(function(e,i){return eventHTML(e,false,i);}).join('')+
- (events.length>4?'<p class="calendar-scroll-hint">↑ ↓ Browse events · OK shows time</p>':''):
- '<p class="calendar-empty">Nothing scheduled today. Enjoy the space.</p>';
+ if(!calConnected)return '<p class="calendar-empty">No calendar linked for this profile. Set one up in Gear → Daily life → Calendar.</p>'+
+ '<div class="calendar-tools">'+row('calendarSettings','Calendar settings','Open','Connect Google Calendar or BallerWatch')+'</div>';
+ var filters=[['all','All'],['play','Playing'],['watch','Watching'],['other','Life']];
+ var tabs='<div class="calendar-filters">'+filters.map(function(f){return '<button class="calendar-filter focusable'+(calendarFilter===f[0]?' is-current':'')+'" data-act="filterCalendar" data-id="'+f[0]+'">'+f[1]+'</button>';}).join('')+'</div>';
+ var events=calendarUpcoming();calendarViewEvents=events;
+ return tabs+(events.length?events.map(function(e,i){return eventHTML(e,false,i);}).join('')+
+ (events.length>4?'<p class="calendar-scroll-hint">↑ ↓ Browse · OK for details</p>':''):
+ '<p class="calendar-empty">No '+(calendarFilter==='all'?'upcoming':calendarFilter==='play'?'playing':calendarFilter==='watch'?'watching':'life')+' events in the next seven days.</p>');
 }
 function hideUpcomingReminder(){if(reminderTimer)clearTimeout(reminderTimer);reminderTimer=null;var el=$('#eventReminder');
  if(el){el.classList.remove('visible');el.setAttribute('aria-hidden','true');}}
@@ -440,7 +524,17 @@ function updateCalendarView(){var n=Date.now(),today=calendarToday();
  var peek=$('#calendarPeek');var next=today.filter(function(e){return e.end>n&&(!e.allDay||e.start>n);}).slice(0,2);peek.innerHTML=calConnected&&next.length?'<div class="peek-heading">TODAY</div>'+next.map(function(e){return eventHTML(e,true);}).join(''):'';
  if(screen==='calendar')renderCalendarBody();else maybeShowUpcomingReminder();}
 function receiveCalendar(json){try{var obj=typeof json==='string'?JSON.parse(json):json;if(!obj||obj.profile!==profileId)return;
- calendarProfile=obj.profile;calConnected=!!obj.connected;calVerified=!!obj.verified;calName=obj.calendarName||'';calLabel=obj.label||'';calAccount=obj.calendarId||'';calLastSuccess=Number(obj.lastSuccess)||0;calLastAttempt=Number(obj.lastAttempt)||0;calEvents=Array.isArray(obj.events)?obj.events.filter(function(e){return Number.isFinite(e.start)&&Number.isFinite(e.end);}).slice(0,60):[];calStatus=obj.status||'';calendarChecked=Date.now();updateCalendarView();if(screen==='calendarSettings')renderPanel('calendarSettings');/* Cached calendar status must never close a live phone pairing. */}catch(e){toast('Could not read calendar data');}}
+ calendarProfile=obj.profile;calConnected=!!obj.connected;calVerified=!!obj.verified;calName=obj.calendarName||'';calLabel=obj.label||'';calAccount=obj.calendarId||'';calLastSuccess=Number(obj.lastSuccess)||0;calLastAttempt=Number(obj.lastAttempt)||0;
+ calSources=Array.isArray(obj.sources)?obj.sources.filter(function(s){return s&&['google','sport'].indexOf(s.kind)>=0;}).slice(0,2):[];
+ calEvents=Array.isArray(obj.events)?obj.events.filter(function(e){return e&&Number.isFinite(e.start)&&Number.isFinite(e.end);}).slice(0,150).map(function(e){
+  return {title:String(e.title||'Untitled event').slice(0,120),start:e.start,end:e.end,allDay:!!e.allDay,
+   uid:String(e.uid||'').slice(0,180),kind:['play','watch'].indexOf(e.kind)>=0?e.kind:'other',
+   location:String(e.location||'').slice(0,180),description:String(e.description||'').slice(0,1400),
+   channel:String(e.channel||'').slice(0,80),url:String(e.url||'').slice(0,512)};
+ }):[];
+ calStatus=obj.status||'';calendarChecked=Date.now();updateCalendarView();if(screen==='calendarSettings'||screen==='calendarSource')renderPanel(screen);/* Cached calendar status must never close a live phone pairing. */}catch(e){toast('Could not read calendar data');}}
+function calendarSaveReady(profile,okay,message){if(profile!==profileId)return;
+ if(okay){renderPanel('calendarSettings');toast('Private calendar saved');}else toast(message||'Could not save calendar');}
 function qrSvg(url){if(!window.VelaQRCode)return '<span class="pair-url">'+esc(url)+'</span>';
  try {var q=new window.VelaQRCode(0,0);q.addData(url);q.make();var n=q.getModuleCount(),out='<svg class="pair-svg" viewBox="0 0 '+(n+8)+' '+(n+8)+'" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#fff"/>';
  for(var y=0;y<n;y++)for(var x=0;x<n;x++)if(q.isDark(y,x))out+='<rect x="'+(x+4)+'" y="'+(y+4)+'" width="1" height="1" fill="#101b1c"/>';return out+'</svg>';}
@@ -466,7 +560,7 @@ function pairingReady(url,expires){
 function pairingCompleted(profile){
  if(profile!==profileId)return;
  stopPairClock();pairingUrl='';pairingExpiresAt=0;
- if(screen==='pairing'){if(panelHistory.length&&panelHistory[panelHistory.length-1]==='calendarSettings')panelHistory.pop();renderPanel('calendarSettings');toast('Calendar link received · verifying with Google…');}
+ if(screen==='pairing'){if(panelHistory.length&&panelHistory[panelHistory.length-1]==='calendarSettings')panelHistory.pop();renderPanel('calendarSettings');toast('Calendar link received · verifying feed…');}
 }
 function requestCalendar(force){if(profileId==='guest'){calConnected=false;calVerified=false;calEvents=[];updateCalendarView();return;}if(!bridge||!bridge.loadCalendar){if(preview&&calendarProfile!==profileId){calendarProfile=profileId;calConnected=false;calEvents=[];updateCalendarView();}return;}
  bridge.loadCalendar(profileId,!!force);}
@@ -486,17 +580,17 @@ function wallpaperReady(uri){customPhoto=uri&&uri.indexOf('data:image/jpeg;base6
 function refreshWallpaper(){if(bridge&&bridge.requestWallpaper)bridge.requestWallpaper();}
 function receiveUpdateStatus(json){try{updateStatus=typeof json==='string'?JSON.parse(json):json;if(screen==='updates'){var key=focusedControl?{act:focusedControl.getAttribute('data-act'),id:focusedControl.getAttribute('data-id')||undefined,dir:focusedControl.getAttribute('data-dir')||undefined}:null;renderPanel('updates',key,true);}}catch(e){}}
 function pause(){hideUpcomingReminder();hideVolume();if(calTimer){clearInterval(calTimer);calTimer=null;}if(rotationTimer){clearTimeout(rotationTimer);rotationTimer=null;}if(clockTimer){clearTimeout(clockTimer);clockTimer=null;}}
-function resume(){rescheduleClock();scheduleRotation();checkWakeProfilePrompt();if(calTimer)clearInterval(calTimer);calTimer=setInterval(function(){updateCalendarView();if(!preview&&profileId!=='guest'&&Date.now()-calendarChecked>15*60000)requestCalendar(false);},60000);updateCalendarView();if(profileId!=='guest'&&Date.now()-calendarChecked>15*60000)requestCalendar(false);if(!preview&&Date.now()-lastCatalog>15*60000)refreshApps();}
+function resume(){rescheduleClock();scheduleRotation();checkWakeProfilePrompt();if(calTimer)clearInterval(calTimer);calTimer=setInterval(function(){updateCalendarView();if(!preview&&profileId!=='guest'&&Date.now()-calendarChecked>15*60000)requestCalendar(false);},60000);updateCalendarView();if(profileId!=='guest'&&Date.now()-calendarChecked>15*60000)requestCalendar(false);if(!preview&&Date.now()-lastCatalog>15*60000)refreshApps();if(window.VelaWeatherClient)window.VelaWeatherClient.resume();}
 function init(){loadVolumePrefs();initProfiles();rescheduleClock();calTimer=setInterval(function(){updateCalendarView();if(!preview&&profileId!=='guest'&&Date.now()-calendarChecked>15*60000)requestCalendar(false);},60000);if(!preview&&bridge&&bridge.getCachedApps){try{var cached=bridge.getCachedApps();if(cached){receiveApps(cached);lastCatalog=Number(bridge.getCachedCatalogAt?bridge.getCachedCatalogAt():0)||0;}}catch(e){}}
  if(preview||!catalogSignature||Date.now()-lastCatalog>15*60000)refreshApps();else home();
  document.addEventListener('visibilitychange',function(){if(document.hidden)pause();else resume();});window.addEventListener('focus',resume);
- window.addEventListener('resize',function(){listDirty=true;});$('#panelContent').addEventListener('scroll',function(){listDirty=true;});refreshWallpaper();scheduleRotation();}
+ window.addEventListener('resize',function(){listDirty=true;});$('#panelContent').addEventListener('scroll',function(){listDirty=true;});refreshWallpaper();scheduleRotation();if(window.VelaWeatherClient)window.VelaWeatherClient.start();}
 document.addEventListener('click',function(e){var b=e.target.closest('button[data-act]');if(!b)return;var i;listDirty=true;activeList();i=controls.indexOf(b);if(i>=0)select(i);action(b.getAttribute('data-act'),b.getAttribute('data-id')||'',b.getAttribute('data-dir')||'');});
 var previewEnterAt=0,previewLong=false;
 document.addEventListener('keydown',function(e){if(!preview)return;
  if(e.key==='Enter'){e.preventDefault();if(!e.repeat){previewEnterAt=Date.now();previewLong=false;}else if(!previewLong&&Date.now()-previewEnterAt>=500){previewLong=true;remote('longselect');}return;}
  var k={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',Escape:'back',Backspace:'back'}[e.key];if(k){e.preventDefault();remote(k);}});
 document.addEventListener('keyup',function(e){if(preview&&e.key==='Enter'){e.preventDefault();if(!previewLong)remote('select');previewEnterAt=0;previewLong=false;}});
-window.QH={pause:pause,checkWakeProfilePrompt:checkWakeProfilePrompt,profileNameReady:profileNameReady,profileDeleteConfirmed:profileDeleteConfirmed,remote:remote,refreshApps:refreshApps,receiveApps:receiveApps,catalogRefreshed:catalogRefreshed,iconReady:iconReady,refreshWallpaper:refreshWallpaper,wallpaperReady:wallpaperReady,resume:resume,tick:clock,updateStatusReady:receiveUpdateStatus,receiveCalendar:receiveCalendar,pairingReady:pairingReady,pairingCompleted:pairingCompleted,volumeChanged:volumeChanged};
+window.QH={pause:pause,checkWakeProfilePrompt:checkWakeProfilePrompt,profileNameReady:profileNameReady,profileDeleteConfirmed:profileDeleteConfirmed,remote:remote,refreshApps:refreshApps,receiveApps:receiveApps,catalogRefreshed:catalogRefreshed,iconReady:iconReady,refreshWallpaper:refreshWallpaper,wallpaperReady:wallpaperReady,resume:resume,tick:clock,updateStatusReady:receiveUpdateStatus,receiveCalendar:receiveCalendar,calendarSaveReady:calendarSaveReady,pairingReady:pairingReady,pairingCompleted:pairingCompleted,volumeChanged:volumeChanged,watchChannelReady:watchChannelReady,weatherReady:function(data){if(window.VelaWeatherClient)window.VelaWeatherClient.receive(data);}};
 init();
 })();

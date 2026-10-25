@@ -5,7 +5,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 r=Path(__file__).resolve().parents[1]
 asset=r/'app/src/main/assets'
-for f in ['app.js','style.css','index.html','landscape.svg','landscape-1.svg','landscape-2.svg','landscape-3.svg']:
+for f in ['app.js','style.css','index.html','weather.js','landscape.svg','landscape-1.svg','landscape-2.svg','landscape-3.svg']:
     assert (asset/f).read_bytes()==(r/'preview'/f).read_bytes(),f
 js=(asset/'app.js').read_text();css=(asset/'style.css').read_text()
 assert 'favoritesEditor()' in js and "data-act=\\\"swap\\\"" not in js # controls generated dynamically
@@ -21,6 +21,13 @@ assert 'getCachedApps' in js and 'catalogRefreshed' in js
 assert 'geometry=controls.map' in js
 assert 'avatarSvg' in js and 'avatarPicker' in js
 assert 'calendarPeek' in (asset/'index.html').read_text()
+assert 'id="weatherCard"' in (asset/'index.html').read_text()
+assert 'weatherReady:' in js and 'VelaWeatherClient.start()' in js
+assert '.weather-card' in css and 'pointer-events:none' in css
+weather_js=(asset/'weather.js').read_text()
+assert "https://ip-info.com/json" in weather_js and "https://api.open-meteo.com/v1/forecast" in weather_js
+assert 'MAX_AGE=90*60000' in weather_js and 'setTimeout(refresh,900)' in weather_js
+assert 'window.location' not in weather_js and 'weather_snapshot_v1' in weather_js
 assert 'receiveCalendar' in js and 'calendarState' in js
 assert 'app-monogram' not in js and 'vela-icons.local/icon/' in js
 main=(r/'app/src/main/java/com/danielvu/quiethome/MainActivity.java').read_text()
@@ -40,6 +47,7 @@ assert any(s.get(a+'name')=='.VelaDreamService' for s in app.findall('service'))
 for script in ['build.sh','tv.sh','profile.sh']:
     subprocess.run(['bash','-n',str(r/'scripts'/script)],check=True)
 subprocess.run(['node','--check',str(asset/'app.js')],check=True)
+subprocess.run(['node','--check',str(asset/'weather.js')],check=True)
 assert 'Vela-2.5.apk' in (r/'scripts/build.sh').read_text()
 assert 'Vela-2.5.apk' in (r/'scripts/tv.sh').read_text()
 print('PASS static UI, native bridge, screensaver, updater, no-destructive-install and scripts')
@@ -93,7 +101,8 @@ print('PASS QR pairing lifecycle, expiry countdown, renewal, and unclipped panel
 # Volume and scenic DreamService checks: no polling, no display blackout, TV fallback retained.
 dream=(r/'app/src/main/java/com/danielvu/quiethome/VelaDreamService.java').read_text()
 assert 'setScreenBright(true)' in dream and 'setScreenBright(false)' not in dream
-assert 'getAssets().open(chooseWallpaper())' in dream
+assert 'Bitmap loadScenery()' in dream and 'getAssets().open(asset)' in dream
+assert 'display.getMode().getPhysicalWidth()' in dream
 assert 'root.addView(scenery' in dream and 'clockGroup.addView(time' in dream
 assert 'onDreamingStarted()' in dream and 'onDreamingStopped()' in dream
 assert 'handler.postDelayed(this, 60000L' in dream
@@ -149,12 +158,12 @@ assert 'if (consumedVolumePress) return true;' in main
 assert 'return super.dispatchKeyEvent(e);' in main
 assert 'stopVolumeObservation();' in main
 assert 'getDrawableForDensity(' in main and 'DisplayMetrics.DENSITY_XXXHIGH' in main
-assert 'final int size = 192' in main
+assert 'final int size = 384' in main
 assert 'Bitmap.CompressFormat.PNG' in main and 'Bitmap.CompressFormat.WEBP, 78' not in main
 assert 'data:image/png;base64,' in main
 assert 'new WebResourceResponse("image/png"' in main
-assert '-hq192-v2.png' in main
-assert '?quality=hq192-v2' in js
+assert '-hq384-v3.png' in main
+assert '?quality=hq384-v3' in js
 assert 'volumeSettings' in js and 'Home-only overlay' in js
 assert 'SYSTEM_ALERT_WINDOW' not in ET.tostring(m,encoding='unicode')
 print('PASS Home-only volume input handling, native streaming fallback, high-density lossless TV icons')
@@ -177,8 +186,16 @@ assert 'Number(e.end)>Math.max(start,Date.now())' in js
 assert "e.start<=n+3600000?'soon'" in js and 'e.start<=n+2*3600000?' in js
 dream=(r/'app/src/main/java/com/danielvu/quiethome/VelaDreamService.java').read_text()
 calendar=(r/'app/src/main/java/com/danielvu/quiethome/VelaCalendarController.java').read_text()
-assert 'cachedEventsForDream(this,currentProfile())' in dream
-assert 'positionContent()' in dream and 'Math.min(3,events.size())' in dream
+assert 'cachedEventsForDream(this, currentProfile())' in dream
+assert 'positionContent()' in dream and 'Math.min(3, events.size())' in dream
+assert 'VelaWeatherRepository.refresh' in dream and 'showWeather(' in dream
+weather_native=(r/'app/src/main/java/com/danielvu/quiethome/VelaWeatherRepository.java').read_text()
+assert 'weather_cache_v1' in weather_native and 'weather_location_v1' in weather_native
+assert 'Executors.newSingleThreadExecutor' in weather_native and 'getApplicationContext()' in weather_native
+assert 'setConnectTimeout(5500)' in weather_native and 'weather_data_v1' not in weather_native
+assert 'requestWeather(boolean ignoredForce)' in main
+assert 'Gravity.START | Gravity.BOTTOM' in dream and 'Gravity.END | Gravity.BOTTOM' in dream
+assert 'eventBlock.setTranslationX(x)' in dream and 'clockGroup.setTranslationX(x)' in dream
 assert 'static JSONArray cachedEventsForDream(Context ctx, String profile)' in calendar
 assert 'success_'+ '"+profile' in calendar and 'day_'+ '"+profile' in calendar
 assert 'url_'+ '"+profile' not in dream
@@ -188,3 +205,41 @@ assert 'Intent.ACTION_BOOT_COMPLETED' in boot
 assert any(x.get(a+'name')=='.VelaBootReceiver' for x in app.findall('receiver'))
 assert 'android.permission.RECEIVE_BOOT_COMPLETED' in ET.tostring(m,encoding='unicode')
 print('PASS grouped settings, wake profile choice, app sorting, ongoing events, screensaver privacy and remote left exit')
+
+# Sony must show the chooser on cold process startup even when no screen-off
+# broadcast was delivered; ordinary streaming-app returns should not re-arm it.
+assert 'if (b == null) markNextViewingSession();' in main
+assert 'if (!screenIsInteractive()) markNextViewingSession();' in main
+onresume=main.split('@Override public void onResume()')[1].split('@Override protected void onPause()')[0]
+assert 'markNextViewingSession();' in onresume
+assert 'markNextViewingSession();' not in onresume.split('if (!screenIsInteractive())')[0]
+assert 'Intent.ACTION_SCREEN_OFF' in main
+
+# Samsung uses the same UI with a separate Tizen adapter, not Android APK APIs.
+for f in ['app.js','style.css','index.html','weather.js','tizen-bridge.js','tizen-calendar.js','tizen-private-calendar.js']:
+    assert (asset/f).read_bytes()==(r/'preview'/f).read_bytes(),f
+tizen=(asset/'tizen-bridge.js').read_text()
+assert "window.VelaPlatform = {kind:'tizen'}" in tizen
+assert 'tizen.application.getAppsInfo' in tizen and 'tizen.application.launch' in tizen
+assert '10009' in tizen and 'window.QH.remote(key)' in tizen
+assert 'tizenMode' in js and 'tizenCalendarEntry' in js and 'saveTizenCalendar' in js
+assert 'appLabels' in js and 'data-app-labels' in css
+for stem in ['mist-lake','blue-coast','amber-dunes','lavender-bay']:
+    for base in [asset/'wallpapers',r/'preview'/'wallpapers']:
+        assert (base/(stem+'-4k.webp')).stat().st_size>100000
+        assert (base/('thumb-'+stem+'.webp')).stat().st_size>10000
+assert (r/'design'/'vela-icon.svg').exists() and (r/'design'/'vela-banner.svg').exists()
+assert (r/'app/src/main/res/drawable/icon.png').stat().st_size>5000
+assert (r/'app/src/main/res/drawable/banner.png').stat().st_size>5000
+config=ET.parse(r/'samsung/config.xml').getroot()
+t='{http://tizen.org/ns/widgets}'
+assert config.find(t+'application') is not None
+assert config.find(t+'profile').get('name')=='tv'
+assert any(p.get('name')=='http://tizen.org/privilege/appmanager.launch' for p in config.findall(t+'privilege'))
+assert any(p.get('name')=='http://tizen.org/privilege/internet' for p in config.findall(t+'privilege'))
+assert not any(p.get('name')=='http://tizen.org/privilege/keymanager' for p in config.findall(t+'privilege'))
+origins=[x.get('origin') for x in config.findall('{http://www.w3.org/ns/widgets}access')]
+assert 'https://ip-info.com' in origins and 'https://api.open-meteo.com' in origins
+subprocess.run(['bash','-n',str(r/'scripts/build-tizen.sh')],check=True)
+subprocess.run(['bash','-n',str(r/'scripts/device.sh')],check=True)
+print('PASS cold-process profile fallback, calm two-column screensaver and Samsung Tizen staging')

@@ -143,15 +143,15 @@ body.modern-clock .clock{font-family:Arial,Helvetica,sans-serif;font-weight:200;
 .calendar-peek{margin-top:25px;width:min(380px,43vw);min-height:0;pointer-events:none}
 .peek-heading{font-size:10px;letter-spacing:.2em;opacity:.8;font-weight:700;margin-bottom:9px}
 .event-item{display:flex;flex-direction:column;gap:4px;padding:12px 12px 15px 13px;margin:0 0 7px;background:rgba(255,255,255,.035);border:0;border-left:2px solid transparent;border-radius:8px}
-.event-item.ongoing{background:rgba(205,239,222,.15);border-left-color:#c8f1d3}
-.event-item.soon{background:rgba(235,189,129,.13);border-left-color:#edc78a}
+.event-item.ongoing{background:rgba(208,225,216,.075);border-left-color:rgba(203,229,215,.55)}
+.event-item.soon{background:rgba(208,225,216,.045);border-left-color:rgba(196,218,206,.36)}
 .event-meta{font-size:11px;font-weight:700;letter-spacing:.03em;color:rgba(250,249,242,.75)}
-.event-item.ongoing .event-meta{color:#c8f2d6}.event-item.soon .event-meta{color:#ffe1b0}
+.event-item.ongoing .event-meta{color:rgba(221,236,226,.93)}.event-item.soon .event-meta{color:rgba(210,226,214,.78)}
 .event-summary{font-size:14px;line-height:1.4;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .event-when{font-size:11px;opacity:.65}
 .event-peek{background:transparent!important;border-left:0!important;border-radius:0;margin:0 0 9px;padding:0 0 0 11px;box-shadow:none;position:relative}
 .event-peek:before{content:'';position:absolute;left:0;top:2px;bottom:2px;width:2px;background:rgba(255,255,255,.38);border-radius:2px}
-.event-peek.ongoing:before{background:#c8f1d3}.event-peek.soon:before{background:#f7d4a5}
+.event-peek.ongoing:before{background:rgba(211,232,216,.58)}.event-peek.soon:before{background:rgba(208,228,214,.36)}
 .event-peek .event-summary{font-size:13px;max-width:390px;text-shadow:0 1px 10px rgba(0,0,0,.35)}
 .calendar-tools{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.12)}
 .calendar-empty,.calendar-help{padding:17px 10px!important;font-size:13px!important;color:rgba(255,255,255,.78)!important;line-height:1.6!important}
@@ -255,9 +255,9 @@ body.light .monitor-button{color:#173536;border-color:rgba(19,53,55,.3);backgrou
 
 /* Three calm event priorities. The event that is happening now receives the
    strongest cue; next hour is warm; one-to-two hours stays muted. */
-.event-item.ongoing{border-left-color:rgba(188,237,203,.95);background:rgba(182,226,197,.13)}
-.event-item.soon{border-left-color:rgba(234,197,138,.72);background:rgba(232,190,129,.075)}
-.event-item.later{border-left-color:rgba(221,225,214,.21);background:rgba(255,255,255,.026)}
+.event-item.ongoing{border-left-color:rgba(203,229,215,.55);background:rgba(208,225,216,.075)}
+.event-item.soon{border-left-color:rgba(196,218,206,.36);background:rgba(208,225,216,.045)}
+.event-item.later{border-left-color:rgba(213,226,217,.19);background:rgba(255,255,255,.022)}
 .event-item.later .event-meta{color:rgba(239,242,237,.58)}
 .event-item.later .event-summary{font-weight:500}
 .event-peek.later:before{background:rgba(223,232,222,.24)}
@@ -279,3 +279,70 @@ body.light .monitor-button{color:#173536;border-color:rgba(19,53,55,.3);backgrou
 .overlay.startup-panel .startup-list .panel-row.selected,
 .overlay.startup-panel .startup-list .panel-row:focus{background:rgba(232,245,236,.18);border-color:rgba(234,248,238,.85)}
 @media(max-width:700px){.overlay.startup-panel .panel{width:90vw;min-width:0}}
+/* Samsung firmware owns Calendar integrations, TV Home and the system saver. */
+body.tizen-tv #monitorButton{display:none!important}
+.calendar-input-label{display:block;color:rgba(229,241,234,.82);font-size:12px;letter-spacing:.08em;margin:20px 4px 9px}
+.calendar-url-input{display:block;width:calc(100% - 8px);padding:15px 17px;margin:0 4px 13px;border-radius:11px;
+ border:1px solid rgba(217,234,225,.36);background:rgba(6,24,28,.62);color:#fff;font-size:15px;outline:none}
+.calendar-url-input:focus{border-color:rgba(229,245,235,.9);box-shadow:0 0 0 3px rgba(229,245,235,.14)}
+
+/* CleanFrame-inspired per-profile launcher presentation modes. Names stay readable
+   in either dock or list without text baked into low-resolution icon bitmaps. */
+.home-tile-name{display:none!important}
+body[data-app-labels="both"] .favorites .home-tile-name,
+body[data-app-labels="names"] .favorites .home-tile-name{
+ display:block!important;line-height:1.22;width:100%;max-width:100%;color:#f3f8f5;
+ font-size:clamp(10px,.95vw,14px);font-weight:600;text-align:center;
+ text-overflow:ellipsis;overflow:hidden;white-space:nowrap}
+body[data-app-labels="both"] .favorites .app-card{gap:7px}
+body[data-app-labels="both"] .favorites .app-icon-frame{width:clamp(48px,6.5vh,72px);height:clamp(48px,6.5vh,72px)}
+body[data-app-labels="names"] .favorites .app-icon-frame{display:none}
+body[data-app-labels="names"] .favorites .app-card{padding:9px 10px;background:rgba(9,24,27,.23)}
+body[data-app-labels="names"] .favorites.list{width:clamp(154px,19vw,270px)}
+body[data-app-labels="names"] .favorites.list .app-card{width:100%}
+body[data-app-labels="both"] .favorites.list .app-card{width:clamp(105px,13vw,170px)}
+body[data-app-labels="both"] .favorites.list{width:clamp(110px,13vw,177px)}
+
+/* Weather: small, passive ambient information opposite the clock. It cannot
+   receive remote focus or obscure the main favorite-app dock. */
+.weather-card{position:fixed;top:27vh;right:6.5vw;width:min(300px,27vw);z-index:3;
+ display:flex;flex-direction:column;align-items:flex-start;gap:7px;pointer-events:none;
+ padding:18px 20px 18px;border-radius:17px;
+ background:rgba(8,24,29,.17);color:rgba(240,247,242,.91);border:1px solid rgba(239,250,242,.105);
+ text-shadow:0 1px 9px rgba(0,0,0,.17)}
+.weather-card.hidden{display:none!important}
+.weather-kicker{font-size:10px;font-weight:700;letter-spacing:.18em;opacity:.77;white-space:nowrap}
+.weather-kicker span{font-weight:400;letter-spacing:.045em;opacity:.68}
+.weather-main{display:flex;align-items:center;gap:10px;width:100%;min-height:58px}
+.weather-symbol{flex:none;width:49px;height:49px;color:rgba(236,248,238,.87)}
+.weather-symbol .weather-cloud,.weather-symbol .weather-rain{display:none}
+.weather-card[data-kind="cloud"] .weather-symbol .weather-cloud,
+.weather-card[data-kind="rain"] .weather-symbol .weather-cloud,
+.weather-card[data-kind="snow"] .weather-symbol .weather-cloud{display:block}
+.weather-card[data-kind="cloud"] .weather-symbol .weather-sun,
+.weather-card[data-kind="rain"] .weather-symbol .weather-sun,
+.weather-card[data-kind="snow"] .weather-symbol .weather-sun{display:none}
+.weather-card[data-kind="rain"] .weather-symbol .weather-rain{display:block}
+.weather-temp{font:400 clamp(31px,2.8vw,45px)/1 Georgia,serif;letter-spacing:-.06em;white-space:nowrap}
+.weather-condition{font-size:12px;line-height:1.28;opacity:.86;min-width:0}
+.weather-location{font-size:12px;font-weight:600;letter-spacing:.01em;max-width:100%;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.weather-precip{font-size:11px;line-height:1.5;color:rgba(219,236,226,.75)}
+body.light .weather-card{background:rgba(237,246,239,.15);color:#16373c;border-color:rgba(18,57,56,.13);text-shadow:none}
+body.light .weather-precip{color:rgba(13,50,51,.72)}
+@media(max-width:950px){.weather-card{top:20vh;right:4vw;width:min(260px,29vw);padding:12px 14px}.weather-symbol{width:36px;height:36px}.weather-main{gap:6px}.weather-temp{font-size:29px}.weather-condition{font-size:11px}}
+
+/* Calendar categories live inside the calendar screen; Home and Dream keep a
+   single concise date/time line with no location, channel, or long notes. */
+.calendar-filters{display:flex;gap:9px;flex-wrap:wrap;padding:3px 3px 16px}
+.calendar-filter{padding:9px 15px;border:1px solid rgba(237,249,239,.13);border-radius:22px;
+ background:rgba(243,251,245,.065);color:rgba(234,244,237,.77);font-size:12px;font-weight:600}
+.calendar-filter.is-current{background:rgba(228,245,234,.18);border-color:rgba(223,241,228,.53);color:#f3faf5}
+.calendar-filter.selected,.calendar-filter:focus{outline:1px solid rgba(237,249,239,.82);background:rgba(228,245,234,.19)}
+.event-details{display:flex;flex-direction:column;gap:6px;max-width:780px;padding:2px 3px 30px}
+.event-detail-row{display:grid;grid-template-columns:min(160px,24%) minmax(0,1fr);align-items:start;gap:16px;
+ padding:11px 15px;border-bottom:1px solid rgba(224,243,232,.105)}
+.event-detail-row>span,.event-details-copy>span{color:rgba(214,232,220,.59);font-size:11px;font-weight:700;letter-spacing:.1em}
+.event-detail-row>strong{color:rgba(249,252,249,.91);font-size:15px;font-weight:500;overflow-wrap:anywhere}
+.event-details-copy{padding:12px 15px 16px;border-bottom:1px solid rgba(224,243,232,.105)}
+.event-details-copy p{white-space:pre-line!important;overflow-wrap:anywhere;color:rgba(241,249,243,.86)!important;
+ font-size:14px!important;line-height:1.65!important;margin-top:10px!important;max-width:100%!important}
