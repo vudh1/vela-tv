@@ -22,10 +22,10 @@
       <div class="pair-illustration" aria-hidden="true"><span class="screen"></span><span class="halo"></span></div>
       <p class="eyebrow">YOUR LIVING ROOM, IN YOUR HAND</p>
       <h1>Connect to Vela</h1>
-      <p class="support">Connect your phone to the TV's home network, then enter your private remote PIN.</p>
+      <p class="support">On Vela TV, open Settings → Device & support → Web remote to generate a PIN. Connect your phone to the same home network and enter it here.</p>
       <form id="pinForm" autocomplete="off">
         <label for="pin">Remote PIN</label>
-        <input id="pin" name="pin" type="password" inputmode="numeric" pattern="[0-9]{8,12}" minlength="8" maxlength="12" autocomplete="off" placeholder="8–12 digits" required>
+        <input id="pin" name="pin" type="password" inputmode="numeric" pattern="[0-9]{10}" minlength="10" maxlength="10" autocomplete="off" placeholder="10-digit TV PIN" required>
         <button id="connect" type="submit" class="primary">Connect <span aria-hidden="true">→</span></button>
       </form>
       <p id="error" class="error" role="alert" aria-live="polite"></p>

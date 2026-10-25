@@ -686,6 +686,32 @@ public final class MainActivity extends Activity {
         runOnUiThread(() -> toast(message));
     }
 
+    private void showRemotePin(String pin) {
+        android.widget.TextView code = new android.widget.TextView(this);
+        code.setText(pin);
+        code.setTextSize(36);
+        code.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
+        code.setGravity(android.view.Gravity.CENTER);
+        int pad = (int) (getResources().getDisplayMetrics().density * 24);
+        code.setPadding(pad, pad, pad, pad);
+        code.setContentDescription("Your Vela remote PIN: " + pin);
+        new AlertDialog.Builder(this)
+            .setTitle("Vela remote PIN")
+            .setMessage("Enter this 10-digit PIN on your phone at vudh1.github.io/velatv/remote/. Only one controller can connect at a time.\n\nRegenerate the PIN here whenever you need to revoke access.")
+            .setView(code)
+            .setPositiveButton("Done", (dialog, which) -> {})
+            .show();
+    }
+
+    private void generateRemotePin() {
+        toast("Generating your private remote PIN…");
+        VelaRemoteClient.get(this).generatePin((pin, error) -> runOnUiThread(() -> {
+            if (!pin.isEmpty()) showRemotePin(pin);
+            else toast(error);
+            sendToJs("QH.remoteStatusReady(" + JSONObject.quote(pin.isEmpty() ? error : "Remote PIN ready") + ")");
+        }));
+    }
+
     public void deliverUpdateStatus(String json) {
         sendToJs("QH.updateStatusReady(" + JSONObject.quote(json) + ")");
     }
@@ -697,24 +723,26 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public boolean remoteRevocationPending() {
             return VelaRemoteClient.get(MainActivity.this).revocationPending();
         }
+        @JavascriptInterface public boolean remoteHasPin() {
+            return VelaRemoteClient.get(MainActivity.this).currentPin().length() == 10;
+        }
         @JavascriptInterface public void pairWebRemote() {
+            runOnUiThread(() -> generateRemotePin());
+        }
+        @JavascriptInterface public void showWebRemotePin() {
             runOnUiThread(() -> {
-                EditText pin = new EditText(MainActivity.this);
-                pin.setSingleLine(true);
-                pin.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
-                pin.setHint("8–12 digit remote PIN");
-                new AlertDialog.Builder(MainActivity.this)
-                    .setTitle("Connect Vela Remote")
-                    .setMessage("Enter the PIN configured privately in your Cloudflare Worker. It won't be saved on this TV.")
-                    .setView(pin)
-                    .setNegativeButton("Cancel", (d, w) -> {})
-                    .setPositiveButton("Connect", (d, w) -> {
-                        String value = pin.getText().toString();
-                        VelaRemoteClient.get(MainActivity.this).enroll(value,
-                            message -> sendToJs("QH.remoteStatusReady(" + JSONObject.quote(message) + ")"));
-                        pin.setText("");
-                    }).show();
+                String pin = VelaRemoteClient.get(MainActivity.this).currentPin();
+                if (pin.length() == 10) showRemotePin(pin);
+                else toast("Choose Regenerate PIN to create a TV-managed code.");
             });
+        }
+        @JavascriptInterface public void rotateWebRemotePin() {
+            runOnUiThread(() -> new AlertDialog.Builder(MainActivity.this)
+                .setTitle("Regenerate remote PIN?")
+                .setMessage("The old PIN and any connected phone will stop working immediately. A new 10-digit PIN will appear on this TV.")
+                .setNegativeButton("Cancel", (d, w) -> {})
+                .setPositiveButton("Regenerate", (d, w) -> generateRemotePin())
+                .show());
         }
         @JavascriptInterface public void disableWebRemote() {
             runOnUiThread(() -> new AlertDialog.Builder(MainActivity.this)
