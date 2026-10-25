@@ -270,15 +270,15 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  else if(type==='remoteSettings'){title='Web remote';subtitle='Use your phone at vudh1.github.io/velatv/remote.';
  body=(bridge&&bridge.remoteRevocationPending&&bridge.remoteRevocationPending()?row('remoteDisable','Retry revocation','Pending','The TV is paused until Cloudflare confirms removal'):
  bridge&&bridge.remoteEnabled&&bridge.remoteEnabled()?
- row('remoteRotate','Generate new PIN','New code','Only needed when connecting a different phone; revokes the old phone')+
- row('remoteDisable','Disable remote','Revoke','Disconnect controllers and revoke this TV key'):
+ row('remoteRotate','Add Another Remote','Generate PIN','Pair another phone without disconnecting existing remotes (up to 4)')+
+ row('remoteDisable','Disable remote','Revoke','Disconnect all phones and revoke this TV key'):
  row('remotePair','Enable remote','Generate PIN','Generate a new private 10-digit PIN on this TV'))+
  row('remoteAccessibility','Control other apps','Sony settings','Optional accessibility service; app compatibility varies')+
  row('sonyIpSetup','Sony native-app controls',bridge&&bridge.sonyIpControlEnabled&&bridge.sonyIpControlEnabled()?'Connected':'Set up','Optional IP control for Netflix/YouTube navigation; key stays on the TV')+
  (bridge&&bridge.sonyIpControlEnabled&&bridge.sonyIpControlEnabled()?
  row('sonyIpTest','Test Sony controls','Test','Send one Up command to check Sony IP control')+
  row('sonyIpRemove','Remove Sony key','Remove','Delete the encrypted Sony control key from this TV'):'')+
- '<p class="library-footnote">Generate a one-time PIN here, then enter it on your phone. The code cannot be shown again. A trusted phone reconnects automatically after idle; generating a new PIN revokes the old phone. Both devices must share the home Internet connection. Only one remote can be active at a time.</p>';
+ '<p class="library-footnote">Generate a separate one-time PIN for each phone (up to four). Existing paired remotes remain connected; each reconnects privately after idle. All devices must share the home Internet connection. Disconnect on a phone removes only that phone; Disable remote resets all phones.</p>';
  }
  else if(type==='about'){title='About Vela';subtitle='A calmer TV launcher.';
  body=tizenMode?

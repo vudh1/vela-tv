@@ -792,7 +792,7 @@ public final class MainActivity extends Activity {
         code.setContentDescription("Your Vela remote PIN: " + pin);
         remotePinDialog = new AlertDialog.Builder(this)
             .setTitle("Vela remote PIN")
-            .setMessage("Enter this 10-digit PIN at vudh1.github.io/velatv/remote/. This screen closes automatically when your phone connects. Only one controller can connect at a time.")
+            .setMessage("Enter this 10-digit PIN at vudh1.github.io/velatv/remote/. This screen closes when the new phone connects. Up to four phones can control this TV independently.")
             .setView(code)
             .setPositiveButton("Done", (dialog, which) -> {})
             .create();

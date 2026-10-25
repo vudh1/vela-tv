@@ -17,8 +17,11 @@ final class SonyIrccMessage {
             case "volume_up": return "AAAAAQAAAAEAAAASAw==";
             case "volume_down": return "AAAAAQAAAAEAAAATAw==";
             case "mute": return "AAAAAQAAAAEAAAAUAw==";
-            // Discrete standby avoids accidentally toggling an awake TV on a
-            // repeated tap. A sleeping TV cannot be awakened by this app.
+            // Sony's physical remote Power key toggles on/off when IRCC is
+            // reachable. When Vela stops polling during standby, the cloud
+            // remote cannot deliver a second command to wake the TV.
+            case "power_toggle": return "AAAAAQAAAAEAAAAVAw==";
+            // Preserve the older discrete standby key for existing clients.
             case "power_off": return "AAAAAQAAAAEAAAAvAw==";
             case "input": return "AAAAAQAAAAEAAAAlAw==";
             case "hdmi1": return "AAAAAgAAABoAAABaAw==";

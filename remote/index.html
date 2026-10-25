@@ -30,7 +30,7 @@
         <button id="connect" type="submit" class="primary">Connect <span aria-hidden="true">→</span></button>
       </form>
       <p id="error" class="error" role="alert" aria-live="polite"></p>
-      <p class="trust"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4.5 5v6c0 4.8 3.2 8.7 7.5 11 4.3-2.3 7.5-6.2 7.5-11V5L12 2Zm0 4.6a2.4 2.4 0 0 1 2.4 2.4v1.3h.8V16H8.8v-5.7h.8V9A2.4 2.4 0 0 1 12 6.6Z"/></svg> Protected by Cloudflare · one controller at a time</p>
+      <p class="trust"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4.5 5v6c0 4.8 3.2 8.7 7.5 11 4.3-2.3 7.5-6.2 7.5-11V5L12 2Zm0 4.6a2.4 2.4 0 0 1 2.4 2.4v1.3h.8V16H8.8v-5.7h.8V9A2.4 2.4 0 0 1 12 6.6Z"/></svg> Protected by Cloudflare · up to four trusted remotes</p>
     </section>
 
     <section id="controller" class="controller hidden" aria-label="Vela TV remote">
@@ -38,16 +38,15 @@
       <div class="utility-row">
         <button data-key="home" class="round-action" aria-label="Vela home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3.7 11 8.3-7 8.3 7M6.5 9v10h11V9M10 19v-6h4v6"/></svg><span>Home</span></button>
         <button data-key="back" class="round-action" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h12a6 6 0 0 1 6 6"/></svg><span>Back</span></button>
-        <button data-key="settings" class="round-action" aria-label="Open Vela settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2h0a2 2 0 0 1 2 2l.1.5a8 8 0 0 1 2 .9l.4-.2a2 2 0 0 1 2.8 2.8l-.2.4a8 8 0 0 1 .9 2l.5.1a2 2 0 0 1 0 4l-.5.1a8 8 0 0 1-.9 2l.2.4a2 2 0 0 1-2.8 2.8l-.4-.2a8 8 0 0 1-2 .9l-.1.5a2 2 0 0 1-4 0l-.1-.5a8 8 0 0 1-2-.9l-.4.2a2 2 0 0 1-2.8-2.8l.2-.4a8 8 0 0 1-.9-2L3.5 14a2 2 0 0 1 0-4l.5-.1a8 8 0 0 1 .9-2l-.2-.4a2 2 0 0 1 2.8-2.8l.4.2a8 8 0 0 1 2-.9L10 4a2 2 0 0 1 2-2Z"/></svg><span>Settings</span></button>
+        <button data-key="power_toggle" class="round-action" aria-label="Toggle Sony TV power"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M7.1 5.8A8 8 0 1 0 16.9 5.8"/></svg><span>Power</span></button>
       </div>
       <div class="remote-tools" role="group" aria-label="More remote controls">
-        <button id="deviceToggle" type="button" aria-expanded="false" aria-controls="devicePanel">TV & Inputs</button>
+        <button id="deviceToggle" type="button" aria-expanded="false" aria-controls="devicePanel">TV options</button>
         <button id="keyboardToggle" type="button" aria-expanded="false" aria-controls="keyboardPanel">Type on TV</button>
       </div>
       <section id="devicePanel" class="tool-panel hidden" aria-label="TV device controls">
-        <p class="tool-title">Choose a TV source</p>
+        <p class="tool-title">HDMI source</p>
         <div class="source-grid">
-          <button data-key="input" type="button">Input menu</button>
           <button data-key="hdmi1" type="button">HDMI 1</button>
           <button data-key="hdmi2" type="button">HDMI 2</button>
           <button data-key="hdmi3" type="button">HDMI 3</button>
@@ -55,9 +54,8 @@
         </div>
         <div class="device-options">
           <button id="wifiButton" type="button">Wi-Fi settings</button>
-          <button id="powerOffButton" type="button" class="danger-button">Turn TV off</button>
         </div>
-        <p class="tool-note">Power on needs an always-on local controller. Vela cannot wake a TV after its app stops in standby. TV source selection is separate from your Vizio soundbar's audio input.</p>
+        <p class="tool-note">The Power button uses Sony's toggle command while Vela is connected. Once the TV sleeps, this remote may not be able to wake it. HDMI source selection is separate from your Vizio soundbar's audio input.</p>
       </section>
       <section id="keyboardPanel" class="tool-panel hidden" aria-label="Type on TV">
         <form id="textForm" autocomplete="off">
@@ -80,7 +78,7 @@
         <button data-key="play_pause" aria-label="Play or pause"><svg viewBox="0 0 24 24"><path d="M6 5v14l10-7L6 5Zm11 1v12m4-12v12"/></svg></button>
         <button data-key="volume_up" aria-label="Volume up">+ <span>VOL</span></button>
       </div>
-      <p id="remoteInfo" class="hint" aria-live="polite">Vela navigation ready. Streaming apps may not expose directional controls to accessibility; Sony IP control may be required.</p>
+      <p id="remoteInfo" class="hint" aria-live="polite">Vela navigation ready. Power toggles while connected, but waking from standby may require the physical remote. Streaming-app navigation may need Sony IP control.</p>
     </section>
 
     <footer><span>VELA / REMOTE</span><span>Private home access</span></footer>

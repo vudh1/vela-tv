@@ -1,17 +1,20 @@
 // Vela remote relay. A single SQLite-backed Durable Object serializes the
-// controller lease and TV command queue. The pairing PIN originates on the TV;
+// TV's shared command queue and up to four independently paired controllers.
+// The pairing PIN originates on the TV;
 // Cloudflare stores only its salted hash, never a GitHub-configured shared PIN.
 // No open LAN port or public TV address.
 const SITE = 'https://vudh1.github.io';
-const LEASE_MS = 22_000;
+const LEASE_MS = 55_000; // Allow economical 20s heartbeats for four phones.
 const TV_ONLINE_MS = 25_000;
 const UNCLAIMED_MS = 10 * 60_000;
+const PAIRING_PIN_MS = 10 * 60_000;
 const RESUME_CHALLENGE_MS = 45_000;
 const MAX_FAILED = 5;
 const RATE_WINDOW_MS = 15 * 60_000;
+const MAX_CONTROLLERS = 4;
 const KEYS = new Set(['up', 'down', 'left', 'right', 'select', 'back', 'home',
   'volume_up', 'volume_down', 'mute', 'play_pause', 'settings',
-  'power_off', 'wifi_settings', 'input', 'hdmi1', 'hdmi2', 'hdmi3', 'hdmi4']);
+  'power_toggle', 'power_off', 'wifi_settings', 'input', 'hdmi1', 'hdmi2', 'hdmi3', 'hdmi4']);
 
 function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
@@ -158,15 +161,22 @@ export class RemoteRoom {
         return json({ error: 'invalid_json' }, 400);
     }
     const stored = await this.ctx.storage.get('room') || {};
+    // One-time migration from the previously single-controller room; preserve
+    // the currently trusted phone instead of demanding that it pair again.
+    const legacyController = stored.pairedKey || stored.controllerHash ? [{
+      pairedKey: stored.pairedKey || null, pairedKeyId: stored.pairedKeyId || '',
+      controllerHash: stored.controllerHash || '', controllerIp: stored.controllerIp || '',
+      lease: stored.lease || 0 }] : [];
     const state = { tvHash: stored.tvHash || '', tvIp: stored.tvIp || '',
       pinSalt: stored.pinSalt || '', pinHash: stored.pinHash || '',
+      pinExpiresAt: stored.pinExpiresAt || stored.pendingUntil || 0,
       pendingUntil: stored.pendingUntil || 0,
-      tvSeen: stored.tvSeen || 0, controllerHash: stored.controllerHash || '',
-      controllerIp: stored.controllerIp || '', lease: stored.lease || 0,
+      tvSeen: stored.tvSeen || 0,
+      controllers: (Array.isArray(stored.controllers) ? stored.controllers : legacyController)
+        .filter(c => c && typeof c === 'object' && (c.pairedKey || c.controllerHash)).slice(0, MAX_CONTROLLERS),
       commands: stored.commands || [], lastCommandAt: stored.lastCommandAt || 0,
       readyUntil: stored.readyUntil || 0,
       textPublicKey: stored.textPublicKey || '',
-      pairedKey: stored.pairedKey || null, pairedKeyId: stored.pairedKeyId || '',
       challenges: stored.challenges || [],
       failures: stored.failures || {},
       globalFailures: stored.globalFailures || [] };
@@ -176,10 +186,14 @@ export class RemoteRoom {
     if (state.pendingUntil && state.pendingUntil <= now) {
       state.tvHash = ''; state.tvIp = ''; state.tvSeen = 0;
       state.pinSalt = ''; state.pinHash = ''; state.pendingUntil = 0;
-      state.controllerHash = ''; state.controllerIp = ''; state.lease = 0;
-      state.pairedKey = null; state.pairedKeyId = ''; state.challenges = [];
+      state.pinExpiresAt = 0;
+      state.controllers = []; state.challenges = [];
       state.commands = []; state.readyUntil = 0;
       state.textPublicKey = '';
+    }
+    // An unused add-phone code should not remain usable indefinitely.
+    if (state.pinExpiresAt && state.pinExpiresAt <= now) {
+      state.pinSalt = ''; state.pinHash = ''; state.pinExpiresAt = 0;
     }
     // Do not retain old attacker IP hashes forever in Durable Object storage.
     for (const key of Object.keys(state.failures)) {
@@ -187,13 +201,13 @@ export class RemoteRoom {
       if (!state.failures[key].length) delete state.failures[key];
     }
     const online = !!state.tvHash && state.tvSeen > now - TV_ONLINE_MS;
-    const active = !!state.controllerHash && state.lease > now;
+    const active = state.controllers.some(c => !!c.controllerHash && c.lease > now);
     const sameNetwork = online && sameHomeNetwork(state.tvIp, ip);
     const persist = () => this.ctx.storage.put('room', state);
     const rateKey = await sha256(ip);
     const times = state.failures[rateKey] || [];
     state.globalFailures = state.globalFailures.filter(t => t > now - RATE_WINDOW_MS);
-    state.challenges = state.challenges.filter(ch => ch.expires > now).slice(-5);
+    state.challenges = state.challenges.filter(ch => ch.expires > now).slice(-12);
     if (path === '/api/status')
       return json({ online, busy: active, sameNetwork });
 
@@ -213,15 +227,17 @@ export class RemoteRoom {
       state.pendingUntil = now + UNCLAIMED_MS;
       state.pinSalt = randomToken();
       state.pinHash = await sha256(state.pinSalt + ':' + data.pin);
+      state.pinExpiresAt = now + PAIRING_PIN_MS;
       await persist();
       return json({ ok: true });
     }
     if (path === '/api/connect') {
       if (!online) return json({ error: 'tv_offline' }, 503);
       if (!sameNetwork) return json({ error: 'different_network' }, 403);
-      if (active) return json({ error: 'in_use' }, 409);
       if (!state.pinHash || !state.pinSalt)
         return json({ error: 'pairing_required' }, 409);
+      if (state.controllers.length >= MAX_CONTROLLERS)
+        return json({ error: 'max_controllers' }, 409);
       if (times.length >= MAX_FAILED || state.globalFailures.length >= 40)
         return json({ error: 'locked', retryAfterSeconds: 900 }, 429);
       const pinHash = typeof data.pin === 'string' && /^\d{10}$/.test(data.pin)
@@ -241,40 +257,43 @@ export class RemoteRoom {
         catch (_) { return json({ error: 'invalid_controller_key' }, 400); }
         verifiedKey = { kty: 'EC', crv: 'P-256', x: data.publicKey.x, y: data.publicKey.y };
       }
+      const keyId = verifiedKey ? await sha256(verifiedKey.x + ':' + verifiedKey.y) : '';
+      if (keyId && state.controllers.some(c => c.pairedKeyId === keyId))
+        return json({ error: 'already_paired' }, 409);
       delete state.failures[rateKey];
       state.pendingUntil = 0;
       // Pairing codes authorize exactly one registration, not a permanent
       // fallback credential after the lease has expired.
-      state.pinSalt = ''; state.pinHash = '';
+      state.pinSalt = ''; state.pinHash = ''; state.pinExpiresAt = 0;
       const token = randomToken();
-      state.controllerHash = await sha256(token);
-      state.controllerIp = ip;
-      state.lease = now + LEASE_MS;
-      state.pairedKey = verifiedKey;
-      state.pairedKeyId = verifiedKey ? await sha256(verifiedKey.x + ':' + verifiedKey.y) : '';
-      state.challenges = [];
-      state.commands = []; state.readyUntil = 0;
+      state.controllers.push({ pairedKey: verifiedKey, pairedKeyId: keyId,
+        controllerHash: await sha256(token), controllerIp: ip, lease: now + LEASE_MS });
       await persist();
       return json({ token, leaseSeconds: LEASE_MS / 1000 });
     }
     if (path === '/api/challenge') {
       if (!online) return json({ error: 'tv_offline' }, 503);
       if (!sameNetwork) return json({ error: 'different_network' }, 403);
-      if (!state.pairedKey) return json({ error: 'pairing_required' }, 409);
       if (times.length >= MAX_FAILED || state.globalFailures.length >= 40)
         return json({ error: 'locked', retryAfterSeconds: 900 }, 429);
+      const requestedKey = typeof data.keyId === 'string' && /^[a-f0-9]{64}$/.test(data.keyId)
+        ? data.keyId : '';
+      // Omitted keyId remains compatible with the former single-phone client.
+      const candidate = requestedKey ? state.controllers.find(c => c.pairedKeyId === requestedKey)
+        : state.controllers.length === 1 ? state.controllers[0] : null;
+      if (!candidate || !candidate.pairedKey)
+        return json({ error: 'pairing_required' }, 409);
       const challenge = randomToken();
       state.challenges.push({ hash: await sha256(challenge), ipHash: rateKey,
-        expires: now + RESUME_CHALLENGE_MS });
-      state.challenges = state.challenges.slice(-5);
+        keyId: candidate.pairedKeyId, expires: now + RESUME_CHALLENGE_MS });
+      state.challenges = state.challenges.slice(-12);
       await persist();
-      return json({ challenge, keyId: state.pairedKeyId,
+      return json({ challenge, keyId: candidate.pairedKeyId,
         expiresSeconds: RESUME_CHALLENGE_MS / 1000 });
     }
     if (path === '/api/resume') {
       if (!online) return json({ error: 'tv_offline' }, 503);
       if (!sameNetwork) return json({ error: 'different_network' }, 403);
-      if (!state.pairedKey) return json({ error: 'pairing_required' }, 409);
       if (times.length >= MAX_FAILED || state.globalFailures.length >= 40)
         return json({ error: 'locked', retryAfterSeconds: 900 }, 429);
       const bytes = signatureBytes(data.signature);
@@ -283,10 +302,11 @@ export class RemoteRoom {
       const index = state.challenges.findIndex(ch => ch.ipHash === rateKey && sameString(ch.hash, hash));
       if (!bytes || index < 0) return json({ error: 'session_expired' }, 401);
       // Single-use, short-lived challenge. A stolen signature cannot be replayed.
-      state.challenges.splice(index, 1);
+      const [usedChallenge] = state.challenges.splice(index, 1);
+      const candidate = state.controllers.find(c => c.pairedKeyId === usedChallenge.keyId);
       let verified = false;
       try {
-        const key = await importPublicKey(state.pairedKey);
+        const key = await importPublicKey(candidate.pairedKey);
         verified = await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' },
           key, bytes, new TextEncoder().encode('vela-remote-v1:' + data.challenge));
       } catch (_) { /* Treat malformed signature as authentication failure. */ }
@@ -297,10 +317,12 @@ export class RemoteRoom {
       }
       delete state.failures[rateKey];
       const token = randomToken();
-      state.controllerHash = await sha256(token);
-      state.controllerIp = ip;
-      state.lease = now + LEASE_MS;
-      state.commands = []; state.readyUntil = 0;
+      // Commands from the superseded lease must not run after reconnection.
+      state.commands = state.commands.filter(c => c.owner !== candidate.controllerHash);
+      candidate.controllerHash = await sha256(token);
+      candidate.controllerIp = ip;
+      candidate.lease = now + LEASE_MS;
+      // A returning phone must not cancel the other phones' queued controls.
       await persist();
       return json({ token, leaseSeconds: LEASE_MS / 1000 });
     }
@@ -311,24 +333,25 @@ export class RemoteRoom {
       if (path === '/api/tv/pin') {
         if (typeof data.pin !== 'string' || !/^\d{10}$/.test(data.pin))
           return json({ error: 'invalid_pin' }, 400);
+        if (state.controllers.length >= MAX_CONTROLLERS)
+          return json({ error: 'max_controllers' }, 409);
         state.pinSalt = randomToken();
         state.pinHash = await sha256(state.pinSalt + ':' + data.pin);
+        state.pinExpiresAt = now + PAIRING_PIN_MS;
         if (state.pendingUntil) state.pendingUntil = now + UNCLAIMED_MS;
-        // Regeneration immediately invalidates previously paired controllers.
-        state.controllerHash = ''; state.controllerIp = ''; state.lease = 0;
-        state.pairedKey = null; state.pairedKeyId = ''; state.challenges = [];
-        state.commands = []; state.readyUntil = 0; state.tvIp = ip; state.tvSeen = now;
+        // Adding the next trusted phone must never disconnect existing ones.
+        state.tvIp = ip; state.tvSeen = now;
         await persist();
-        return json({ ok: true });
+        return json({ ok: true, pairedCount: state.controllers.length });
       }
       if (path === '/api/tv/disable') {
         await this.ctx.storage.delete('room');
         return json({ ok: true });
       }
       if (!sameHomeNetwork(state.tvIp, ip)) {
-        // Network changed; invalidate the old controller's authorization.
-        state.controllerHash = ''; state.lease = 0; state.commands = []; state.readyUntil = 0;
-        state.pairedKey = null; state.pairedKeyId = ''; state.challenges = [];
+        // Network changed: all phone proofs must be re-established by new PINs.
+        state.controllers = []; state.commands = []; state.readyUntil = 0;
+        state.challenges = []; state.pinSalt = ''; state.pinHash = ''; state.pinExpiresAt = 0;
       }
       state.tvIp = ip;
       state.tvSeen = now;
@@ -338,26 +361,33 @@ export class RemoteRoom {
       if (typeof data.textPublicKey === 'string' &&
           /^[A-Za-z0-9+/]{100,200}={0,2}$/.test(data.textPublicKey))
         state.textPublicKey = data.textPublicKey;
-      const commands = state.commands.filter(c => c.at > now - 6_000);
+      const commands = state.commands.filter(c => c.at > now - 6_000)
+        .map(({ owner, ...command }) => command); // Never expose session hashes to the TV.
       state.commands = [];
       await persist();
-      return json({ active: !!state.controllerHash && state.lease > now,
+      const anyActive = state.controllers.some(c => !!c.controllerHash && c.lease > now);
+      return json({ active: anyActive, pinPending: !!state.pinHash,
+        pairedCount: state.controllers.length,
         // Briefly speed up polling after real interaction or a newly opened
         // controller. An untouched phone must not consume fast polls all day.
-        fast: active && (state.lastCommandAt > now - 12_000 || state.readyUntil > now),
+        fast: anyActive && (state.lastCommandAt > now - 12_000 || state.readyUntil > now),
         commands });
     }
     const token = bearer(req);
-    if (!token || !active || !sameString(await sha256(token), state.controllerHash)
-        || !sameHomeNetwork(ip, state.controllerIp) || !sameNetwork)
+    const tokenHash = token ? await sha256(token) : '';
+    const controller = state.controllers.find(c => tokenHash && c.lease > now
+      && sameString(tokenHash, c.controllerHash) && sameHomeNetwork(ip, c.controllerIp));
+    if (!controller || !sameNetwork)
       return json({ error: 'session_expired' }, 401);
     if (path === '/api/release') {
-      state.controllerHash = ''; state.lease = 0; state.commands = []; state.readyUntil = 0;
-      state.pairedKey = null; state.pairedKeyId = ''; state.challenges = [];
+      // Disconnect removes only the requesting phone, not the other three.
+      state.controllers = state.controllers.filter(c => c !== controller);
+      state.commands = state.commands.filter(c => c.owner !== tokenHash);
+      state.challenges = state.challenges.filter(ch => ch.keyId !== controller.pairedKeyId);
       await persist();
       return json({ ok: true });
     }
-    state.lease = now + LEASE_MS;
+    controller.lease = now + LEASE_MS;
     if (path === '/api/heartbeat' && data.ready === true) state.readyUntil = now + 12_000;
     if (path === '/api/command') {
       if (data.key !== 'type_text' && !KEYS.has(data.key)) return json({ error: 'invalid_key' }, 400);
@@ -375,7 +405,7 @@ export class RemoteRoom {
       state.commands = state.commands.filter(c => c.at > now - 6_000).slice(-15);
       state.commands.push({ key: data.key, ...(data.key === 'type_text' ? { payload: {
         ephemeral: data.payload.ephemeral, iv: data.payload.iv, cipher: data.payload.cipher } } : {}),
-        at: now, id: randomToken().slice(0, 12) });
+        at: now, id: randomToken().slice(0, 12), owner: tokenHash });
       state.lastCommandAt = now;
     }
     await persist();

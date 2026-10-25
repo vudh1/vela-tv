@@ -74,7 +74,7 @@
   function showConnection() {
     $('network').className = 'network' + (state.online ? state.busy ? ' busy' : ' online' : '');
     $('network').querySelector('span').textContent = !state.online ? 'TV offline' : state.token ? 'Connected'
-      : state.busy ? 'Remote in use' : 'TV available';
+      : state.busy ? 'Other remotes connected' : 'TV available';
   }
   function setConnected(token) {
     state.token = token; manuallyDisconnected = false;
@@ -83,7 +83,7 @@
     $('pair').classList.add('hidden'); $('controller').classList.remove('hidden');
     message(''); showConnection();
     if (pingTimer) clearInterval(pingTimer);
-    pingTimer = setInterval(heartbeat, 7000);
+    pingTimer = setInterval(heartbeat, 20000);
     heartbeat(); // Arm a brief responsiveness window right after pairing/resume.
   }
   function disconnected(reason = '') {
@@ -98,9 +98,10 @@
     incorrect_pin: 'Incorrect PIN. Check the 10-digit code shown in Vela TV settings.',
     different_network: 'Your phone and TV must use the same home Internet connection. Turn off your VPN or mobile data.',
     tv_offline: 'Vela TV is offline. Open Vela and check Remote settings.',
-    in_use: 'Another device is using this remote. Disconnect it or generate a new PIN on the TV.',
+    max_controllers: 'Four remotes are already paired. Disconnect one or reset remote access on the TV.',
+    already_paired: 'This phone is already paired. Reopen the remote to reconnect.',
     locked: 'Too many attempts. Wait 15 minutes before trying again.',
-    pairing_required: 'Generate a new PIN in Vela TV settings to connect this phone.',
+    pairing_required: 'Choose Add Another Remote in Vela TV settings for a new pairing PIN.',
     already_enrolled: 'A different TV is already registered.',
     session_expired: 'Connection interrupted. Reconnecting to Vela TV…'
   };
@@ -115,24 +116,30 @@
         storedKey('current'), storedKey('pending')
       ]);
       if (!current && !pending) return;
-      const challenge = await request('/api/challenge', {});
-      let identity = null, recoveredPending = false;
-      if (current && await identityId(current) === challenge.keyId) identity = current;
-      else if (pending && await identityId(pending) === challenge.keyId) {
-        identity = pending; recoveredPending = true;
+      // Every trusted phone has its own server-side identity. Never ask the
+      // room to reveal which other phones are paired.
+      const identities = [current, pending].filter(Boolean);
+      for (const identity of identities) {
+        const keyId = await identityId(identity);
+        let challenge;
+        try { challenge = await request('/api/challenge', { keyId }); }
+        catch (error) {
+          if (error.message === 'pairing_required') continue;
+          throw error;
+        }
+        if (challenge.keyId !== keyId) continue;
+        const signed = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' },
+          identity.privateKey, new TextEncoder().encode('vela-remote-v1:' + challenge.challenge));
+        const data = await request('/api/resume', {
+          challenge: challenge.challenge, signature: hex(signed)
+        });
+        if (identity === pending) {
+          await storedKey('current', identity); await storedKey('pending', null);
+        }
+        setConnected(data.token);
+        return;
       }
-      if (!identity) {
-        await clearKeys(); message(errors.pairing_required); return;
-      }
-      const signed = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' },
-        identity.privateKey, new TextEncoder().encode('vela-remote-v1:' + challenge.challenge));
-      const data = await request('/api/resume', {
-        challenge: challenge.challenge, signature: hex(signed)
-      });
-      if (recoveredPending) {
-        await storedKey('current', identity); await storedKey('pending', null);
-      }
-      setConnected(data.token);
+      await clearKeys(); message(errors.pairing_required);
     })().catch(error => {
       if (error.message === 'pairing_required') {
         clearKeys().catch(() => {}); message(errors.pairing_required);
@@ -152,7 +159,7 @@
     } catch (_) { state.online = false; showConnection(); }
   }
   async function heartbeat() {
-    if (!state.token) return;
+    if (!state.token || document.hidden) return;
     const token = state.token;
     // Brief fast-poll bursts only while a person is actually using the
     // controller. Leaving this tab open must not create all-day request cost.
@@ -194,7 +201,11 @@
     lastControlAt = Date.now();
     if (navigator.vibrate) navigator.vibrate(9);
     const token = state.token;
-    try { await request('/api/command', { key }, token); }
+    try {
+      await request('/api/command', { key }, token);
+      if (key === 'power_toggle')
+        $('remoteInfo').textContent = 'Power request queued. If the TV goes into standby and disconnects, use its physical remote to wake it.';
+    }
     catch (error) {
       if (error.status === 401 && state.token === token) { disconnected(errors.session_expired); status(); }
       else $('remoteInfo').textContent = 'TV did not receive this command. Check the connection.';
@@ -213,10 +224,6 @@
   $('wifiButton').addEventListener('click', () => {
     if (window.confirm('Open Wi-Fi settings on your Sony TV? Changing networks may disconnect this remote.'))
       send('wifi_settings');
-  });
-  $('powerOffButton').addEventListener('click', () => {
-    if (window.confirm('Put Sony TV into standby? You will need the physical remote or an always-on LAN controller to turn it back on.'))
-      send('power_off');
   });
 
   const encode64 = bytes => {
@@ -300,5 +307,7 @@
   window.addEventListener('focus', foreground);
   window.addEventListener('online', status);
   status();
-  statusTimer = setInterval(status, 8000);
+  // Connected phones already heartbeat; avoid quadrupling constant Worker
+  // status traffic when four controllers stay paired all day.
+  statusTimer = setInterval(() => { if (!document.hidden && !state.token) status(); }, 30000);
 })();
