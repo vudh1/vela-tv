@@ -29,9 +29,9 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
-/** Each profile has a private, encrypted, read-only Google Calendar iCal subscription.
+/** Each profile has an encrypted, read-only iCalendar subscription (Google or BallerWatch).
  * Calendar fetch/parse never occurs on the TV UI or WebView JavaScript thread.
- * The URL is never sent to JavaScript, telemetry, GitHub, or the network except Google Calendar.
+ * URLs stay in the Android Keystore-protected native storage, never in JavaScript or logs.
  */
 final class VelaCalendarController {
     private final MainActivity activity;
@@ -82,23 +82,34 @@ final class VelaCalendarController {
             return new JSONArray(data);
         } catch(Exception ignored) { return empty; }
     }
-    private static boolean googleCalendarUrl(String url){
-        try{Uri u=Uri.parse(url.trim());return "https".equalsIgnoreCase(u.getScheme())&&"calendar.google.com".equalsIgnoreCase(u.getHost())
-            &&u.getPort()==-1&&u.getEncodedPath()!=null&&u.getEncodedPath().startsWith("/calendar/ical/")&&u.getEncodedPath().endsWith(".ics")&&url.length()<=4096
-            &&u.getUserInfo()==null;}
-        catch(Exception ignored){return false;}
+    private static boolean allowedCalendarUrl(String url){
+        try {
+            if(url==null||url.length()>4096)return false;
+            Uri u=Uri.parse(url.trim());
+            if(!"https".equalsIgnoreCase(u.getScheme())||u.getPort()!=-1
+               ||u.getUserInfo()!=null||u.getFragment()!=null)return false;
+            String host=u.getHost(),path=u.getEncodedPath();
+            if(host==null||path==null)return false;
+            boolean google="calendar.google.com".equalsIgnoreCase(host)
+                &&path.startsWith("/calendar/ical/")&&path.endsWith(".ics");
+            boolean ballerwatch="ballerwatch-web.vudhone.workers.dev".equalsIgnoreCase(host)
+                &&path.equals("/web/calendar.ics");
+            if(ballerwatch)for(String key:u.getQueryParameterNames())
+                if(!key.equals("teams")&&!key.equals("pickup")&&!key.equals("watch"))return false;
+            return google||ballerwatch;
+        }catch(Exception ignored){return false;}
     }
     private String download(String url) throws Exception {
-        // Never follow a redirect outside the same trusted Google Calendar host.
+        // Never follow a redirect to an unapproved host or feed path.
         for(int redirect=0;redirect<4;redirect++){
-            if(!googleCalendarUrl(url))throw new IllegalArgumentException("Calendar URL must be a private Google iCal address");
+            if(!allowedCalendarUrl(url))throw new IllegalArgumentException("Use an approved Google or BallerWatch iCalendar address");
             HttpURLConnection connection=(HttpURLConnection)new URL(url).openConnection();
             connection.setInstanceFollowRedirects(false);connection.setConnectTimeout(10000);connection.setReadTimeout(12000);
             connection.setRequestProperty("Accept","text/calendar,text/plain");connection.setRequestProperty("Accept-Encoding","identity");
             try{
                 int status=connection.getResponseCode();
                 if(status>=300&&status<400){String target=connection.getHeaderField("Location");if(target==null)throw new IllegalStateException("Redirect without location");url=new URL(new URL(url),target).toString();continue;}
-                if(status!=200)throw new IllegalStateException("Google Calendar returned HTTP "+status);
+                if(status!=200)throw new IllegalStateException("Calendar source returned HTTP "+status);
                 try(InputStream in=connection.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
                     byte[] buf=new byte[8192];int n,total=0;
                     while((n=in.read(buf))!=-1){total+=n;if(total>2_000_000)throw new IllegalStateException("Calendar feed is too large");out.write(buf,0,n);}
@@ -108,7 +119,7 @@ final class VelaCalendarController {
         }
         throw new IllegalStateException("Too many calendar redirects");
     }
-    static boolean isValidGoogleCalendarLink(String url){return googleCalendarUrl(url);}
+    static boolean isValidCalendarLink(String url){return allowedCalendarUrl(url);}
     private static String calendarName(String ics){
         for(String line:ics.replace("\r\n", "\n").split("\n")) {
             if(line.startsWith("X-WR-CALNAME:")) return line.substring(13).trim().replace("\\,",",").replace("\\;",";");
@@ -128,7 +139,7 @@ final class VelaCalendarController {
         }catch(Exception ignored){}
     }
     void saveLink(String profile,String url,String label){
-        if(!profileOkay(profile)||"guest".equals(profile)||!googleCalendarUrl(url))return;
+        if(!profileOkay(profile)||"guest".equals(profile)||!allowedCalendarUrl(url))return;
         worker.execute(()->{
             try{
                 prefs.edit().putString("url_"+profile,encrypt(url)).putString("label_"+profile,encrypt(label==null?"":label.trim().substring(0,Math.min(80,label.trim().length()))))
@@ -159,7 +170,7 @@ final class VelaCalendarController {
             long last=prefs.getLong("checked_"+profile,0);
             if(!force&&System.currentTimeMillis()-last<TTL&&LocalDate.now(ZoneId.systemDefault()).toString().equals(prefs.getString("day_"+profile,""))){deliver(profile,true,cache,prefs.getLong("success_"+profile,0)>0?"Verified feed · cached, refreshes every 15 minutes":"Link saved · not yet verified");return;}
             // Return cached events immediately so opening the calendar is never network-blocking.
-            deliver(profile,true,cache,"Checking Google Calendar…");
+            deliver(profile,true,cache,"Checking calendar feed…");
             prefs.edit().putLong("attempt_"+profile,System.currentTimeMillis()).apply();
             try{
                 ZoneId zone=ZoneId.systemDefault();LocalDate day=LocalDate.now(zone);
@@ -170,20 +181,20 @@ final class VelaCalendarController {
                 String data=array.toString();prefs.edit().putString("data_"+profile,encrypt(data)).putLong("checked_"+profile,System.currentTimeMillis())
                     .putLong("success_"+profile,System.currentTimeMillis()).putString("name_"+profile,encrypt(calendarName(feed)))
                     .putString("day_"+profile,day.toString()).apply();
-                deliver(profile,true,data,events.isEmpty()?"Verified with Google · no events today":"Verified with Google · updated just now");
-            }catch(Exception e){android.util.Log.w("VelaCalendar","Calendar refresh failed (no URL logged): "+e.getClass().getSimpleName());deliver(profile,true,cache,prefs.getLong("success_"+profile,0)>0?"Last refresh failed · showing verified cache":"Link saved, but Google has not returned a valid feed");}
+                deliver(profile,true,data,events.isEmpty()?"Verified feed · no events today":"Verified calendar · updated just now");
+            }catch(Exception e){android.util.Log.w("VelaCalendar","Calendar refresh failed (no URL logged): "+e.getClass().getSimpleName());deliver(profile,true,cache,prefs.getLong("success_"+profile,0)>0?"Last refresh failed · showing verified cache":"Link saved, but calendar source has not returned a valid feed");}
         });
     }
     void edit(String profile){
         if(!profileOkay(profile)||"guest".equals(profile))return;
         activity.runOnUiThread(()->{
             EditText input=new EditText(activity);input.setSingleLine(true);input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);
-            input.setHint("https://calendar.google.com/calendar/ical/…/basic.ics");
-            new AlertDialog.Builder(activity).setTitle("Connect Google Calendar · read-only")
-                .setMessage("On a computer: Google Calendar → Settings → your calendar → Integrate calendar → Secret address in iCal format. Paste it here. This link is private: never share it.")
+            input.setHint("https://ballerwatch-web.vudhone.workers.dev/web/calendar.ics");
+            new AlertDialog.Builder(activity).setTitle("Connect calendar · read-only")
+                .setMessage("Paste a Google Calendar secret iCal address or the calendar subscription URL copied from BallerWatch → Settings → Share my calendar. Both are read-only; use trusted Wi-Fi.")
                 .setView(input).setNegativeButton("Cancel",(d,w)->{}).setPositiveButton("Save",(d,w)->{
-                    String url=input.getText().toString().trim();if(!googleCalendarUrl(url)){
-                        new AlertDialog.Builder(activity).setTitle("Invalid calendar address").setMessage("Use the Secret address in iCal format from Google Calendar. The URL must begin https://calendar.google.com/calendar/ical/ and end with .ics.").setPositiveButton("OK",null).show();return;}
+                    String url=input.getText().toString().trim();if(!allowedCalendarUrl(url)){
+                        new AlertDialog.Builder(activity).setTitle("Invalid calendar address").setMessage("Only official Google Calendar secret .ics URLs and BallerWatch /web/calendar.ics URLs are supported. Use Copy calendar link in BallerWatch settings.").setPositiveButton("OK",null).show();return;}
                     saveLink(profile,url,"");
                 }).show();
         });
