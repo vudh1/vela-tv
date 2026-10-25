@@ -3,6 +3,8 @@
 Minimalist TV Home experience. One shared interface with platform-specific
 integration and installation targets.
 
+**FRIDAY:** [Integration ownership and compatibility](FRIDAY.md) · [Agent instructions](AGENTS.md).
+
 ## Ambient weather
 
 Vela Home shows a small, non-interactive weather card with current
