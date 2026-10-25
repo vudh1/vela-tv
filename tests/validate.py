@@ -183,4 +183,8 @@ assert 'static JSONArray cachedEventsForDream(Context ctx, String profile)' in c
 assert 'success_'+ '"+profile' in calendar and 'day_'+ '"+profile' in calendar
 assert 'url_'+ '"+profile' not in dream
 assert 'wakeProfilePromptEnabled' in js and 'profile_prompt_enabled' in main
+boot=(r/'app/src/main/java/com/danielvu/quiethome/VelaBootReceiver.java').read_text()
+assert 'Intent.ACTION_BOOT_COMPLETED' in boot
+assert any(x.get(a+'name')=='.VelaBootReceiver' for x in app.findall('receiver'))
+assert 'android.permission.RECEIVE_BOOT_COMPLETED' in ET.tostring(m,encoding='unicode')
 print('PASS grouped settings, wake profile choice, app sorting, ongoing events, screensaver privacy and remote left exit')
