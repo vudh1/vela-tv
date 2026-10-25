@@ -55,3 +55,9 @@ jobs:
             app/src/main/java/com/danielvu/quiethome/SonyIrccMessage.java \
             tests/java/com/danielvu/quiethome/SonyIrccMessageTest.java
           java -cp build/ci-classes com.danielvu.quiethome.SonyIrccMessageTest
+      - name: Test TV updater permission return and no-loop behavior
+        run: |
+          javac -source 8 -target 8 -d build/ci-classes \
+            app/src/main/java/com/danielvu/quiethome/VelaInstallPermissionFlow.java \
+            tests/java/com/danielvu/quiethome/VelaInstallPermissionFlowTest.java
+          java -cp build/ci-classes com.danielvu.quiethome.VelaInstallPermissionFlowTest
