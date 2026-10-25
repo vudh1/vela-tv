@@ -744,18 +744,8 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public boolean remoteRevocationPending() {
             return VelaRemoteClient.get(MainActivity.this).revocationPending();
         }
-        @JavascriptInterface public boolean remoteHasPin() {
-            return VelaRemoteClient.get(MainActivity.this).currentPin().length() == 10;
-        }
         @JavascriptInterface public void pairWebRemote() {
             runOnUiThread(() -> generateRemotePin());
-        }
-        @JavascriptInterface public void showWebRemotePin() {
-            runOnUiThread(() -> {
-                String pin = VelaRemoteClient.get(MainActivity.this).currentPin();
-                if (pin.length() == 10) showRemotePin(pin);
-                else toast("Choose Regenerate PIN to create a TV-managed code.");
-            });
         }
         @JavascriptInterface public void rotateWebRemotePin() {
             runOnUiThread(() -> new AlertDialog.Builder(MainActivity.this)

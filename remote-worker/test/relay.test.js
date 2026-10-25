@@ -42,6 +42,19 @@ async function rotate(env, pin = NEXT_PIN, token = TV_TOKEN) {
 async function poll(env, ip = TV_IP, token = TV_TOKEN) {
   return call(env, '/api/tv/poll', { ip, origin: null, data: {}, token });
 }
+async function controllerIdentity() {
+  const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' },
+    false, ['sign', 'verify']);
+  const jwk = await crypto.subtle.exportKey('jwk', pair.publicKey);
+  return { privateKey: pair.privateKey,
+    publicKey: { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y } };
+}
+async function resumeWith(env, identity, challenge, ip = TV_IP) {
+  const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' },
+    identity.privateKey, new TextEncoder().encode('vela-remote-v1:' + challenge));
+  return call(env, '/api/resume', { ip,
+    data: { challenge, signature: Buffer.from(signature).toString('hex') } });
+}
 
 test('needs no GitHub or Cloudflare PIN secret; rejects browser-origin TV claims', async () => {
   const { env } = setup();
@@ -88,7 +101,9 @@ test('same public IP, exclusive controller lease and one-way key queue', async (
   assert.equal((await poll(env)).body.commands.length, 0);
   assert.equal((await call(env, '/api/heartbeat', { data: {}, token: session, ip: OTHER_IP })).status, 401);
   assert.equal((await call(env, '/api/release', { data: {}, token: session })).status, 200);
-  assert.equal((await call(env, '/api/connect', { data: { pin: PIN } })).status, 200);
+  assert.equal((await call(env, '/api/connect', { data: { pin: PIN } })).status, 409);
+  assert.equal((await rotate(env)).status, 200);
+  assert.equal((await call(env, '/api/connect', { data: { pin: NEXT_PIN } })).status, 200);
 });
 
 test('wrong PIN attempts lock out, without blocking TV-signed PIN regeneration', async () => {
@@ -149,7 +164,9 @@ test('lease expires without heartbeat; stale controller cannot be revived', asyn
     assert.equal((await call(env, '/api/command', { token: first.body.token,
       data: { key: 'select' } })).status, 401);
     await poll(env);
-    const second = await call(env, '/api/connect', { data: { pin: PIN } });
+    assert.equal((await call(env, '/api/connect', { data: { pin: PIN } })).status, 409);
+    await rotate(env);
+    const second = await call(env, '/api/connect', { data: { pin: NEXT_PIN } });
     assert.equal(second.status, 200);
     assert.notEqual(second.body.token, first.body.token);
   } finally { Date.now = originalClock; }
@@ -164,4 +181,71 @@ test('IPv6 /64 household prefix permits differing private interface addresses', 
   assert.equal((await call(env, '/api/status', { ip: phoneIp })).body.sameNetwork, true);
   assert.equal((await call(env, '/api/status', { ip: elsewhere })).body.sameNetwork, false);
   assert.equal((await call(env, '/api/connect', { ip: phoneIp, data: { pin: PIN } })).status, 200);
+});
+
+test('trusted controller can return after sleep and reload with no PIN', async () => {
+  const { env, storage } = setup(); await enroll(env);
+  const identity = await controllerIdentity();
+  const first = await call(env, '/api/connect', { data: { pin: PIN, publicKey: identity.publicKey } });
+  assert.equal(first.status, 200);
+  const saved = await storage.get('room');
+  assert.deepEqual(saved.pairedKey, identity.publicKey);
+  assert.equal(saved.pairedKeyId.length, 64);
+  assert.equal(saved.pinHash, '');
+  assert.equal(saved.pinSalt, '');
+  assert.equal(JSON.stringify(saved).includes(PIN), false);
+  const clock = Date.now;
+  Date.now = () => clock() + 30_000;
+  try {
+    assert.equal((await call(env, '/api/heartbeat', { data: {}, token: first.body.token })).status, 401);
+    await poll(env); // TV is still online on the same network.
+    const challenge = await call(env, '/api/challenge', { data: {} });
+    assert.equal(challenge.status, 200);
+    assert.equal(challenge.body.keyId, saved.pairedKeyId);
+    const second = await resumeWith(env, identity, challenge.body.challenge);
+    assert.equal(second.status, 200);
+    assert.notEqual(second.body.token, first.body.token);
+    assert.equal((await call(env, '/api/command', { data: { key: 'select' },
+      token: second.body.token })).status, 200);
+    assert.equal((await call(env, '/api/resume', { data: {
+      challenge: challenge.body.challenge, signature: '00'.repeat(64) } })).status, 401);
+  } finally { Date.now = clock; }
+});
+
+test('reconnection rejects other networks, tampered signatures and expired challenges', async () => {
+  const { env } = setup(); await enroll(env);
+  const trusted = await controllerIdentity();
+  const stranger = await controllerIdentity();
+  assert.equal((await call(env, '/api/connect', { data: { pin: PIN,
+    publicKey: { ...trusted.publicKey, x: '!' } } })).status, 400);
+  assert.equal((await call(env, '/api/connect', { data: { pin: PIN,
+    publicKey: trusted.publicKey } })).status, 200);
+  assert.equal((await call(env, '/api/challenge', { ip: OTHER_IP, data: {} })).status, 403);
+  const first = await call(env, '/api/challenge', { data: {} });
+  assert.equal((await resumeWith(env, stranger, first.body.challenge)).status, 401);
+  assert.equal((await resumeWith(env, trusted, first.body.challenge)).status, 401);
+  const second = await call(env, '/api/challenge', { data: {} });
+  const clock = Date.now;
+  Date.now = () => clock() + 46_000;
+  try {
+    await poll(env);
+    assert.equal((await resumeWith(env, trusted, second.body.challenge)).status, 401);
+  } finally { Date.now = clock; }
+});
+
+test('explicit disconnect, PIN rotation and TV network change revoke trusted phone', async () => {
+  const { env } = setup(); await enroll(env);
+  const identity = await controllerIdentity();
+  let session = await call(env, '/api/connect', { data: { pin: PIN, publicKey: identity.publicKey } });
+  assert.equal((await call(env, '/api/release', { data: {}, token: session.body.token })).status, 200);
+  assert.equal((await call(env, '/api/challenge', { data: {} })).status, 409);
+  assert.equal((await rotate(env)).status, 200);
+  session = await call(env, '/api/connect', { data: { pin: NEXT_PIN, publicKey: identity.publicKey } });
+  assert.equal(session.status, 200);
+  assert.equal((await rotate(env, PIN)).status, 200);
+  assert.equal((await call(env, '/api/challenge', { data: {} })).status, 409);
+  session = await call(env, '/api/connect', { data: { pin: PIN, publicKey: identity.publicKey } });
+  assert.equal(session.status, 200);
+  await poll(env, OTHER_IP);
+  assert.equal((await call(env, '/api/challenge', { ip: OTHER_IP, data: {} })).status, 409);
 });
