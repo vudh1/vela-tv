@@ -224,13 +224,15 @@ final class VelaCalendarController {
             try{
                 ZoneId zone=ZoneId.systemDefault();LocalDate day=LocalDate.now(zone);
                 List<JSONObject> combined=new ArrayList<>();Set<String> ids=new HashSet<>();
-                int verified=0,total=0;String displayName="";
+                int refreshed=0,total=0;String displayName="";
                 for(String source:new String[]{"google","sport"}){
                     String url=sourceUrl(profile,source);if(url.isEmpty())continue;total++;
                     JSONArray list=cachedSource(profile,source,day.toString());
                     try{
                         String feed=download(url);if(!validCalendarFeed(feed))throw new IllegalStateException("Invalid iCal feed");
-                        List<CalendarIcs.Event> events=CalendarIcs.upcoming(feed,zone,day,7);
+                        // Keep a month of events for the full calendar; the
+                        // compact Home peek still chooses only timely events.
+                        List<CalendarIcs.Event> events=CalendarIcs.upcoming(feed,zone,day,30);
                         JSONArray fresh=new JSONArray();for(CalendarIcs.Event e:events){
                             JSONObject j=new JSONObject();j.put("title",e.title);j.put("start",e.start).put("end",e.end).put("allDay",e.allDay)
                                 .put("uid",e.uid).put("kind",e.kind).put("location",e.location).put("description",e.description)
@@ -239,12 +241,11 @@ final class VelaCalendarController {
                         list=fresh;long now=System.currentTimeMillis();
                         prefs.edit().putString("cache_"+source+"_"+profile,encrypt(list.toString()))
                             .putLong("success_"+source+"_"+profile,now).putString("day_"+source+"_"+profile,day.toString()).apply();
+                        refreshed++;
                         displayName+=displayName.isEmpty()?calendarName(feed):" + "+(source.equals("sport")?"BallerWatch":"Google");
                     }catch(Exception e){
                         android.util.Log.w("VelaCalendar","Source refresh failed: "+e.getClass().getSimpleName());
                     }
-                    if(prefs.getLong("success_"+source+"_"+profile,0)>0&&
-                        day.toString().equals(prefs.getString("day_"+source+"_"+profile,"")))verified++;
                     for(int i=0;i<list.length();i++){
                         JSONObject obj=list.optJSONObject(i);if(obj==null)continue;
                         String id=obj.optString("uid","")+"/"+obj.optLong("start");
@@ -256,12 +257,11 @@ final class VelaCalendarController {
                 String data=array.toString();SharedPreferences.Editor e=prefs.edit()
                     .putString("data_"+profile,encrypt(data)).putLong("checked_"+profile,System.currentTimeMillis())
                     .putString("day_"+profile,day.toString());
-                if(verified>0)e.putLong("success_"+profile,System.currentTimeMillis());
-                else e.remove("success_"+profile);
+                if(refreshed>0)e.putLong("success_"+profile,System.currentTimeMillis());
                 if(!displayName.isEmpty())e.putString("name_"+profile,encrypt(displayName));
                 e.apply();
-                deliver(profile,true,data,verified==total?(array.length()==0?"Verified · no upcoming events":"Verified · updated just now"):
-                    verified>0?"Some sources unavailable · showing verified events":"Calendar sources could not be verified");
+                deliver(profile,true,data,refreshed==total?(array.length()==0?"Verified · no upcoming events":"Verified · updated just now"):
+                    refreshed>0?"Some sources failed · showing their last saved events":"Refresh failed · showing saved calendar events");
             }catch(Exception e){android.util.Log.w("VelaCalendar","Calendar refresh failed (no URL logged): "+e.getClass().getSimpleName());deliver(profile,true,cache,prefs.getLong("success_"+profile,0)>0?"Last refresh failed · showing verified cache":"Link saved, but calendar source has not returned a valid feed");}
         });
     }

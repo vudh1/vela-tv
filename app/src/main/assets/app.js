@@ -150,7 +150,7 @@ function home(){var arr=fav.map(byId).filter(Boolean),f=$('#favorites');f.classN
  f.innerHTML=arr.length?arr.map(function(a){return tile(a,'launch');}).join(''):'<div class="empty-home">Choose your favorite apps from the gear.</div>';
  listDirty=true;visibleIcons();if(!screen){activeList();select(Math.max(0,controls.findIndex(function(el){return el.classList.contains('app-card');})));}}
 /* Geometry is calculated only when markup, scroll or viewport changes—not for every remote key. */
-function activeList(){if(!listDirty)return;var root=screen?$('#overlay'):$('.page');controls=Array.prototype.slice.call(root.querySelectorAll('button.focusable:not([disabled])'));
+function activeList(){if(!listDirty)return;var root=screen?$('#overlay'):$('.page');controls=Array.prototype.slice.call(root.querySelectorAll('button.focusable:not([disabled])')).filter(function(el){return el.getClientRects().length>0;});
  geometry=controls.map(function(el){var r=el.getBoundingClientRect();return {x:(r.left+r.right)/2,y:(r.top+r.bottom)/2,top:r.top};});listDirty=false;}
 function labelSelected(el){var label=$('#focusLabel');if(screen||appLabelMode!=='focus'||!el||!el.classList.contains('app-card')){label.classList.remove('visible');return;}
  var a=byId(el.getAttribute('data-id'));if(!a){label.classList.remove('visible');return;}var g=geometry[cursor];if(!g)return;
@@ -280,8 +280,8 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  '<p class="library-footnote">Profiles and app activity stay on this TV. Calendar links and events are stored locally with Android Keystore encryption. Returning to Sony Home remains available under Recovery. Weather: Open-Meteo (CC BY 4.0), approximate location by IP Info.</p>';}
  else if(type==='homeApps'){title='Home favorites';subtitle='Pin up to eight apps and reorder with arrows.';body=favoritesEditor();}
  else if(type==='startupProfiles'){title='Who is watching?';subtitle='Choose a profile to continue.';
- body='<div class="startup-list">'+profiles.map(function(p){
- return '<button class="panel-row focusable" data-act="switchProfile" data-id="'+esc(p.id)+'"><span class="row-title">'+esc(p.name)+'</span><span class="row-right">'+(p.id===profileId?'Current':'Select')+' ›</span></button>';
+ body='<div class="startup-avatar-grid" role="group" aria-label="Choose your profile">'+profiles.map(function(p){
+ return '<button class="startup-avatar-card focusable" data-act="switchProfile" data-id="'+esc(p.id)+'" aria-label="Continue as '+esc(p.name)+'"><span class="startup-avatar">'+avatarSvg(p.avatar,p.name)+'</span><span class="startup-profile-name">'+esc(p.name)+'</span></button>';
  }).join('')+'</div>';}
  else if(type==='all'){title='All apps';subtitle='Hold OK on an icon for quick actions.';
  body='<div class="app-grid">'+orderedApps().map(function(a){return tile(a,'launch');}).join('')+'</div>'+(apps.length?'<p class="library-footnote">Sorted by '+esc(sortLabel())+' · Change under Gear → Apps</p>':'<p>Loading installed apps…</p>');}
@@ -325,7 +325,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  if(profileId==='guest')body+='<p class="calendar-help">Guest is temporary: no calendar addresses or events are saved.</p>';
  else body+=row('calendarSource','Google Calendar',calSources.some(function(s){return s.kind==='google';})?'Connected':'Connect','Birthdays, appointments, tasks and other events','google')+
  row('calendarSource','BallerWatch',calSources.some(function(s){return s.kind==='sport';})?'Connected':'Connect','Matches you play and professional sports you watch','sport')+
- row('refreshCalendar','Refresh now','↻','Normally auto-refreshes about every 15 minutes while Vela is open')+
+ row('refreshCalendar','Refresh now','↻','Fetch new games from the saved links; normally every 15 minutes')+
   (calConnected?row('disconnectCalendar','Disconnect both calendars','Remove','Delete both subscriptions and caches for this profile'):'')+
  '<p class="library-footnote">Both feeds are read-only and encrypted separately. Each can be replaced without removing the other. '+(tizenMode?'Samsung requires direct HTTPS access from this TV; no proxy receives your private link.':'Only use private iCal addresses on a trusted device.')+'</p>';
  }
@@ -335,7 +335,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  row('pairCalendar','Connect using phone','QR','Scan on your trusted Wi-Fi and paste the subscription URL')+
  row('connectCalendar',attached?'Replace on TV':'Enter on TV','Enter','Paste the iCal URL on your Sony TV'))+
  (attached?row('removeCalendarSource','Remove this source','Remove','Keep the other calendar connected'):'')+
- '<p class="library-footnote">'+(isSport?'Copy the feed under BallerWatch → Settings → Share my calendar. The ICS marks playing versus watching, but does not currently include Drogon TV channels.':'Get your secret iCal link from Google Calendar settings. You do not need to sign into Google on this TV.')+'</p>';}
+ '<p class="library-footnote">'+(isSport?'Copy the feed under BallerWatch → Settings → Share my calendar. Newly published games for selected teams update automatically. Changing your monitored teams currently creates a different link; replace this source once after a watchlist change.':'Get your secret iCal link from Google Calendar settings. You do not need to sign into Google on this TV.')+'</p>';}
  else if(type==='tizenCalendarEntry'){title='Private calendar';subtitle='Samsung · saved under this profile only';
  body='<p class="library-footnote">Paste your '+(selectedSource==='sport'?'BallerWatch sports':'Google Calendar secret')+' iCal address using the Samsung keyboard or SmartThings remote. Press Down after editing to reach Save. Vela encrypts the link before saving.</p>'+
  '<label class="calendar-input-label" for="tizenCalendarUrl">Secret HTTPS iCal URL</label>'+
@@ -381,7 +381,7 @@ function checkWakeProfilePrompt(){
   startupChooserOpen=true;panelHistory=[];renderPanel('startupProfiles');
  }}catch(e){}
 }
-function close(){panelHistory=[];startupChooserOpen=false;if(screen==='pairing'){stopPairClock();pairingUrl='';pairingExpiresAt=0;if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();}screen='';scheduleRotation();$('#overlay').classList.add('hidden');listDirty=true;activeList();select(Math.max(0,controls.findIndex(function(el){return el.classList.contains('app-card');})));maybeShowUpcomingReminder();}
+function close(){if(startupChooserOpen&&screen==='startupProfiles')return;panelHistory=[];startupChooserOpen=false;if(screen==='pairing'){stopPairClock();pairingUrl='';pairingExpiresAt=0;if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();}screen='';scheduleRotation();$('#overlay').classList.add('hidden');listDirty=true;activeList();select(Math.max(0,controls.findIndex(function(el){return el.classList.contains('app-card');})));maybeShowUpcomingReminder();}
 function rerenderWithFocus(act,id,dir){renderPanel(screen,{act:act,id:id,dir:dir},true);}
 function requestProfileEdit(kind,id){var p=null;for(var i=0;i<profiles.length;i++)if(profiles[i].id===id)p=profiles[i];
  var old=p?p.name:'';if(bridge&&bridge.editProfile){bridge.editProfile(kind,id,old);}else{
@@ -470,6 +470,7 @@ function action(name,id,dir){
 function trigger(){activeList();var b=controls[cursor];if(b)action(b.getAttribute('data-act'),b.getAttribute('data-id')||'',b.getAttribute('data-dir')||'');}
 function goBack(){
  if(!screen)return;
+ if(screen==='startupProfiles')return;
  if(screen==='pairing'){stopPairClock();pairingUrl='';pairingExpiresAt=0;
   if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();}
  if(panelHistory.length){var previous=panelHistory.pop();renderPanel(previous);return;}
@@ -496,7 +497,7 @@ function calendarState(e){if(e.allDay)return '';var n=Date.now();return e.start<
 function calendarToday(){var now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
  var end=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1).getTime();
  return calEvents.filter(function(e){return Number(e.start)<end&&Number(e.end)>Math.max(start,Date.now());}).sort(function(a,b){return a.start-b.start;});}
-function calendarUpcoming(){var now=Date.now(),until=now+7*86400000;
+function calendarUpcoming(){var now=Date.now(),until=now+30*86400000;
  return calEvents.filter(function(e){return e.end>now&&e.start<until&&(calendarFilter==='all'||(e.kind||'other')===calendarFilter);}).sort(function(a,b){return a.start-b.start;});}
 function eventHTML(e,compact,index){var state=calendarState(e),when=calendarDate(e.start)+' · '+calendarTime(e.start,e.allDay);
  var type=e.kind==='play'?'PLAY · ':e.kind==='watch'?'WATCH · ':'';
@@ -512,7 +513,7 @@ function calendarEventList(){
  var events=calendarUpcoming();calendarViewEvents=events;
  return tabs+(events.length?events.map(function(e,i){return eventHTML(e,false,i);}).join('')+
  (events.length>4?'<p class="calendar-scroll-hint">↑ ↓ Browse · OK for details</p>':''):
- '<p class="calendar-empty">No '+(calendarFilter==='all'?'upcoming':calendarFilter==='play'?'playing':calendarFilter==='watch'?'watching':'life')+' events in the next seven days.</p>');
+ '<p class="calendar-empty">No '+(calendarFilter==='all'?'upcoming':calendarFilter==='play'?'playing':calendarFilter==='watch'?'watching':'life')+' events in the next 30 days.</p>');
 }
 function hideUpcomingReminder(){if(reminderTimer)clearTimeout(reminderTimer);reminderTimer=null;var el=$('#eventReminder');
  if(el){el.classList.remove('visible');el.setAttribute('aria-hidden','true');}}
@@ -601,7 +602,7 @@ function resume(){rescheduleClock();scheduleRotation();checkWakeProfilePrompt();
 function init(){loadVolumePrefs();initProfiles();rescheduleClock();calTimer=setInterval(function(){updateCalendarView();if(!preview&&profileId!=='guest'&&Date.now()-calendarChecked>15*60000)requestCalendar(false);},60000);if(!preview&&bridge&&bridge.getCachedApps){try{var cached=bridge.getCachedApps();if(cached){receiveApps(cached);lastCatalog=Number(bridge.getCachedCatalogAt?bridge.getCachedCatalogAt():0)||0;}}catch(e){}}
  if(preview||!catalogSignature||Date.now()-lastCatalog>15*60000)refreshApps();else home();
  document.addEventListener('visibilitychange',function(){if(document.hidden)pause();else resume();});window.addEventListener('focus',resume);
- window.addEventListener('resize',function(){listDirty=true;});$('#panelContent').addEventListener('scroll',function(){listDirty=true;});refreshWallpaper();scheduleRotation();if(window.VelaWeatherClient)window.VelaWeatherClient.start();}
+ window.addEventListener('resize',function(){listDirty=true;});$('#panelContent').addEventListener('scroll',function(){listDirty=true;});refreshWallpaper();checkWakeProfilePrompt();document.body.classList.remove('booting');scheduleRotation();if(window.VelaWeatherClient)window.VelaWeatherClient.start();}
 document.addEventListener('click',function(e){var b=e.target.closest('button[data-act]');if(!b)return;var i;listDirty=true;activeList();i=controls.indexOf(b);if(i>=0)select(i);action(b.getAttribute('data-act'),b.getAttribute('data-id')||'',b.getAttribute('data-dir')||'');});
 var previewEnterAt=0,previewLong=false;
 document.addEventListener('keydown',function(e){if(!preview)return;

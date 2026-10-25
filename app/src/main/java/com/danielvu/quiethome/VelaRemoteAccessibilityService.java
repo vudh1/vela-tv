@@ -28,20 +28,54 @@ public final class VelaRemoteAccessibilityService extends AccessibilityService {
             AccessibilityNodeInfo focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
             if (focused == null) focused = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY);
             if (focused == null) return;
-            if ("select".equals(key)) { focused.performAction(AccessibilityNodeInfo.ACTION_CLICK); return; }
-            int direction;
-            switch (key) {
-                case "up": direction = View.FOCUS_UP; break;
-                case "down": direction = View.FOCUS_DOWN; break;
-                case "left": direction = View.FOCUS_LEFT; break;
-                case "right": direction = View.FOCUS_RIGHT; break;
-                default: return;
-            }
-            AccessibilityNodeInfo next = focused.focusSearch(direction);
-            if (next != null) {
-                try { next.performAction(AccessibilityNodeInfo.ACTION_FOCUS); }
-                finally { next.recycle(); }
-            }
+            try {
+                if ("select".equals(key)) {
+                    // Netflix/YouTube sometimes focus a non-clickable child of
+                    // a clickable card; walk upward without reading its text.
+                    AccessibilityNodeInfo node = focused;
+                    for (int level = 0; level < 5 && node != null; level++) {
+                        if (node.isClickable() && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) break;
+                        AccessibilityNodeInfo parent = node.getParent();
+                        if (node != focused) node.recycle();
+                        node = parent;
+                    }
+                    if (node != null && node != focused) node.recycle();
+                    return;
+                }
+                int direction;
+                switch (key) {
+                    case "up": direction = View.FOCUS_UP; break;
+                    case "down": direction = View.FOCUS_DOWN; break;
+                    case "left": direction = View.FOCUS_LEFT; break;
+                    case "right": direction = View.FOCUS_RIGHT; break;
+                    default: return;
+                }
+                AccessibilityNodeInfo next = focused.focusSearch(direction);
+                if (next != null) {
+                    try {
+                        // Some Android TV apps expose accessibility focus but
+                        // not standard input focus. Both are best-effort only.
+                        if (!next.performAction(AccessibilityNodeInfo.ACTION_FOCUS))
+                            next.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS);
+                        next.performAction(AccessibilityNodeInfo.ACTION_SHOW_ON_SCREEN);
+                    } finally { next.recycle(); }
+                } else {
+                    // When the card is at a list boundary, permit scrolling
+                    // through the nearest scrollable ancestor.
+                    AccessibilityNodeInfo node = focused.getParent();
+                    for (int level = 0; level < 6 && node != null; level++) {
+                        if (node.isScrollable()) {
+                            boolean forward = direction == View.FOCUS_DOWN || direction == View.FOCUS_RIGHT;
+                            if (node.performAction(forward ? AccessibilityNodeInfo.ACTION_SCROLL_FORWARD :
+                                AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)) { node.recycle(); node = null; break; }
+                        }
+                        AccessibilityNodeInfo parent = node.getParent();
+                        node.recycle();
+                        node = parent;
+                    }
+                    if (node != null) node.recycle();
+                }
+            } finally { focused.recycle(); }
         } finally { root.recycle(); }
     }
 }

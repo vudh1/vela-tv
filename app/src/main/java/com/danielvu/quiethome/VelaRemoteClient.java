@@ -164,6 +164,10 @@ final class VelaRemoteClient {
                 long next = 7_000; // idle: ~12k requests/day, below free-tier limits
                 try {
                     JSONObject answer = post("/api/tv/poll", token(), new JSONObject());
+                    // Check on every active poll: the owner might reopen the
+                    // PIN dialog while an already-paired controller is online.
+                    if (answer.optBoolean("active"))
+                        MainActivity.remoteControllerConnected();
                     JSONArray commands = answer.optJSONArray("commands");
                     if (commands != null) for (int i = 0; i < commands.length() && i < 16; i++) {
                         String key = commands.optJSONObject(i) == null ? "" : commands.optJSONObject(i).optString("key");
@@ -202,9 +206,14 @@ final class VelaRemoteClient {
                 AudioManager audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
                 if (audio != null) {
                     try {
-                        if ("mute".equals(key)) audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, 0);
-                        else audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
-                            "volume_up".equals(key) ? AudioManager.ADJUST_RAISE : AudioManager.ADJUST_LOWER, 0);
+                        // Use Android's chosen output volume instead of forcing
+                        // STREAM_MUSIC. Fixed-volume/HDMI-CEC outputs are still
+                        // controlled by Sony or the connected soundbar.
+                        if (!audio.isVolumeFixed()) {
+                            int direction = "mute".equals(key) ? AudioManager.ADJUST_TOGGLE_MUTE :
+                                "volume_up".equals(key) ? AudioManager.ADJUST_RAISE : AudioManager.ADJUST_LOWER;
+                            audio.adjustVolume(direction, AudioManager.FLAG_SHOW_UI);
+                        }
                     } catch (SecurityException ignored) { }
                 }
                 return;
