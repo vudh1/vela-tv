@@ -121,7 +121,16 @@ The script checks certificate fingerprints and uploads **four encrypted Actions 
 
 When `production` receives a new commit, Actions builds and signs `Vela-release.apk`, publishes a GitHub Release, and Vela's **Gear → Updates** can check for new versions, download, verify SHA-256, and request installation. Android will prompt for installation approval; the app cannot silently install itself.
 
-**Sony updater recovery:** Vela now opens Android's "Install unknown apps" setting at most once per install attempt. After enabling **Allow from this source** for Vela, press **Back** and the pending installation resumes automatically. The verified APK is staged with Android's `PackageInstaller.Session` and requires a visible Android confirmation; Android may block an install because of TV policy, insufficient storage, or a mismatched signing certificate. Vela surfaces the result rather than reopening settings indefinitely. The existing broken updater cannot repair itself on all Sony firmware: install the first fixed, signed GitHub APK manually **over** Vela (do not uninstall, since that can erase your on-TV data), then use Vela updates for later releases. This is local Sony update behavior only (**No FRIDAY impact, no new service or billing**). Physical TV confirmation remains required.
+**Sony updater recovery:** **Open Android installer** first downloads and verifies the APK, then hands its read-only `content://` URI directly to Sony's visible Android package installer. Android still requires your approval and can demand **Allow from this source** for Vela. If that first installer does not appear, choose **Alternative installer** on Vela's Updates page; that method stages the verified APK with `PackageInstaller.Session` and explicitly requests a system confirmation. Returning from an unsuccessful direct install clears Vela's waiting state and presents an explanation; neither method silently installs or loops forever through unknown-app settings. Sony firmware may still block either method, and Android rejects mismatched signing certificates. The running older build cannot repair itself until a signed newer APK is installed **over** it (never uninstall or clear data).
+
+**Reusable Mac/ADB fallback for every release:** Install Android platform-tools (`adb`), enable/authorize ADB debugging on the Sony TV and connect from your Mac (`adb connect TV_IP:5555` if using TCP). Then run:
+
+```bash
+curl -fsSLo install-latest-tv.sh https://raw.githubusercontent.com/vudh1/velatv/main/scripts/install-latest-tv.sh
+bash install-latest-tv.sh
+```
+
+The script selects exactly one authorized TV (or accepts its ADB serial as an argument), downloads the newest production APK and matching published checksum, verifies SHA-256, and calls `adb install -r`. It preserves the app's package name and existing data. Every signed GitHub Release includes these manual-recovery instructions. **No FRIDAY impact, no new service or billing.** A successful CI build or command execution still does not prove that Sony's built-in installer displays correctly on all firmware versions.
 
 This repository is public, so TV clients can fetch signed GitHub Release assets anonymously. Keep the same signing key and never embed private GitHub credentials in Vela.
 
