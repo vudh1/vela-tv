@@ -79,6 +79,8 @@ public final class VelaDreamService extends DreamService {
             events.add(e);
         }
         Collections.sort(events,(a,b)->{
+            boolean aAll=a.optBoolean("allDay"),bAll=b.optBoolean("allDay");
+            if(aAll!=bAll)return aAll?1:-1; // all-day items do not bury timed events
             boolean aNow=a.optLong("start")<=now,bNow=b.optLong("start")<=now;
             if(aNow!=bNow)return aNow?-1:1;
             return Long.compare(a.optLong("start"),b.optLong("start"));
@@ -90,13 +92,14 @@ public final class VelaDreamService extends DreamService {
             JSONObject e=events.get(i);
             boolean nowOn=e.optLong("start")<=now;
             long delta=e.optLong("start")-now;
-            String when=nowOn?"NOW":delta<=3600000L?"IN "+Math.max(1,(delta+59999)/60000)+" MIN":
+            String when=e.optBoolean("allDay")?"ALL DAY":nowOn?"NOW":delta<=3600000L?"IN "+Math.max(1,(delta+59999)/60000)+" MIN":
                 DateFormat.getTimeFormat(this).format(new Date(e.optLong("start")));
             String label=e.optString("title","Event").replace('\n',' ');
             if(label.length()>65)label=label.substring(0,65)+"…";
             TextView line=text(when+"  ·  "+label,15,nowOn?Color.rgb(247,224,175):Color.rgb(235,245,238));
+            line.setMaxWidth((int)(getResources().getDisplayMetrics().widthPixels*.62f));
             line.setPadding(12,6,12,4);
-            eventBlock.addView(line,new LinearLayout.LayoutParams(-1,-2));
+            eventBlock.addView(line,new LinearLayout.LayoutParams(-2,-2));
         }
     }
     /** Reposition the whole clock+event composition inside a safe center region. */
