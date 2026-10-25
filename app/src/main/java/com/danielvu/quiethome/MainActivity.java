@@ -82,6 +82,9 @@ public final class MainActivity extends Activity {
     private VelaUpdateController updater;
     private VelaCalendarController calendar;
     private VelaPairingServer pairing;
+    // Only the on-TV PIN dialog is dismissed when an authenticated controller
+    // actually connects. The underlying Web remote settings remain unchanged.
+    private AlertDialog remotePinDialog;
     // Streaming-app returns reuse this Activity; a new launcher process is a
     // fresh viewing session. Some Sony standby paths never emit SCREEN_OFF.
     // A cold launch fallback covers those paths (at the cost of a prompt if
@@ -240,6 +243,10 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onDestroy() {
+        if (remotePinDialog != null) {
+            remotePinDialog.dismiss();
+            remotePinDialog = null;
+        }
         visibleActivity = new WeakReference<>(null);
         stopVolumeObservation();
         javascriptReady = false;
@@ -686,7 +693,19 @@ public final class MainActivity extends Activity {
         runOnUiThread(() -> toast(message));
     }
 
+    static void remoteControllerConnected() {
+        MainActivity activity = visibleActivity.get();
+        if (activity != null) activity.runOnUiThread(() -> {
+            if (activity.remotePinDialog != null && activity.remotePinDialog.isShowing()) {
+                activity.remotePinDialog.dismiss();
+                activity.remotePinDialog = null;
+                activity.toast("Web remote connected");
+            }
+        });
+    }
+
     private void showRemotePin(String pin) {
+        if (remotePinDialog != null) remotePinDialog.dismiss();
         android.widget.TextView code = new android.widget.TextView(this);
         code.setText(pin);
         code.setTextSize(36);
@@ -695,12 +714,14 @@ public final class MainActivity extends Activity {
         int pad = (int) (getResources().getDisplayMetrics().density * 24);
         code.setPadding(pad, pad, pad, pad);
         code.setContentDescription("Your Vela remote PIN: " + pin);
-        new AlertDialog.Builder(this)
+        remotePinDialog = new AlertDialog.Builder(this)
             .setTitle("Vela remote PIN")
-            .setMessage("Enter this 10-digit PIN on your phone at vudh1.github.io/velatv/remote/. Only one controller can connect at a time.\n\nRegenerate the PIN here whenever you need to revoke access.")
+            .setMessage("Enter this 10-digit PIN at vudh1.github.io/velatv/remote/. This screen closes automatically when your phone connects. Only one controller can connect at a time.")
             .setView(code)
             .setPositiveButton("Done", (dialog, which) -> {})
-            .show();
+            .create();
+        remotePinDialog.setOnDismissListener(dialog -> remotePinDialog = null);
+        remotePinDialog.show();
     }
 
     private void generateRemotePin() {
