@@ -27,8 +27,8 @@ import javax.crypto.spec.GCMParameterSpec;
 
 /** TV-initiated HTTPS relay. The TV generates a one-time-displayed PIN;
  * Cloudflare holds a salted hash, not a PIN copied from GitHub Secrets.
- * A controller is granted by Cloudflare only after the right PIN, matching
- * public-IP exit, and an exclusive lease. Keys are accepted only from Cloudflare.
+ * Up to four controllers are independently authorized by a PIN, matching
+ * public-IP exit, and separately authenticated leases. Keys come from Cloudflare.
  */
 final class VelaRemoteClient {
     static final String API = "https://velatv-remote.vudhone.workers.dev";
@@ -108,10 +108,10 @@ final class VelaRemoteClient {
             return;
         }
         new Thread(() -> {
+            boolean rotating = enabled();
             try {
                 String pin = freshPin();
                 String deviceToken = token();
-                boolean rotating = enabled();
                 if (deviceToken.length() != 64) {
                     byte[] seed = new byte[32]; new SecureRandom().nextBytes(seed);
                     StringBuilder sb = new StringBuilder();
@@ -133,7 +133,9 @@ final class VelaRemoteClient {
                 start();
                 callback.done(pin, "");
             } catch (Exception ex) {
-                callback.done("", "Could not generate a remote PIN. Check the network or revoke a previous enrollment.");
+                callback.done("", "Remote HTTP 409".equals(ex.getMessage()) && rotating
+                    ? "Four phones are already paired. Disconnect one, or disable remote access to reset all."
+                    : "Could not generate a remote PIN. Check the network or try again.");
             } finally { generatingPin.set(false); }
         }, "VelaRemoteGeneratePin").start();
     }
@@ -172,7 +174,7 @@ final class VelaRemoteClient {
                     JSONObject answer = post("/api/tv/poll", token(), poll);
                     // Check on every active poll: the owner might reopen the
                     // PIN dialog while an already-paired controller is online.
-                    if (answer.optBoolean("active"))
+                    if (answer.optBoolean("active") && !answer.optBoolean("pinPending"))
                         MainActivity.remoteControllerConnected();
                     JSONArray commands = answer.optJSONArray("commands");
                     if (commands != null) for (int i = 0; i < commands.length() && i < 16; i++) {
@@ -187,7 +189,7 @@ final class VelaRemoteClient {
                         // Low latency only during a recent remote interaction
                         // or when the phone has just opened the controller.
                         // Idle clients keep the free-tier-friendly cadence.
-                        next = answer.optBoolean("fast") ? 180 : 1_500;
+                        next = answer.optBoolean("fast") ? 180 : 2_500;
                 } catch (Exception ex) {
                     if ("Remote HTTP 401".equals(ex.getMessage())) {
                         // An unconfirmed pairing may have expired, or the TV
@@ -209,7 +211,7 @@ final class VelaRemoteClient {
             case "up": case "down": case "left": case "right": case "select":
             case "back": case "home": case "volume_up": case "volume_down":
             case "mute": case "play_pause": case "settings":
-            case "wifi_settings": case "power_off": case "input":
+            case "wifi_settings": case "power_toggle": case "power_off": case "input":
             case "hdmi1": case "hdmi2": case "hdmi3": case "hdmi4": return true;
             default: return false;
         }
@@ -237,7 +239,8 @@ final class VelaRemoteClient {
                 MainActivity.openRemoteWifiSettings(context);
                 return;
             }
-            if ("power_off".equals(key) || "input".equals(key) || key.startsWith("hdmi")) {
+            if ("power_toggle".equals(key) || "power_off".equals(key)
+                    || "input".equals(key) || key.startsWith("hdmi")) {
                 // Remote device controls are deliberately unavailable without
                 // an owner-configured Sony key. Never pretend an action worked.
                 VelaSonyIpControl sony = VelaSonyIpControl.get(context);

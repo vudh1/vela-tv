@@ -4,9 +4,14 @@
   // non-extractable signing key in IndexedDB for PIN-free reconnection.
   const API = 'https://velatv-remote.vudhone.workers.dev';
   const $ = id => document.getElementById(id);
-  const state = { token: '', busy: false, online: false, sameNetwork: false, textPublicKey: '' };
-  let holdTimer, repeatTimer, pingTimer, statusTimer, resumePromise;
-  let lastResumeAttempt = 0, manuallyDisconnected = false;
+  const state = { token: '', busy: false, online: false, sameNetwork: false,
+    textPublicKey: '', tvId: '', tvName: '' };
+  // Only the selected TV is controlled. Each phone can retain two independent
+  // non-extractable identities; commands never fan out to both TVs.
+  let remotes = [], selectedRemote = null, addingTv = false;
+  let holdTimer, repeatTimer, pingTimer, statusTimer;
+  const resumeTasks = new WeakMap();
+  let manuallyDisconnected = false;
   let lastControlAt = 0, lastOpenedAt = 0;
   function message(text) { $('error').textContent = text; }
   function hasTrustedStorage() {
@@ -37,6 +42,59 @@
   }
   async function clearKeys() {
     await Promise.all([storedKey('current', null), storedKey('pending', null)]);
+  }
+  async function saveRemotes() {
+    const trusted = remotes.filter(r => r.identity).map(r => ({
+      tvId: r.tvId, tvName: r.tvName, identity: r.identity }));
+    await storedKey('trustedTvs', trusted.length ? trusted : null);
+  }
+  function snapshot() {
+    if (selectedRemote) Object.assign(selectedRemote, {
+      token: state.token, textPublicKey: state.textPublicKey,
+      online: state.online, busy: state.busy, sameNetwork: state.sameNetwork });
+  }
+  function drawTvPicker() {
+    const pill = $('tvPill'), menu = $('tvMenu');
+    pill.querySelector('span').textContent = state.tvName || 'Choose TV';
+    menu.replaceChildren();
+    remotes.forEach(remote => {
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'tv-choice';
+      button.textContent = remote.tvName || 'Vela TV';
+      if (remote === selectedRemote) button.classList.add('selected');
+      button.addEventListener('click', () => selectTv(remote));
+      menu.appendChild(button);
+    });
+    if (remotes.length < 2) {
+      const add = document.createElement('button');
+      add.type = 'button'; add.className = 'tv-choice add-tv';
+      add.textContent = '+ Connect Another TV';
+      add.addEventListener('click', () => showPair(true));
+      menu.appendChild(add);
+    }
+  }
+  function showPair(addAnother = false) {
+    addingTv = addAnother;
+    $('tvMenu').classList.add('hidden'); $('tvPill').setAttribute('aria-expanded', 'false');
+    $('controller').classList.add('hidden'); $('pair').classList.remove('hidden');
+    $('pairTitle').textContent = addAnother ? 'Connect another TV' : 'Connect to Vela';
+    $('cancelPair').classList.toggle('hidden', !addAnother || !remotes.length);
+    message('');
+  }
+  function selectTv(remote) {
+    clearTimeout(holdTimer); clearInterval(repeatTimer);
+    snapshot(); selectedRemote = remote;
+    state.tvId = remote.tvId || ''; state.tvName = remote.tvName || 'Vela TV';
+    state.token = remote.token || ''; state.textPublicKey = remote.textPublicKey || '';
+    state.online = !!remote.online; state.busy = !!remote.busy;
+    state.sameNetwork = !!remote.sameNetwork;
+    addingTv = false;
+    $('pair').classList.add('hidden'); $('controller').classList.remove('hidden');
+    $('tvMenu').classList.add('hidden'); $('tvPill').setAttribute('aria-expanded', 'false');
+    lastOpenedAt = Date.now(); drawTvPicker(); showConnection();
+    if (pingTimer) clearInterval(pingTimer);
+    pingTimer = setInterval(heartbeat, 40000);
+    heartbeat(); status();
   }
   function hex(bytes) {
     return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -74,92 +132,115 @@
   function showConnection() {
     $('network').className = 'network' + (state.online ? state.busy ? ' busy' : ' online' : '');
     $('network').querySelector('span').textContent = !state.online ? 'TV offline' : state.token ? 'Connected'
-      : state.busy ? 'Remote in use' : 'TV available';
+      : state.busy ? 'Other remotes connected' : 'TV available';
   }
-  function setConnected(token) {
-    state.token = token; manuallyDisconnected = false;
+  async function setConnected(token, tvId, tvName, identity) {
+    snapshot();
+    let remote = remotes.find(r => r.tvId && r.tvId === tvId);
+    if (!remote && identity) remote = remotes.find(r => r.identity?.publicKey?.x === identity.publicKey.x);
+    if (!remote) {
+      if (remotes.length >= 2) { message('This phone already has two TVs. Disconnect one first.'); return; }
+      remote = { tvId: tvId || 'tv-1', tvName: tvName || 'TV 1', identity,
+        token: '', online: true, busy: true, sameNetwork: true, textPublicKey: '' };
+      remotes.push(remote);
+    }
+    remote.tvId = tvId || remote.tvId || 'tv-1';
+    remote.tvName = tvName || remote.tvName || 'Vela TV';
+    if (identity) remote.identity = identity;
+    remote.token = token; remote.online = true; remote.busy = true; remote.sameNetwork = true;
+    // Persist both TV identities before deleting the legacy migration slots.
+    // A failed IndexedDB write must never discard the only recovery key.
+    try { await saveRemotes(); await clearKeys(); }
+    catch (_) { /* A live lease still works until this browser session ends. */ }
+    selectedRemote = null; // Old selection was already snapshotted above.
+    selectTv(remote);
+    manuallyDisconnected = false;
     lastOpenedAt = Date.now();
     $('pin').value = '';
-    $('pair').classList.add('hidden'); $('controller').classList.remove('hidden');
     message(''); showConnection();
-    if (pingTimer) clearInterval(pingTimer);
-    pingTimer = setInterval(heartbeat, 7000);
-    heartbeat(); // Arm a brief responsiveness window right after pairing/resume.
   }
   function disconnected(reason = '') {
     state.token = '';
     state.textPublicKey = '';
-    $('controller').classList.add('hidden'); $('pair').classList.remove('hidden');
+    if (selectedRemote) selectedRemote.token = '';
     $('pin').value = ''; message(reason); showConnection();
-    if (pingTimer) clearInterval(pingTimer);
-    pingTimer = null;
   }
   const errors = {
     incorrect_pin: 'Incorrect PIN. Check the 10-digit code shown in Vela TV settings.',
     different_network: 'Your phone and TV must use the same home Internet connection. Turn off your VPN or mobile data.',
     tv_offline: 'Vela TV is offline. Open Vela and check Remote settings.',
-    in_use: 'Another device is using this remote. Disconnect it or generate a new PIN on the TV.',
+    max_tvs: 'Two Sony TVs are already registered. Disable remote on a TV before adding another.',
+    max_controllers: 'Four remotes are already paired. Disconnect one or reset remote access on the TV.',
+    already_paired: 'This phone is already paired. Reopen the remote to reconnect.',
     locked: 'Too many attempts. Wait 15 minutes before trying again.',
-    pairing_required: 'Generate a new PIN in Vela TV settings to connect this phone.',
+    pairing_required: 'Choose Add Another Remote in Vela TV settings for a new pairing PIN.',
     already_enrolled: 'A different TV is already registered.',
     session_expired: 'Connection interrupted. Reconnecting to Vela TV…'
   };
   async function resume() {
-    if (state.token || manuallyDisconnected || !state.online || !state.sameNetwork) return;
-    if (resumePromise) return resumePromise;
-    if (Date.now() - lastResumeAttempt < 5500) return;
-    lastResumeAttempt = Date.now();
-    resumePromise = (async () => {
+    const remote = selectedRemote;
+    if (!remote || state.token || manuallyDisconnected || !state.online || !state.sameNetwork) return;
+    if (resumeTasks.has(remote)) return resumeTasks.get(remote);
+    if (Date.now() - (remote.lastResumeAttempt || 0) < 5500) return;
+    remote.lastResumeAttempt = Date.now();
+    const promise = (async () => {
       if (!hasTrustedStorage()) return;
-      const [current, pending] = await Promise.all([
-        storedKey('current'), storedKey('pending')
-      ]);
-      if (!current && !pending) return;
-      const challenge = await request('/api/challenge', {});
-      let identity = null, recoveredPending = false;
-      if (current && await identityId(current) === challenge.keyId) identity = current;
-      else if (pending && await identityId(pending) === challenge.keyId) {
-        identity = pending; recoveredPending = true;
+      if (!remote.identity) return;
+      const identities = [remote.identity];
+      for (const identity of identities) {
+        const keyId = await identityId(identity);
+        let challenge;
+        try { challenge = await request('/api/challenge', { keyId }); }
+        catch (error) {
+          if (error.message === 'pairing_required') continue;
+          throw error;
+        }
+        if (challenge.keyId !== keyId) continue;
+        const signed = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' },
+          identity.privateKey, new TextEncoder().encode('vela-remote-v1:' + challenge.challenge));
+        const data = await request('/api/resume', {
+          challenge: challenge.challenge, signature: hex(signed)
+        });
+        remote.token = data.token;
+        remote.tvId = data.tvId || remote.tvId || 'tv-1';
+        remote.tvName = data.tvName || remote.tvName || 'TV 1';
+        await saveRemotes();
+        await clearKeys();
+        if (remote === selectedRemote) await setConnected(data.token, remote.tvId, remote.tvName, identity);
+        return;
       }
-      if (!identity) {
-        await clearKeys(); message(errors.pairing_required); return;
-      }
-      const signed = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' },
-        identity.privateKey, new TextEncoder().encode('vela-remote-v1:' + challenge.challenge));
-      const data = await request('/api/resume', {
-        challenge: challenge.challenge, signature: hex(signed)
-      });
-      if (recoveredPending) {
-        await storedKey('current', identity); await storedKey('pending', null);
-      }
-      setConnected(data.token);
+      if (remote === selectedRemote) message(errors.pairing_required);
     })().catch(error => {
+      if (remote !== selectedRemote) return;
       if (error.message === 'pairing_required') {
-        clearKeys().catch(() => {}); message(errors.pairing_required);
+        message(errors.pairing_required);
       } else if (error.message === 'locked') message(errors.locked);
       else if (error.message === 'different_network') message(errors.different_network);
       else if (error.message === 'session_expired') message('Reconnection expired. Trying again…');
-    }).finally(() => { resumePromise = null; });
-    return resumePromise;
+    }).finally(() => { resumeTasks.delete(remote); });
+    resumeTasks.set(remote, promise);
+    return promise;
   }
   async function status() {
     try {
-      const data = await request('/api/status');
+      const selected = selectedRemote;
+      const data = await request('/api/status' + (selected?.tvId ? '?tvId=' + encodeURIComponent(selected.tvId) : ''));
+      if (selected !== selectedRemote) return;
       state.online = !!data.online; state.busy = !!data.busy;
       state.sameNetwork = !!data.sameNetwork;
       showConnection();
-      if (!state.token) await resume();
+      if (!state.token && selected) await resume();
     } catch (_) { state.online = false; showConnection(); }
   }
   async function heartbeat() {
-    if (!state.token) return;
+    if (!state.token || document.hidden) return;
     const token = state.token;
     // Brief fast-poll bursts only while a person is actually using the
     // controller. Leaving this tab open must not create all-day request cost.
     const ready = !document.hidden && Date.now() - Math.max(lastOpenedAt, lastControlAt) < 12_000;
     try {
       const response = await request('/api/heartbeat', { ready }, token);
-      state.textPublicKey = response.textPublicKey || '';
+      if (state.token === token) state.textPublicKey = response.textPublicKey || '';
     }
     catch (error) {
       if (error.status === 401 && state.token === token) {
@@ -171,8 +252,7 @@
     event.preventDefault();
     const pin = $('pin').value;
     if (!/^\d{10}$/.test(pin)) { message('Enter the 10-digit PIN generated by your TV.'); return; }
-    if (!state.online) { message('TV is offline. Check the connection first.'); return; }
-    if (!state.sameNetwork) { message(errors.different_network); return; }
+    // The PIN selects the TV server-side; the currently selected TV may be off.
     $('connect').disabled = true; message('');
     try {
       let identity = null;
@@ -180,12 +260,7 @@
       catch (_) { /* Private browsing might disable IndexedDB. */ }
       const data = await request('/api/connect', { pin,
         ...(identity ? { publicKey: identity.publicKey } : {}) });
-      if (identity) {
-        try {
-          await storedKey('current', identity); await storedKey('pending', null);
-        } catch (_) { /* Pending identity can be resumed after a browser crash. */ }
-      }
-      setConnected(data.token);
+      await setConnected(data.token, data.tvId, data.tvName, identity);
     } catch (error) { message(errors[error.message] || 'Connection failed. Try again in a moment.'); }
     finally { $('pin').value = ''; $('connect').disabled = false; }
   });
@@ -194,7 +269,11 @@
     lastControlAt = Date.now();
     if (navigator.vibrate) navigator.vibrate(9);
     const token = state.token;
-    try { await request('/api/command', { key }, token); }
+    try {
+      await request('/api/command', { key }, token);
+      if (key === 'power_toggle')
+        $('remoteInfo').textContent = 'Power request queued. If the TV goes into standby and disconnects, use its physical remote to wake it.';
+    }
     catch (error) {
       if (error.status === 401 && state.token === token) { disconnected(errors.session_expired); status(); }
       else $('remoteInfo').textContent = 'TV did not receive this command. Check the connection.';
@@ -213,10 +292,6 @@
   $('wifiButton').addEventListener('click', () => {
     if (window.confirm('Open Wi-Fi settings on your Sony TV? Changing networks may disconnect this remote.'))
       send('wifi_settings');
-  });
-  $('powerOffButton').addEventListener('click', () => {
-    if (window.confirm('Put Sony TV into standby? You will need the physical remote or an always-on LAN controller to turn it back on.'))
-      send('power_off');
   });
 
   const encode64 = bytes => {
@@ -284,11 +359,16 @@
   });
   $('release').addEventListener('click', async () => {
     const token = state.token;
+    const departing = selectedRemote;
     manuallyDisconnected = true;
     disconnected('Disconnected. Generate a new PIN on Vela TV to pair again.');
-    try { await clearKeys(); } catch (_) { /* Storage can be unavailable. */ }
     try { await request('/api/release', {}, token); }
     catch (_) { /* The short-lived lease expires automatically. */ }
+    remotes = remotes.filter(remote => remote !== departing);
+    selectedRemote = null; state.token = '';
+    await saveRemotes().catch(() => {});
+    if (remotes.length) selectTv(remotes[0]); else showPair();
+    manuallyDisconnected = false;
   });
   // Do not release on pagehide: mobile browsers routinely suspend tabs.
   function foreground() {
@@ -299,6 +379,23 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) foreground(); });
   window.addEventListener('focus', foreground);
   window.addEventListener('online', status);
-  status();
-  statusTimer = setInterval(status, 8000);
+  $('tvPill').addEventListener('click', () => {
+    const open = $('tvMenu').classList.toggle('hidden');
+    $('tvPill').setAttribute('aria-expanded', String(!open));
+  });
+  $('cancelPair').addEventListener('click', () => { if (selectedRemote) selectTv(selectedRemote); });
+  (async () => {
+    let saved = await storedKey('trustedTvs').catch(() => null);
+    if (!Array.isArray(saved) || !saved.length) {
+      const current = await storedKey('current').catch(() => null);
+      const pending = await storedKey('pending').catch(() => null);
+      saved = (current || pending) ? [{ tvId: '', tvName: 'TV 1', identity: current || pending }] : [];
+    }
+    remotes = saved.slice(0, 2).filter(r => r.identity && r.identity.privateKey)
+      .map(r => ({ ...r, token: '', online: false, busy: false, sameNetwork: false, textPublicKey: '' }));
+    if (remotes.length) selectTv(remotes[0]); else { showPair(); status(); }
+  })().catch(() => { showPair(); status(); });
+  // Connected phones already heartbeat; avoid quadrupling constant Worker
+  // status traffic when four controllers stay paired all day.
+  statusTimer = setInterval(() => { if (!document.hidden && !state.token) status(); }, 30000);
 })();

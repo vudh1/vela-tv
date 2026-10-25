@@ -72,7 +72,14 @@ assert.ok(connected.includes('Oct 24'),'events show a date even on the current d
 context.calEvents=[event(14*24*60,'Game in two weeks'),event(35*24*60,'Game in five weeks')];
 const monthView=context.calendarEventList();
 assert.ok(monthView.includes('Game in two weeks'),'fixtures beyond the old seven-day window appear');
-assert.ok(!monthView.includes('Game in five weeks'),'calendar remains bounded to 30 days');
+assert.ok(!monthView.includes('Game in five weeks'),'calendar list remains bounded to one calendar month');
+context.calEvents=[event(20,'Today'),event(24*60+20,'Tomorrow'),event(48*60+20,'Monday'),
+  event(30*24*60,'Still this month'),event(32*24*60,'Outside the month')];
+const divided=context.calendarEventList();
+assert.match(divided,/event-day-divider[^>]*>.*Today/,'Today events have a quiet date heading');
+assert.ok(divided.includes('Tomorrow</span>'),'Tomorrow has its own section');
+assert.ok(divided.includes('Still this month')&&!divided.includes('Outside the month'),'one-month TV list bound');
+assert.equal((divided.match(/class="event-day-divider"/g)||[]).length,4,'one divider for each day with events');
 const playing={...event(40,'Pickup football'),kind:'play',uid:'play-1',location:'Jefferson Park Playfield',description:'RSVP to play'};
 const watching={...event(60,'Sounders match'),kind:'watch',uid:'watch-1',description:'Watching · professional sports'};
 const other={...event(90,'Family birthday'),kind:'other',uid:'other-1',description:'Bring cake'};

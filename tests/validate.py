@@ -309,10 +309,10 @@ assert "document.body.classList.remove('booting')" in js
 assert "document.body.classList.remove('booting');listDirty=true;activeList()" in js
 
 # A refresh is not verified just because an older cache succeeded today.
-assert 'CalendarIcs.upcoming(feed,zone,day,30)' in calendar
+assert 'CalendarIcs.upcoming(feed,zone,day,120)' in calendar
 assert 'refreshed==total' in calendar and 'Refresh failed · showing saved calendar events' in calendar
-assert 'now+30*86400000' in js
-print('PASS remote auto-dismiss, best-effort native control, immersive startup profiles and 30-day calendar refresh')
+assert 'Math.min(d.getDate(),lastNextDay)' in js and 'event-day-divider' in js and 'calendarDayDivider' in js
+print('PASS remote auto-dismiss, best-effort native control, immersive startup profiles and one-month TV calendar view')
 
 # Sony IRCC keys are never in the public browser assets or Cloudflare relay.
 sony=(r/'app/src/main/java/com/danielvu/quiethome/VelaSonyIpControl.java').read_text()
@@ -323,9 +323,10 @@ assert 'VelaSonyIpControl.get(context).send(key' in remote_native
 assert 'case "settings":' in remote_native
 assert 'openRemoteSettings(Context context)' in main
 assert "if(key==='settings')" in js
-assert 'data-key="settings"' in (r/'remote/index.html').read_text()
+assert 'data-key="settings"' not in (r/'remote/index.html').read_text()
+assert 'data-key="power_toggle"' in (r/'remote/index.html').read_text()
 assert "'settings'" in remote_worker and 'readyUntil' in remote_worker
-assert 'readyUntil > now' in remote_worker and 'next = answer.optBoolean("fast") ? 180 : 1_500' in remote_native
+assert 'readyUntil > now' in remote_worker and 'next = answer.optBoolean("fast") ? 180 : 2_500' in remote_native
 for code in ['volume_up', 'volume_down', 'mute']:
     assert 'case "'+code+'"' in codes
 assert 'VelaRemoteClient.encrypt(psk)' in sony and 'psk_encrypted' in sony
@@ -339,19 +340,24 @@ assert 'android.permission.ACCESS_NETWORK_STATE' in ET.tostring(m,encoding='unic
 assert 'usesCleartextTraffic' in ET.tostring(m,encoding='unicode')
 print('PASS Sony on-device PSK isolation, restricted HTTP hosts, opt-in IRCC and offline fallback')
 
-# TV utilities: explicit Sony input/standby commands and non-password remote
+# TV utilities: a single Sony power-toggle button, advanced HDMI/Wi-Fi options
+# without separate Settings/Input buttons, and non-password remote
 # typing. ECDH private material must never enter the public remote or Worker.
 mobile=(r/'remote/index.html').read_text()
 text_crypto=(r/'app/src/main/java/com/danielvu/quiethome/VelaRemoteText.java').read_text()
 assert 'Apps & Activity' in js and 'Device & Support' in js and 'Home & Profiles' in js
 assert 'Apps & activity' not in js and 'Device & support' not in js
 assert 'data-key="hdmi1"' in mobile and 'data-key="hdmi4"' in mobile
-assert 'id="wifiButton"' in mobile and 'id="powerOffButton"' in mobile
+assert 'id="wifiButton"' in mobile and 'id="powerOffButton"' not in mobile
+assert 'data-key="input"' not in mobile and 'data-key="settings"' not in mobile
+assert 'data-key="power_toggle"' in mobile and 'Toggle Sony TV power' in mobile
 assert 'id="remoteText"' in mobile and 'id="textForm"' in mobile
 assert 'id="deviceToggle"' in mobile and 'id="keyboardToggle"' in mobile
 assert 'openRemoteWifiSettings(Context context)' in main and 'Settings.ACTION_WIFI_SETTINGS' in main
-assert 'case "power_off"' in codes and 'case "hdmi4"' in codes and 'case "input"' in codes
-assert "window.confirm('Put Sony TV into standby?" in remote_js
+assert 'case "power_toggle"' in codes and 'case "hdmi4"' in codes and 'case "input"' in codes
+assert 'AAAAAQAAAAEAAAAVAw==' in codes
+assert "send('power_off')" not in remote_js and "$('powerOffButton')" not in remote_js
+assert 'case "power_toggle"' in remote_native and "'power_toggle'" in remote_worker
 assert "window.confirm('Open Wi-Fi settings" in remote_js
 assert 'encryptText(value, state.textPublicKey)' in remote_js
 assert "'/api/command', { key: 'type_text', payload }" in remote_js
@@ -363,4 +369,28 @@ assert "data.key === 'type_text'" in remote_worker and 'textPublicKey' in remote
 assert 'textPublicKey: state.textPublicKey' in remote_worker
 assert 'data.text ' not in remote_worker and 'plainText' not in remote_worker
 assert (r/'remote/ux.css').exists() and 'href="ux.css"' in mobile
-print('PASS TV source/standby/Wi-Fi and end-to-end encrypted focused text entry')
+print('PASS single Sony power button, HDMI/Wi-Fi options and encrypted focused text entry')
+
+assert 'MAX_CONTROLLERS = 4' in remote_worker and 'controllers: (' in remote_worker
+assert 'state.controllers.push(' in remote_worker and 'state.controllers.filter(c => c !== controller)' in remote_worker
+assert 'keyId: candidate.pairedKeyId' in remote_worker and 'usedChallenge.keyId' in remote_worker
+assert 'pinPending: !!state.pinHash' in remote_worker and 'pinExpiresAt' in remote_worker
+assert 'pairedCount: state.controllers.length' in remote_worker
+assert 'answer.optBoolean("active") && !answer.optBoolean("pinPending")' in remote_native
+assert "row('remoteRotate','Add Another Remote'" in js
+assert 'Other remotes connected' in remote_js and "{ keyId }" in remote_js
+assert 'setInterval(heartbeat, 40000)' in remote_js
+assert 'document.hidden && !state.token' in remote_js
+assert 'one controller at a time' not in mobile
+print('PASS one Sony TV shared by four independent signed phone remotes and bounded polling')
+
+remote_css=(r/'remote/ux.css').read_text()
+assert 'MAX_TVS = 2' in remote_worker and 'root.tvs' in remote_worker
+assert 'tvHash: tv.tvHash' in remote_worker and 'tvId: state.id' in remote_worker
+assert 'selectedRemote' in remote_js and "storedKey('trustedTvs'" in remote_js
+assert 'id="tvPill"' in mobile and 'id="tvMenu"' in mobile
+assert 'height:100dvh' in remote_css and 'overflow:hidden' in remote_css
+assert 'grid-template-rows:auto auto auto minmax(0,1fr) auto auto' in remote_css
+assert "parseWindow(body,Date.now(),60)" in (asset/'tizen-private-calendar.js').read_text()
+assert 'Math.min(120' in (asset/'tizen-calendar.js').read_text()
+print('PASS isolated dual Sony TVs, two trusted TVs per phone, fixed iPhone remote and longer source cache')
