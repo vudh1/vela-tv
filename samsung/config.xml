@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <widget xmlns="http://www.w3.org/ns/widgets"
         xmlns:tizen="http://tizen.org/ns/widgets"
-        id="https://github.com/vudh1/vela-tv/samsung"
+        id="https://github.com/vudh1/velatv/samsung"
         version="2.6.0"
         viewmodes="maximized">
     <tizen:application id="VelaTv0001.VelaTV" package="VelaTv0001" required_version="5.5"/>

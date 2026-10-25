@@ -1,6 +1,6 @@
 # First production release
 
-Current repo: `vudh1/vela-tv` (PRIVATE at time of preparation).
+Current repo: `vudh1/velatv` (public; renamed October 2026).
 
 ### Mac one-time bootstrap
 
@@ -14,7 +14,7 @@ This copies sanitized source into the repo, pushes `main`, installs GitHub Actio
 
 ### Distribution decision
 
-GitHub API `/repos/vudh1/vela-tv/releases/latest` returns a 404 to unauthenticated TV clients if the source repository remains private. Making *reviewed and sanitized* `vela-tv` public is the least complicated way to enable direct TV updates. Otherwise set up a separately public release distribution repository or endpoint and change the updater URL before building. Do not insert a personal GitHub token into Vela.
+GitHub API `/repos/vudh1/velatv/releases/latest` serves publicly downloadable signed releases. If this repository becomes private, use a separate public binary distribution endpoint. Do not insert a personal GitHub token into Vela.
 
 ### Later updates
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# One-time, local signing setup for vudh1/vela-tv.
+# One-time, local signing setup for vudh1/velatv.
 # Usage: bash scripts/setup-release-signing.sh /path/to/quiet-home-dev.jks /path/to/installed-vela.apk
 # Never commit or upload the original APK/keystore to repository source control.
 set -euo pipefail
-REPO="vudh1/vela-tv"
+REPO="vudh1/velatv"
 if [[ $# -ne 2 ]]; then
   echo "Usage: bash scripts/setup-release-signing.sh /path/to/quiet-home-dev.jks /path/to/vela.apk" >&2
   exit 2
