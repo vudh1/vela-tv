@@ -125,11 +125,14 @@ final class VelaPairingServer {
             respond(out,404,"<h3>Pairing closed</h3>");return;
         }
         if("GET".equals(first[0])){respond(out,200,page());return;}
+        // Origin / Sec-Fetch-Site are advisory: phone browsers, camera QR
+        // webviews, and privacy modes can emit "null", "same-site" or omit
+        // either header even when the page was served directly by Vela.
+        // The cryptographic form nonce below is the actual CSRF defense.
+        // Never rely on browser-specific headers for authorization.
         if(!"POST".equals(first[0])||
-            (!origin.isEmpty()&&!origin.equals(base))||
-            (!fetchSite.isEmpty()&&!"same-origin".equalsIgnoreCase(fetchSite)&&!"none".equalsIgnoreCase(fetchSite))||
             !contentType.toLowerCase(Locale.US).startsWith("application/x-www-form-urlencoded")){
-            respond(out,403,"<h3>Request rejected</h3><p>Submit using the current TV QR page.</p>");return;
+            respond(out,400,"<h3>Unsupported form submission</h3><p>Open a new QR from Vela and use its Connect button.</p>");return;
         }
         attempts++;
         // Some mobile browsers omit Origin on same-origin form submits; a
@@ -140,7 +143,7 @@ final class VelaPairingServer {
         if(n!=length){respond(out,400,"<h3>Incomplete input</h3>");return;}
         Map<String,String> values=form(new String(payload,StandardCharsets.UTF_8));
         if(formNonce.isEmpty()||!formNonce.equals(values.get("nonce"))){
-            respond(out,403,"<h3>Request rejected</h3><p>Generate a new QR on Vela and open the new page.</p>");return;
+            respond(out,403,"<h3>Pairing form expired</h3><p>Generate a new QR on Vela and reopen the form. The old page cannot be submitted.</p>");return;
         }
         String url=values.getOrDefault("url","").trim(),label=values.getOrDefault("label","").trim();
         if(!VelaCalendarController.isValidGoogleCalendarLink(url)){
