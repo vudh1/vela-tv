@@ -19,12 +19,14 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.security.KeyStore;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
-/** TV-initiated HTTPS relay. No incoming TV port, no ADB, no plaintext PIN on disk.
+/** TV-initiated HTTPS relay. The TV generates the PIN and encrypts it at rest;
+ * Cloudflare holds a salted hash, not a PIN copied from GitHub Secrets.
  * A controller is granted by Cloudflare only after the right PIN, matching
  * public-IP exit, and an exclusive lease. Keys are accepted only from Cloudflare.
  */
@@ -37,6 +39,7 @@ final class VelaRemoteClient {
     private volatile boolean polling;
     private volatile long generation;
     private volatile String cachedToken;
+    private final AtomicBoolean generatingPin = new AtomicBoolean(false);
 
     private VelaRemoteClient(Context c) {
         context = c.getApplicationContext();
@@ -48,6 +51,7 @@ final class VelaRemoteClient {
     }
     boolean enabled() { return prefs.getBoolean("enabled", false) && token().length() == 64; }
     boolean revocationPending() { return !prefs.getBoolean("enabled", false) && token().length() == 64; }
+    String currentPin() { return enabled() ? decrypt(prefs.getString("pin_encrypted", "")) : ""; }
     private String token() {
         if (cachedToken != null) return cachedToken;
         cachedToken = decrypt(prefs.getString("token_encrypted", ""));
@@ -83,29 +87,52 @@ final class VelaRemoteClient {
     }
 
     interface Callback { void done(String message); }
-    void enroll(String pin, Callback callback) {
-        if (pin == null || !pin.matches("[0-9]{8,12}")) { callback.done("Enter an 8–12 digit PIN"); return; }
-        final String submittedPin = pin; // never persisted or logged
+    interface PinCallback { void done(String pin, String error); }
+    private static String freshPin() {
+        SecureRandom random = new SecureRandom();
+        StringBuilder digits = new StringBuilder(10);
+        for (int i = 0; i < 10; i++) digits.append(random.nextInt(10));
+        return digits.toString();
+    }
+    void generatePin(PinCallback callback) {
+        if (revocationPending()) {
+            callback.done("", "Finish revoking the previous TV connection first.");
+            return;
+        }
+        if (!generatingPin.compareAndSet(false, true)) {
+            callback.done("", "A remote PIN is already being generated.");
+            return;
+        }
         new Thread(() -> {
             try {
+                String pin = freshPin();
                 String deviceToken = token();
+                boolean rotating = enabled();
                 if (deviceToken.length() != 64) {
                     byte[] seed = new byte[32]; new SecureRandom().nextBytes(seed);
                     StringBuilder sb = new StringBuilder();
                     for (byte b : seed) sb.append(String.format(java.util.Locale.US, "%02x", b & 255));
                     deviceToken = sb.toString();
                 }
-                JSONObject payload = new JSONObject();
-                payload.put("pin", submittedPin); payload.put("tvToken", deviceToken);
-                JSONObject answer = post("/api/tv/enroll", "", payload);
-                if (!answer.optBoolean("ok")) throw new Exception("Enrollment rejected");
+                // Encrypt before enrollment to avoid an unreachable enrollment
+                // if local secure storage is unavailable.
                 String sealedToken = encrypt(deviceToken);
-                prefs.edit().putString("token_encrypted", sealedToken).putBoolean("enabled", true).apply();
+                String sealedPin = encrypt(pin);
+                JSONObject payload = new JSONObject();
+                payload.put("pin", pin);
+                if (!rotating) payload.put("tvToken", deviceToken);
+                JSONObject answer = post(rotating ? "/api/tv/pin" : "/api/tv/enroll",
+                    rotating ? deviceToken : "", payload);
+                if (!answer.optBoolean("ok")) throw new Exception("Enrollment rejected");
+                prefs.edit().putString("token_encrypted", sealedToken)
+                    .putString("pin_encrypted", sealedPin).putBoolean("enabled", true).apply();
                 cachedToken = deviceToken;
                 start();
-                callback.done("Remote connected. Enable accessibility for other apps.");
-            } catch (Exception ex) { callback.done("Could not pair. Check your Cloudflare PIN and Worker setup."); }
-        }, "VelaRemoteEnroll").start();
+                callback.done(pin, "");
+            } catch (Exception ex) {
+                callback.done("", "Could not generate a remote PIN. Check the network or revoke a previous enrollment.");
+            } finally { generatingPin.set(false); }
+        }, "VelaRemoteGeneratePin").start();
     }
     void disable(Callback callback) {
         String oldToken = token();
@@ -117,7 +144,7 @@ final class VelaRemoteClient {
         generation++;
         new Thread(() -> {
             try { if (oldToken.length() == 64) post("/api/tv/disable", oldToken, new JSONObject());
-                prefs.edit().remove("token_encrypted").apply();
+                prefs.edit().remove("token_encrypted").remove("pin_encrypted").apply();
                 cachedToken = "";
                 callback.done("Remote access disabled."); }
             catch (Exception ex) { callback.done("Remote paused. Revoke again when Cloudflare is reachable."); }
@@ -145,7 +172,18 @@ final class VelaRemoteClient {
                     // Full speed briefly after an input, economical otherwise.
                     if (answer.optBoolean("active"))
                         next = answer.optBoolean("fast") ? 400 : 1_500;
-                } catch (Exception ignored) { next = 15_000; }
+                } catch (Exception ex) {
+                    if ("Remote HTTP 401".equals(ex.getMessage())) {
+                        // An unconfirmed pairing may have expired, or the TV
+                        // may have been revoked on Cloudflare. Local recovery
+                        // must not require a cloud-side manual reset.
+                        prefs.edit().putBoolean("enabled", false)
+                            .remove("token_encrypted").remove("pin_encrypted").apply();
+                        cachedToken = "";
+                        break;
+                    }
+                    next = 15_000;
+                }
                 try { Thread.sleep(next); } catch (InterruptedException ignored) { break; }
             }
         } finally { synchronized (this) { if (generation == epoch) polling = false; } }

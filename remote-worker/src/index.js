@@ -1,8 +1,11 @@
 // Vela remote relay. A single SQLite-backed Durable Object serializes the
-// controller lease and TV command queue. No open LAN port or public TV address.
+// controller lease and TV command queue. The pairing PIN originates on the TV;
+// Cloudflare stores only its salted hash, never a GitHub-configured shared PIN.
+// No open LAN port or public TV address.
 const SITE = 'https://vudh1.github.io';
 const LEASE_MS = 22_000;
 const TV_ONLINE_MS = 25_000;
+const UNCLAIMED_MS = 10 * 60_000;
 const MAX_FAILED = 5;
 const RATE_WINDOW_MS = 15 * 60_000;
 const KEYS = new Set(['up', 'down', 'left', 'right', 'select', 'back', 'home',
@@ -88,10 +91,8 @@ export default {
     if (request.method === 'OPTIONS')
       return origin === SITE ? new Response(null, { status: 204, headers: cors })
         : json({ error: 'origin' }, 403);
-    if (!/^\/api\/(?:status|connect|heartbeat|command|release|tv\/(?:enroll|poll|disable))$/.test(path))
+    if (!/^\/api\/(?:status|connect|heartbeat|command|release|tv\/(?:enroll|pin|poll|disable))$/.test(path))
       return json({ error: 'not_found' }, 404, cors);
-    if (!env.REMOTE_PIN || !/^\d{8,12}$/.test(env.REMOTE_PIN))
-      return json({ error: 'not_configured' }, 503, cors);
     const ip = request.headers.get('cf-connecting-ip');
     if (!ip) return json({ error: 'network_unavailable' }, 403, cors);
     if (request.method !== (path === '/api/status' ? 'GET' : 'POST'))
@@ -139,11 +140,22 @@ export class RemoteRoom {
     }
     const stored = await this.ctx.storage.get('room') || {};
     const state = { tvHash: stored.tvHash || '', tvIp: stored.tvIp || '',
+      pinSalt: stored.pinSalt || '', pinHash: stored.pinHash || '',
+      pendingUntil: stored.pendingUntil || 0,
       tvSeen: stored.tvSeen || 0, controllerHash: stored.controllerHash || '',
       controllerIp: stored.controllerIp || '', lease: stored.lease || 0,
       commands: stored.commands || [], lastCommandAt: stored.lastCommandAt || 0,
       failures: stored.failures || {},
       globalFailures: stored.globalFailures || [] };
+    // An unauthenticated first-time TV claim must not permanently squat on a
+    // household's remote. It must be confirmed from the TV's network within
+    // ten minutes; established pairings remain until owner-authorized revoke.
+    if (state.pendingUntil && state.pendingUntil <= now) {
+      state.tvHash = ''; state.tvIp = ''; state.tvSeen = 0;
+      state.pinSalt = ''; state.pinHash = ''; state.pendingUntil = 0;
+      state.controllerHash = ''; state.controllerIp = ''; state.lease = 0;
+      state.commands = [];
+    }
     // Do not retain old attacker IP hashes forever in Durable Object storage.
     for (const key of Object.keys(state.failures)) {
       state.failures[key] = state.failures[key].filter(t => t > now - RATE_WINDOW_MS);
@@ -159,33 +171,42 @@ export class RemoteRoom {
     if (path === '/api/status')
       return json({ online, busy: active, sameNetwork });
 
-    if (path === '/api/connect' || path === '/api/tv/enroll') {
+    if (path === '/api/tv/enroll') {
+      if (typeof data.tvToken !== 'string' || !/^[a-f0-9]{64}$/.test(data.tvToken))
+        return json({ error: 'invalid_token' }, 400);
+      if (typeof data.pin !== 'string' || !/^\d{10}$/.test(data.pin))
+        return json({ error: 'invalid_pin' }, 400);
+      // First enrollment is a one-TV claim, not an authorization to replace
+      // an existing TV. Changing its PIN requires the enrolled TV's token.
+      // The secret PIN alone never authorizes TV takeover.
+      if (state.tvHash) return json({ error: 'already_enrolled' }, 409);
+      state.tvHash = await sha256(data.tvToken);
+      state.tvIp = ip;
+      state.tvSeen = now;
+      state.pendingUntil = now + UNCLAIMED_MS;
+      state.pinSalt = randomToken();
+      state.pinHash = await sha256(state.pinSalt + ':' + data.pin);
+      await persist();
+      return json({ ok: true });
+    }
+    if (path === '/api/connect') {
+      if (!online) return json({ error: 'tv_offline' }, 503);
+      if (!sameNetwork) return json({ error: 'different_network' }, 403);
+      if (active) return json({ error: 'in_use' }, 409);
+      if (!state.pinHash || !state.pinSalt)
+        return json({ error: 'pairing_required' }, 409);
       if (times.length >= MAX_FAILED || state.globalFailures.length >= 40)
         return json({ error: 'locked', retryAfterSeconds: 900 }, 429);
-      if (typeof data.pin !== 'string' || !/^\d{8,12}$/.test(data.pin) ||
-          !sameString(data.pin, this.env.REMOTE_PIN)) {
+      const pinHash = typeof data.pin === 'string' && /^\d{10}$/.test(data.pin)
+        ? await sha256(state.pinSalt + ':' + data.pin) : '';
+      if (!sameString(pinHash, state.pinHash)) {
         state.failures[rateKey] = [...times, now];
         state.globalFailures.push(now);
         await persist();
         return json({ error: 'incorrect_pin' }, 401);
       }
       delete state.failures[rateKey];
-      if (path === '/api/tv/enroll') {
-        if (typeof data.tvToken !== 'string' || !/^[a-f0-9]{64}$/.test(data.tvToken))
-          return json({ error: 'invalid_token' }, 400);
-        const hashed = await sha256(data.tvToken);
-        // Once enrolled, another client with only the PIN cannot replace TV.
-        if (state.tvHash && !sameString(state.tvHash, hashed))
-          return json({ error: 'already_enrolled' }, 409);
-        state.tvHash = hashed;
-        state.tvIp = ip;
-        state.tvSeen = now;
-        await persist();
-        return json({ ok: true });
-      }
-      if (!online) return json({ error: 'tv_offline' }, 503);
-      if (!sameNetwork) return json({ error: 'different_network' }, 403);
-      if (active) return json({ error: 'in_use' }, 409);
+      state.pendingUntil = 0;
       const token = randomToken();
       state.controllerHash = await sha256(token);
       state.controllerIp = ip;
@@ -198,6 +219,18 @@ export class RemoteRoom {
       const token = bearer(req);
       if (!token || !state.tvHash || !sameString(await sha256(token), state.tvHash))
         return json({ error: 'unauthorized' }, 401);
+      if (path === '/api/tv/pin') {
+        if (typeof data.pin !== 'string' || !/^\d{10}$/.test(data.pin))
+          return json({ error: 'invalid_pin' }, 400);
+        state.pinSalt = randomToken();
+        state.pinHash = await sha256(state.pinSalt + ':' + data.pin);
+        if (state.pendingUntil) state.pendingUntil = now + UNCLAIMED_MS;
+        // Regeneration immediately invalidates previously paired controllers.
+        state.controllerHash = ''; state.controllerIp = ''; state.lease = 0;
+        state.commands = []; state.tvIp = ip; state.tvSeen = now;
+        await persist();
+        return json({ ok: true });
+      }
       if (path === '/api/tv/disable') {
         await this.ctx.storage.delete('room');
         return json({ ok: true });

@@ -257,8 +257,13 @@ assert 'https://velatv-remote.vudhone.workers.dev' in remote_native
 assert 'vudh1.github.io/velatv/remote' in js
 assert 'https://vudh1.github.io' in remote_worker and 'MAX_FAILED = 5' in remote_worker
 assert 'sameNetwork' in remote_worker and 'controllerHash' in remote_worker
+assert 'pinHash' in remote_worker and 'pinSalt' in remote_worker
+assert 'generatePin(' in remote_native and 'pin_encrypted' in remote_native
+assert "row('remoteRotate'" in js and "row('remoteShowPin'" in js
+assert 'VELA_REMOTE_PIN' not in (r/'.github/workflows/deploy-remote.yml').read_text()
+assert 'REMOTE_PIN' not in remote_worker
 assert 'sessionStorage.setItem' not in remote_js and 'localStorage.setItem' not in remote_js
 assert 'content-security-policy' in remote_page.lower()
 subprocess.run(['node','--check',str(r/'remote/app.js')],check=True)
 subprocess.run(['node','--check',str(r/'remote-worker/src/index.js')],check=True)
-print('PASS encrypted TV remote credential, scoped web client, exclusive Cloudflare lease')
+print('PASS TV-generated encrypted remote PIN, salted Cloudflare check, exclusive controller lease')
