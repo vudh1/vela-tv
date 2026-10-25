@@ -107,3 +107,20 @@ assert "if(name==='volumeDemo')" in js
 assert 'adjustStreamVolume(stream, direction, 0)' in main
 assert 'TYPE_APPLICATION_OVERLAY' not in main
 print('PASS native screensaver artwork + visible clock, event-driven audio observation, Sony fallback')
+
+# Vela update and focus regressions: old scope must not remain selected;
+# downloads are background-only until the user explicitly opens Android installer.
+updater=(r/'app/src/main/java/com/danielvu/quiethome/VelaUpdateController.java').read_text()
+assert 'focusedControl=null' in js and 'var old=focusedControl' in js and 'focusedControl=el' in js
+assert 'var old=controls[cursor]' not in js
+assert "if(name==='autoDownload')" in js and 'Download updates automatically' in js
+assert 'setAutoDownload(boolean enabled)' in main
+assert 'setAutoDownloadEnabled(boolean value)' in updater and 'update_auto_download' in updater
+assert 'autoDownloadEnabled()' in updater and 'j.put("downloaded", downloaded)' in updater
+assert 'private void prefetch()' in updater and 'private File cacheApk(' in updater
+assert 'sha256(temp).equals(digest)' in updater
+prefetch=updater.split('private void prefetch()')[1].split('private File cachedApk()')[0]
+assert 'promptInstaller(' not in prefetch and 'cacheApk(address, digest, length)' in prefetch
+assert 'activity.runOnUiThread(() -> promptInstaller(apk))' in updater.split('void install()')[1]
+assert 's&&s.autoDownload===false' in js and 's.downloaded?' in js
+print('PASS focus selection scope and opt-in Android installation after cached APK download')

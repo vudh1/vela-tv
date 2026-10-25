@@ -648,6 +648,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void installUpdate() { updater.install(); }
         @JavascriptInterface public void updateStatus() { updater.send(); }
         @JavascriptInterface public void setAutoUpdates(boolean enabled) { updater.setAutoEnabled(enabled); }
+        @JavascriptInterface public void setAutoDownload(boolean enabled) { updater.setAutoDownloadEnabled(enabled); }
         @JavascriptInterface public void setCustomVolumeEnabled(boolean enabled) {
             customVolumeEnabled = enabled;
         }
