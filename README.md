@@ -186,3 +186,7 @@ To update your sports/team selection, copy the new BallerWatch URL and replace
 just that source. Treat secret Google URLs as passwords; match-feed URLs can
 encode your viewing preferences. Only the approved Google and BallerWatch
 hosts can be used (including redirects).
+
+## License and attribution
+
+Original Vela TV code and documentation are licensed under the [Apache License 2.0](LICENSE) (`Apache-2.0`). Copyright © 2026 Duong Vu and contributors. Bundled QR implementation, external weather data, reference projects and wallpaper provenance have separate notices in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and [WALLPAPER-CREDITS.md](WALLPAPER-CREDITS.md). No trademark, third-party asset, private calendar or device credential rights are granted by the source license. See [FRIDAY's policy](https://github.com/vudh1/friday/blob/main/docs/LICENSING.md).
