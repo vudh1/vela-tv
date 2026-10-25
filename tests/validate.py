@@ -309,10 +309,10 @@ assert "document.body.classList.remove('booting')" in js
 assert "document.body.classList.remove('booting');listDirty=true;activeList()" in js
 
 # A refresh is not verified just because an older cache succeeded today.
-assert 'CalendarIcs.upcoming(feed,zone,day,30)' in calendar
+assert 'CalendarIcs.upcoming(feed,zone,day,120)' in calendar
 assert 'refreshed==total' in calendar and 'Refresh failed · showing saved calendar events' in calendar
-assert 'now+30*86400000' in js
-print('PASS remote auto-dismiss, best-effort native control, immersive startup profiles and 30-day calendar refresh')
+assert 'Math.min(d.getDate(),lastNextDay)' in js and 'event-day-divider' in js and 'calendarDayDivider' in js
+print('PASS remote auto-dismiss, best-effort native control, immersive startup profiles and one-month TV calendar view')
 
 # Sony IRCC keys are never in the public browser assets or Cloudflare relay.
 sony=(r/'app/src/main/java/com/danielvu/quiethome/VelaSonyIpControl.java').read_text()
@@ -326,7 +326,7 @@ assert "if(key==='settings')" in js
 assert 'data-key="settings"' not in (r/'remote/index.html').read_text()
 assert 'data-key="power_toggle"' in (r/'remote/index.html').read_text()
 assert "'settings'" in remote_worker and 'readyUntil' in remote_worker
-assert 'readyUntil > now' in remote_worker and 'next = answer.optBoolean("fast") ? 180 : 1_500' in remote_native
+assert 'readyUntil > now' in remote_worker and 'next = answer.optBoolean("fast") ? 180 : 2_500' in remote_native
 for code in ['volume_up', 'volume_down', 'mute']:
     assert 'case "'+code+'"' in codes
 assert 'VelaRemoteClient.encrypt(psk)' in sony and 'psk_encrypted' in sony
@@ -379,7 +379,18 @@ assert 'pairedCount: state.controllers.length' in remote_worker
 assert 'answer.optBoolean("active") && !answer.optBoolean("pinPending")' in remote_native
 assert "row('remoteRotate','Add Another Remote'" in js
 assert 'Other remotes connected' in remote_js and "{ keyId }" in remote_js
-assert 'setInterval(heartbeat, 20000)' in remote_js
+assert 'setInterval(heartbeat, 40000)' in remote_js
 assert 'document.hidden && !state.token' in remote_js
 assert 'one controller at a time' not in mobile
 print('PASS one Sony TV shared by four independent signed phone remotes and bounded polling')
+
+remote_css=(r/'remote/ux.css').read_text()
+assert 'MAX_TVS = 2' in remote_worker and 'root.tvs' in remote_worker
+assert 'tvHash: tv.tvHash' in remote_worker and 'tvId: state.id' in remote_worker
+assert 'selectedRemote' in remote_js and "storedKey('trustedTvs'" in remote_js
+assert 'id="tvPill"' in mobile and 'id="tvMenu"' in mobile
+assert 'height:100dvh' in remote_css and 'overflow:hidden' in remote_css
+assert 'grid-template-rows:auto auto auto minmax(0,1fr) auto auto' in remote_css
+assert "parseWindow(body,Date.now(),60)" in (asset/'tizen-private-calendar.js').read_text()
+assert 'Math.min(120' in (asset/'tizen-calendar.js').read_text()
+print('PASS isolated dual Sony TVs, two trusted TVs per phone, fixed iPhone remote and longer source cache')

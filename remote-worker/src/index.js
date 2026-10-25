@@ -1,10 +1,10 @@
 // Vela remote relay. A single SQLite-backed Durable Object serializes the
-// TV's shared command queue and up to four independently paired controllers.
+// each TV's isolated queue and up to four controllers per TV.
 // The pairing PIN originates on the TV;
 // Cloudflare stores only its salted hash, never a GitHub-configured shared PIN.
 // No open LAN port or public TV address.
 const SITE = 'https://vudh1.github.io';
-const LEASE_MS = 55_000; // Allow economical 20s heartbeats for four phones.
+const LEASE_MS = 100_000; // Eight possible phone/TV leases; economical 40s heartbeats.
 const TV_ONLINE_MS = 25_000;
 const UNCLAIMED_MS = 10 * 60_000;
 const PAIRING_PIN_MS = 10 * 60_000;
@@ -12,6 +12,7 @@ const RESUME_CHALLENGE_MS = 45_000;
 const MAX_FAILED = 5;
 const RATE_WINDOW_MS = 15 * 60_000;
 const MAX_CONTROLLERS = 4;
+const MAX_TVS = 2;
 const KEYS = new Set(['up', 'down', 'left', 'right', 'select', 'back', 'home',
   'volume_up', 'volume_down', 'mute', 'play_pause', 'settings',
   'power_toggle', 'power_off', 'wifi_settings', 'input', 'hdmi1', 'hdmi2', 'hdmi3', 'hdmi4']);
@@ -100,7 +101,8 @@ async function limitedBody(request, maxBytes) {
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('origin');
-    const path = new URL(request.url).pathname;
+    const incomingUrl = new URL(request.url);
+    const path = incomingUrl.pathname;
     const isTv = path.startsWith('/api/tv/');
     const cors = { 'access-control-allow-origin': SITE,
       'access-control-allow-methods': 'GET, POST, OPTIONS',
@@ -125,7 +127,8 @@ export default {
     if (body === null) return json({ error: 'request_too_large' }, 413, cors);
     const room = env.REMOTE_ROOM.get(env.REMOTE_ROOM.idFromName('primary-tv'));
     // IP is forwarded internally only. Never trust caller-supplied IP fields.
-    const upstream = new Request('https://room.internal' + path, {
+    const upstream = new Request('https://room.internal' + path +
+      (path === '/api/status' ? incomingUrl.search : ''), {
       method: request.method,
       headers: { authorization: request.headers.get('authorization') || '',
         'x-verified-ip': ip },
@@ -150,7 +153,8 @@ export class RemoteRoom {
   }
 
   async process(req) {
-    const path = new URL(req.url).pathname;
+    const url = new URL(req.url);
+    const path = url.pathname;
     const ip = req.headers.get('x-verified-ip') || '';
     const now = Date.now();
     let data = {};
@@ -161,40 +165,88 @@ export class RemoteRoom {
         return json({ error: 'invalid_json' }, 400);
     }
     const stored = await this.ctx.storage.get('room') || {};
-    // One-time migration from the previously single-controller room; preserve
-    // the currently trusted phone instead of demanding that it pair again.
-    const legacyController = stored.pairedKey || stored.controllerHash ? [{
-      pairedKey: stored.pairedKey || null, pairedKeyId: stored.pairedKeyId || '',
-      controllerHash: stored.controllerHash || '', controllerIp: stored.controllerIp || '',
-      lease: stored.lease || 0 }] : [];
-    const state = { tvHash: stored.tvHash || '', tvIp: stored.tvIp || '',
-      pinSalt: stored.pinSalt || '', pinHash: stored.pinHash || '',
-      pinExpiresAt: stored.pinExpiresAt || stored.pendingUntil || 0,
-      pendingUntil: stored.pendingUntil || 0,
-      tvSeen: stored.tvSeen || 0,
-      controllers: (Array.isArray(stored.controllers) ? stored.controllers : legacyController)
-        .filter(c => c && typeof c === 'object' && (c.pairedKey || c.controllerHash)).slice(0, MAX_CONTROLLERS),
-      commands: stored.commands || [], lastCommandAt: stored.lastCommandAt || 0,
-      readyUntil: stored.readyUntil || 0,
-      textPublicKey: stored.textPublicKey || '',
-      challenges: stored.challenges || [],
-      failures: stored.failures || {},
-      globalFailures: stored.globalFailures || [] };
-    // An unauthenticated first-time TV claim must not permanently squat on a
-    // household's remote. It must be confirmed from the TV's network within
-    // ten minutes; established pairings remain until owner-authorized revoke.
-    if (state.pendingUntil && state.pendingUntil <= now) {
-      state.tvHash = ''; state.tvIp = ''; state.tvSeen = 0;
-      state.pinSalt = ''; state.pinHash = ''; state.pendingUntil = 0;
-      state.pinExpiresAt = 0;
-      state.controllers = []; state.challenges = [];
-      state.commands = []; state.readyUntil = 0;
-      state.textPublicKey = '';
+    // Upgrade legacy primary-tv state in place. Neither old TV credentials nor
+    // its four independently trusted phones need to pair again.
+    const oldTvs = Array.isArray(stored.tvs) ? stored.tvs : stored.tvHash ? [stored] : [];
+    const root = { tvs: oldTvs.filter(tv => tv && tv.tvHash &&
+      !(tv.pendingUntil && tv.pendingUntil <= now)).slice(0, MAX_TVS).map((tv, i) => {
+      const legacyControllers = tv.pairedKey || tv.controllerHash ? [{
+        pairedKey: tv.pairedKey || null, pairedKeyId: tv.pairedKeyId || '',
+        controllerHash: tv.controllerHash || '', controllerIp: tv.controllerIp || '',
+        lease: tv.lease || 0 }] : [];
+      return { id: tv.id || 'tv-1', name: tv.name || 'TV ' + (i + 1),
+        tvHash: tv.tvHash, tvIp: tv.tvIp || '', tvSeen: tv.tvSeen || 0,
+        pinSalt: tv.pinSalt || '', pinHash: tv.pinHash || '',
+        pinExpiresAt: tv.pinExpiresAt || tv.pendingUntil || 0,
+        pendingUntil: tv.pendingUntil || 0,
+        controllers: (Array.isArray(tv.controllers) ? tv.controllers : legacyControllers)
+          .filter(c => c && (c.pairedKey || c.controllerHash)).slice(0, MAX_CONTROLLERS),
+        commands: tv.commands || [], lastCommandAt: tv.lastCommandAt || 0,
+        readyUntil: tv.readyUntil || 0, textPublicKey: tv.textPublicKey || '',
+        challenges: tv.challenges || [], failures: tv.failures || {},
+        globalFailures: tv.globalFailures || [] };
+    }) };
+    for (const tv of root.tvs) {
+      if (tv.pinExpiresAt && tv.pinExpiresAt <= now) {
+        tv.pinSalt = ''; tv.pinHash = ''; tv.pinExpiresAt = 0;
+      }
     }
-    // An unused add-phone code should not remain usable indefinitely.
-    if (state.pinExpiresAt && state.pinExpiresAt <= now) {
-      state.pinSalt = ''; state.pinHash = ''; state.pinExpiresAt = 0;
+    const persist = () => this.ctx.storage.put('room', root);
+    const tvOnline = tv => !!tv && !!tv.tvHash && tv.tvSeen > now - TV_ONLINE_MS;
+    const tvNetwork = tv => tvOnline(tv) && sameHomeNetwork(tv.tvIp, ip);
+    const ipHash = await sha256(ip);
+    const authToken = bearer(req);
+    const tokenHash = authToken ? await sha256(authToken) : '';
+    if (path === '/api/status') {
+      const requested = url.searchParams.get('tvId');
+      if (requested && !/^[a-z0-9-]{1,32}$/.test(requested))
+        return json({ error: 'invalid_tv' }, 400);
+      const matching = requested ? root.tvs.filter(tv => tv.id === requested) : root.tvs;
+      return json({ online: matching.some(tvOnline),
+        busy: matching.some(tv => tv.controllers.some(c => c.controllerHash && c.lease > now)),
+        sameNetwork: matching.some(tvNetwork),
+        ...(requested && matching[0] ? { tvId: matching[0].id, tvName: matching[0].name } : {}) });
     }
+    let state = null;
+    if (path === '/api/tv/enroll') {
+      if (root.tvs.length >= MAX_TVS) return json({ error: 'max_tvs' }, 409);
+      // A second TV must join the same home network as the first enrollment.
+      if (root.tvs.length && !root.tvs.some(tv => sameHomeNetwork(tv.tvIp, ip)))
+        return json({ error: 'different_network' }, 403);
+      const used = new Set(root.tvs.map(tv => tv.name));
+      const name = used.has('TV 1') ? 'TV 2' : 'TV 1';
+      state = { id: randomToken().slice(0, 32), name, tvHash: '', tvIp: '', tvSeen: 0,
+        pinSalt: '', pinHash: '', pinExpiresAt: 0, pendingUntil: 0,
+        controllers: [], commands: [], lastCommandAt: 0, readyUntil: 0,
+        textPublicKey: '', challenges: [], failures: {}, globalFailures: [] };
+      root.tvs.push(state);
+    } else if (path.startsWith('/api/tv/')) {
+      state = root.tvs.find(tv => tokenHash && sameString(tv.tvHash, tokenHash));
+      if (!state) return json({ error: 'unauthorized' }, 401);
+    } else if (path === '/api/connect') {
+      for (const tv of root.tvs) {
+        if (!tvNetwork(tv) || !tv.pinHash || !/^\d{10}$/.test(data.pin || '')) continue;
+        if (sameString(await sha256(tv.pinSalt + ':' + data.pin), tv.pinHash)) {
+          state = tv; break;
+        }
+      }
+      if (!state) state = root.tvs.find(tv => tvNetwork(tv) && tv.pinHash) || root.tvs[0];
+    } else if (path === '/api/challenge') {
+      state = root.tvs.find(tv => tv.controllers.some(c => c.pairedKeyId && c.pairedKeyId === data.keyId));
+      if (!state && data.keyId === undefined) {
+        const candidates = root.tvs.filter(tv => tv.controllers.some(c => c.pairedKey));
+        if (candidates.length === 1 && candidates[0].controllers.length === 1) state = candidates[0];
+      }
+      if (!state) state = root.tvs.find(tvNetwork) || root.tvs[0];
+    } else if (path === '/api/resume') {
+      const hash = typeof data.challenge === 'string' && /^[a-f0-9]{64}$/i.test(data.challenge)
+        ? await sha256(data.challenge) : '';
+      state = root.tvs.find(tv => tv.challenges.some(ch => ch.ipHash === ipHash && sameString(ch.hash, hash)));
+    } else {
+      state = root.tvs.find(tv => tv.controllers.some(c => tokenHash && sameString(c.controllerHash, tokenHash)));
+    }
+    if (!state) return json({ error: path === '/api/connect' ? 'tv_offline' : 'session_expired' },
+      path === '/api/connect' ? 503 : 401);
     // Do not retain old attacker IP hashes forever in Durable Object storage.
     for (const key of Object.keys(state.failures)) {
       state.failures[key] = state.failures[key].filter(t => t > now - RATE_WINDOW_MS);
@@ -203,13 +255,10 @@ export class RemoteRoom {
     const online = !!state.tvHash && state.tvSeen > now - TV_ONLINE_MS;
     const active = state.controllers.some(c => !!c.controllerHash && c.lease > now);
     const sameNetwork = online && sameHomeNetwork(state.tvIp, ip);
-    const persist = () => this.ctx.storage.put('room', state);
-    const rateKey = await sha256(ip);
+    const rateKey = ipHash;
     const times = state.failures[rateKey] || [];
     state.globalFailures = state.globalFailures.filter(t => t > now - RATE_WINDOW_MS);
     state.challenges = state.challenges.filter(ch => ch.expires > now).slice(-12);
-    if (path === '/api/status')
-      return json({ online, busy: active, sameNetwork });
 
     if (path === '/api/tv/enroll') {
       if (typeof data.tvToken !== 'string' || !/^[a-f0-9]{64}$/.test(data.tvToken))
@@ -229,7 +278,7 @@ export class RemoteRoom {
       state.pinHash = await sha256(state.pinSalt + ':' + data.pin);
       state.pinExpiresAt = now + PAIRING_PIN_MS;
       await persist();
-      return json({ ok: true });
+      return json({ ok: true, tvId: state.id, tvName: state.name });
     }
     if (path === '/api/connect') {
       if (!online) return json({ error: 'tv_offline' }, 503);
@@ -269,7 +318,8 @@ export class RemoteRoom {
       state.controllers.push({ pairedKey: verifiedKey, pairedKeyId: keyId,
         controllerHash: await sha256(token), controllerIp: ip, lease: now + LEASE_MS });
       await persist();
-      return json({ token, leaseSeconds: LEASE_MS / 1000 });
+      return json({ token, tvId: state.id, tvName: state.name,
+        leaseSeconds: LEASE_MS / 1000 });
     }
     if (path === '/api/challenge') {
       if (!online) return json({ error: 'tv_offline' }, 503);
@@ -324,7 +374,8 @@ export class RemoteRoom {
       candidate.lease = now + LEASE_MS;
       // A returning phone must not cancel the other phones' queued controls.
       await persist();
-      return json({ token, leaseSeconds: LEASE_MS / 1000 });
+      return json({ token, tvId: state.id, tvName: state.name,
+        leaseSeconds: LEASE_MS / 1000 });
     }
     if (path.startsWith('/api/tv/')) {
       const token = bearer(req);
@@ -342,10 +393,12 @@ export class RemoteRoom {
         // Adding the next trusted phone must never disconnect existing ones.
         state.tvIp = ip; state.tvSeen = now;
         await persist();
-        return json({ ok: true, pairedCount: state.controllers.length });
+        return json({ ok: true, tvId: state.id, pairedCount: state.controllers.length });
       }
       if (path === '/api/tv/disable') {
-        await this.ctx.storage.delete('room');
+        root.tvs = root.tvs.filter(tv => tv !== state);
+        if (root.tvs.length) await persist();
+        else await this.ctx.storage.delete('room');
         return json({ ok: true });
       }
       if (!sameHomeNetwork(state.tvIp, ip)) {
@@ -367,14 +420,14 @@ export class RemoteRoom {
       await persist();
       const anyActive = state.controllers.some(c => !!c.controllerHash && c.lease > now);
       return json({ active: anyActive, pinPending: !!state.pinHash,
+        tvId: state.id,
         pairedCount: state.controllers.length,
         // Briefly speed up polling after real interaction or a newly opened
         // controller. An untouched phone must not consume fast polls all day.
         fast: anyActive && (state.lastCommandAt > now - 12_000 || state.readyUntil > now),
         commands });
     }
-    const token = bearer(req);
-    const tokenHash = token ? await sha256(token) : '';
+    const token = authToken;
     const controller = state.controllers.find(c => tokenHash && c.lease > now
       && sameString(tokenHash, c.controllerHash) && sameHomeNetwork(ip, c.controllerIp));
     if (!controller || !sameNetwork)
@@ -409,7 +462,8 @@ export class RemoteRoom {
       state.lastCommandAt = now;
     }
     await persist();
-    return json({ ok: true, leaseSeconds: LEASE_MS / 1000,
+    return json({ ok: true, tvId: state.id, tvName: state.name,
+      leaseSeconds: LEASE_MS / 1000,
       ...(path === '/api/heartbeat' && state.textPublicKey ? { textPublicKey: state.textPublicKey } : {}) });
   }
 }

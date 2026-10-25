@@ -189,7 +189,7 @@ final class VelaRemoteClient {
                         // Low latency only during a recent remote interaction
                         // or when the phone has just opened the controller.
                         // Idle clients keep the free-tier-friendly cadence.
-                        next = answer.optBoolean("fast") ? 180 : 1_500;
+                        next = answer.optBoolean("fast") ? 180 : 2_500;
                 } catch (Exception ex) {
                     if ("Remote HTTP 401".equals(ex.getMessage())) {
                         // An unconfirmed pairing may have expired, or the TV

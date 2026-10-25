@@ -510,8 +510,16 @@ function calendarState(e){if(e.allDay)return '';var n=Date.now();return e.start<
 function calendarToday(){var now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
  var end=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1).getTime();
  return calEvents.filter(function(e){return Number(e.start)<end&&Number(e.end)>Math.max(start,Date.now());}).sort(function(a,b){return a.start-b.start;});}
-function calendarUpcoming(){var now=Date.now(),until=now+30*86400000;
+function calendarUpcoming(){var now=Date.now(),d=new Date(now),lastNextDay=new Date(d.getFullYear(),d.getMonth()+2,0).getDate();
+ var until=new Date(d.getFullYear(),d.getMonth()+1,Math.min(d.getDate(),lastNextDay),d.getHours(),d.getMinutes(),d.getSeconds()).getTime();
  return calEvents.filter(function(e){return e.end>now&&e.start<until&&(calendarFilter==='all'||(e.kind||'other')===calendarFilter);}).sort(function(a,b){return a.start-b.start;});}
+function calendarDayDivider(e,previous){var now=new Date(),day=new Date(Math.max(e.start,Date.now()));
+ var key=[day.getFullYear(),day.getMonth(),day.getDate()].join('-');if(key===previous)return '';
+ var today=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
+ var dayStart=new Date(day.getFullYear(),day.getMonth(),day.getDate()).getTime();
+ var heading=dayStart===today?'Today':dayStart===new Date(now.getFullYear(),now.getMonth(),now.getDate()+1).getTime()?'Tomorrow':
+ day.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+ return '<div class="event-day-divider" aria-label="'+esc(heading)+'"><span>'+esc(heading)+'</span></div>';}
 function eventHTML(e,compact,index){var state=calendarState(e),when=calendarDate(e.start)+' · '+calendarTime(e.start,e.allDay);
  var type=e.kind==='play'?'PLAY · ':e.kind==='watch'?'WATCH · ':'';
  var meta=type+(state==='ongoing'?'NOW · ':state==='soon'?'NEXT HOUR · ':'')+when;
@@ -524,9 +532,11 @@ function calendarEventList(){
  var filters=[['all','All'],['play','Playing'],['watch','Watching'],['other','Life']];
  var tabs='<div class="calendar-filters">'+filters.map(function(f){return '<button class="calendar-filter focusable'+(calendarFilter===f[0]?' is-current':'')+'" data-act="filterCalendar" data-id="'+f[0]+'">'+f[1]+'</button>';}).join('')+'</div>';
  var events=calendarUpcoming();calendarViewEvents=events;
- return tabs+(events.length?events.map(function(e,i){return eventHTML(e,false,i);}).join('')+
+ var previousDay='';var grouped=events.map(function(e,i){var d=new Date(Math.max(e.start,Date.now())),key=[d.getFullYear(),d.getMonth(),d.getDate()].join('-');
+ var divider=calendarDayDivider(e,previousDay);previousDay=key;return divider+eventHTML(e,false,i);}).join('');
+ return tabs+(events.length?grouped+
  (events.length>4?'<p class="calendar-scroll-hint">↑ ↓ Browse · OK for details</p>':''):
- '<p class="calendar-empty">No '+(calendarFilter==='all'?'upcoming':calendarFilter==='play'?'playing':calendarFilter==='watch'?'watching':'life')+' events in the next 30 days.</p>');
+ '<p class="calendar-empty">No '+(calendarFilter==='all'?'upcoming':calendarFilter==='play'?'playing':calendarFilter==='watch'?'watching':'life')+' events in the next month.</p>');
 }
 function hideUpcomingReminder(){if(reminderTimer)clearTimeout(reminderTimer);reminderTimer=null;var el=$('#eventReminder');
  if(el){el.classList.remove('visible');el.setAttribute('aria-hidden','true');}}

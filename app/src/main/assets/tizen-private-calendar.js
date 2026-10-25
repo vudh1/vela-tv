@@ -126,7 +126,7 @@ function load(profile,force){
     if(!force&&x.verified&&Date.now()-x.checked<TTL)return Promise.resolve(x);
     return download(x.url).then(function(body){
      if(version!==(revision[profile]||0))return x;
-     var events=window.VelaTizenCalendar.parseWindow(body,Date.now(),7),stamp=Date.now();
+     var events=window.VelaTizenCalendar.parseWindow(body,Date.now(),60),stamp=Date.now();
      return seal({day:new Date().toDateString(),checked:stamp,success:stamp,events:events}).then(function(encrypted){
       if(version!==(revision[profile]||0))return x;
       localStorage.setItem(key(profile,'cache_'+x.kind),encrypted);

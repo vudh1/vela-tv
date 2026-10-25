@@ -81,7 +81,7 @@ function eventLink(item,description){
 }
 function parseWindow(ics,now,days) {
  var time=Number(now)||Date.now(),day=new Date(time),start=new Date(day.getFullYear(),day.getMonth(),day.getDate()).getTime();
- days=Math.max(1,Math.min(14,Number(days)||1));
+ days=Math.max(1,Math.min(120,Number(days)||1));
  var end=new Date(day.getFullYear(),day.getMonth(),day.getDate()+days).getTime();
  var entries=eventItems(ics),overrides={},events=[];
  entries.forEach(function(item){var rid=icsDate(first(item,'RECURRENCE-ID'));if(rid)overrides[value(item,'UID')+'|'+rid.ms]=true;});

@@ -22,19 +22,26 @@
     <section id="pair" class="pair">
       <div class="pair-illustration" aria-hidden="true"><span class="screen"></span><span class="halo"></span></div>
       <p class="eyebrow">YOUR LIVING ROOM, IN YOUR HAND</p>
-      <h1>Connect to Vela</h1>
-      <p class="support">On Vela TV, open Settings → Device & Support → Web remote to generate a PIN. Connect your phone to the same home network and enter it here.</p>
+      <h1 id="pairTitle">Connect to Vela</h1>
+      <p class="support">On the Sony TV, open Settings → Device & Support → Web remote and generate a PIN. Use a new PIN for each TV; the phone and TVs must share one home network.</p>
       <form id="pinForm" autocomplete="off">
         <label for="pin">Remote PIN</label>
         <input id="pin" name="pin" type="password" inputmode="numeric" pattern="[0-9]{10}" minlength="10" maxlength="10" autocomplete="off" placeholder="10-digit TV PIN" required>
         <button id="connect" type="submit" class="primary">Connect <span aria-hidden="true">→</span></button>
       </form>
       <p id="error" class="error" role="alert" aria-live="polite"></p>
+      <button id="cancelPair" type="button" class="text-button hidden">Back to remote</button>
       <p class="trust"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4.5 5v6c0 4.8 3.2 8.7 7.5 11 4.3-2.3 7.5-6.2 7.5-11V5L12 2Zm0 4.6a2.4 2.4 0 0 1 2.4 2.4v1.3h.8V16H8.8v-5.7h.8V9A2.4 2.4 0 0 1 12 6.6Z"/></svg> Protected by Cloudflare · up to four trusted remotes</p>
     </section>
 
     <section id="controller" class="controller hidden" aria-label="Vela TV remote">
-      <div class="controller-top"><span>Vela TV</span><button id="release" type="button" class="text-button">Disconnect</button></div>
+      <div class="controller-top">
+        <div class="tv-picker">
+          <button id="tvPill" class="tv-pill" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="tvMenu"><span>TV 1</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+          <div id="tvMenu" class="tv-menu hidden" role="group" aria-label="Switch Sony TV"></div>
+        </div>
+        <button id="release" type="button" class="text-button">Disconnect</button>
+      </div>
       <div class="utility-row">
         <button data-key="home" class="round-action" aria-label="Vela home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3.7 11 8.3-7 8.3 7M6.5 9v10h11V9M10 19v-6h4v6"/></svg><span>Home</span></button>
         <button data-key="back" class="round-action" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h12a6 6 0 0 1 6 6"/></svg><span>Back</span></button>

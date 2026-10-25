@@ -76,13 +76,54 @@ test('TV-generated PIN is salted and hashed; one TV cannot replace another', asy
   assert.equal((await enroll(env, PIN, 'not-a-token')).status, 400);
   assert.equal((await enroll(env)).status, 200);
   const stored = await storage.get('room');
-  assert.equal(stored.pinSalt.length, 64);
-  assert.equal(stored.pinHash.length, 64);
+  assert.equal(stored.tvs[0].pinSalt.length, 64);
+  assert.equal(stored.tvs[0].pinHash.length, 64);
   assert.equal(JSON.stringify(stored).includes(PIN), false);
   assert.equal(JSON.stringify(stored).includes(TV_TOKEN), false);
-  assert.equal((await enroll(env, NEXT_PIN, 'cd'.repeat(32))).status, 409);
-  assert.equal((await rotate(env, NEXT_PIN, 'cd'.repeat(32))).status, 401);
+  assert.equal((await enroll(env, NEXT_PIN, 'cd'.repeat(32))).status, 200);
+  assert.equal((await enroll(env, '3901748299', 'ef'.repeat(32))).status, 409);
+  assert.equal((await rotate(env, NEXT_PIN, 'ef'.repeat(32))).status, 401);
   assert.equal((await call(env, '/api/status')).body.online, true);
+});
+
+test('two Sony TVs share one relay, but keep PINs, phones and commands isolated', async () => {
+  const { env, storage } = setup();
+  const TV_TWO = 'cd'.repeat(32);
+  const tv1 = await enroll(env);
+  const tv2 = await enroll(env, NEXT_PIN, TV_TWO);
+  assert.equal(tv1.status, 200); assert.equal(tv2.status, 200);
+  assert.notEqual(tv1.body.tvId, tv2.body.tvId);
+  assert.deepEqual([tv1.body.tvName, tv2.body.tvName], ['TV 1', 'TV 2']);
+  assert.equal((await enroll(env, '5555555555', 'ef'.repeat(32))).body.error, 'max_tvs');
+  const oneIdentity = await controllerIdentity(), twoIdentity = await controllerIdentity();
+  const one = await call(env, '/api/connect', { data: { pin: PIN, publicKey: oneIdentity.publicKey } });
+  const two = await call(env, '/api/connect', { data: { pin: NEXT_PIN, publicKey: twoIdentity.publicKey } });
+  assert.equal(one.status, 200); assert.equal(two.status, 200);
+  assert.equal(one.body.tvId, tv1.body.tvId);
+  assert.equal(two.body.tvId, tv2.body.tvId);
+  assert.equal((await call(env, '/api/status?tvId=' + tv1.body.tvId)).body.tvName, 'TV 1');
+  assert.equal((await call(env, '/api/status?tvId=' + tv2.body.tvId)).body.tvName, 'TV 2');
+  await Promise.all([
+    call(env, '/api/command', { token: one.body.token, data: { key: 'up' } }),
+    call(env, '/api/command', { token: two.body.token, data: { key: 'down' } })
+  ]);
+  assert.deepEqual((await poll(env)).body.commands.map(c => c.key), ['up']);
+  assert.deepEqual((await poll(env, TV_IP, TV_TWO)).body.commands.map(c => c.key), ['down']);
+  assert.equal((await storage.get('room')).tvs.length, 2);
+  const challenge = await call(env, '/api/challenge', { data: { keyId: await identityId(twoIdentity) } });
+  assert.equal(challenge.status, 200);
+  const renewed = await resumeWith(env, twoIdentity, challenge.body.challenge);
+  assert.equal(renewed.body.tvId, tv2.body.tvId);
+  assert.equal((await call(env, '/api/tv/disable', { origin: null, token: TV_TOKEN, data: {} })).status, 200);
+  assert.equal((await call(env, '/api/heartbeat', { token: renewed.body.token, data: {} })).status, 200);
+  assert.equal((await poll(env)).status, 401);
+  assert.equal((await poll(env, TV_IP, TV_TWO)).status, 200);
+  assert.equal((await storage.get('room')).tvs.length, 1);
+});
+
+test('a second TV cannot be enrolled from a different public network', async () => {
+  const { env } = setup(); await enroll(env);
+  assert.equal((await enroll(env, NEXT_PIN, 'cd'.repeat(32), OTHER_IP)).status, 403);
 });
 
 test('same public IP, exclusive controller lease and one-way key queue', async () => {
@@ -186,7 +227,7 @@ test('adding a phone preserves existing controller leases and pending commands',
   const second = await call(env, '/api/connect', { data: { pin: NEXT_PIN } });
   assert.equal(second.status, 200);
   assert.equal((await call(env, '/api/heartbeat', { data: {}, token })).status, 200);
-  assert.equal((await storage.get('room')).controllers.length, 2);
+  assert.equal((await storage.get('room')).tvs[0].controllers.length, 2);
   assert.equal(JSON.stringify(await storage.get('room')).includes(NEXT_PIN), false);
 });
 
@@ -227,7 +268,7 @@ test('four distinct phones control one TV simultaneously with isolated credentia
   await Promise.all(tokens.map((token, i) => call(env, '/api/command', {
     data: { key: keys[i] }, token }).then(r => assert.equal(r.status, 200))));
   assert.deepEqual((await poll(env)).body.commands.map(c => c.key).sort(), keys.sort());
-  assert.equal((await storage.get('room')).controllers.length, 4);
+  assert.equal((await storage.get('room')).tvs[0].controllers.length, 4);
 
   // A fresh token for phone A must not interrupt B/C/D.
   const keyId = await identityId(identities[0]);
@@ -244,7 +285,7 @@ test('four distinct phones control one TV simultaneously with isolated credentia
   assert.equal((await call(env, '/api/release', { data: {}, token: tokens[1] })).status, 200);
   assert.equal((await call(env, '/api/heartbeat', { data: {}, token: tokens[1] })).status, 401);
   assert.deepEqual((await poll(env)).body.commands.map(c => c.key), ['right']);
-  assert.equal((await storage.get('room')).controllers.length, 3);
+  assert.equal((await storage.get('room')).tvs[0].controllers.length, 3);
   assert.equal((await rotate(env, NEXT_PIN)).status, 200, 'Released slot may pair a replacement');
   assert.equal((await poll(env)).body.pinPending, true, 'TV PIN dialog remains open while another phone is active');
   const replacement = await controllerIdentity();
@@ -257,15 +298,16 @@ test('migrates the previously trusted single phone without losing its signed ses
   const identity = await controllerIdentity();
   const paired = await call(env, '/api/connect', { data: { pin: PIN, publicKey: identity.publicKey } });
   const stored = await storage.get('room');
-  const [old] = stored.controllers;
-  Object.assign(stored, old);
-  delete stored.controllers;
-  await storage.put('room', stored);
+  const legacy = structuredClone(stored.tvs[0]);
+  const [old] = legacy.controllers;
+  Object.assign(legacy, old);
+  delete legacy.controllers;
+  await storage.put('room', legacy);
   assert.equal((await call(env, '/api/heartbeat', { data: {}, token: paired.body.token })).status, 200);
   const challenge = await call(env, '/api/challenge', { data: {} });
   assert.equal(challenge.status, 200);
   assert.equal((await resumeWith(env, identity, challenge.body.challenge)).status, 200);
-  assert.equal((await storage.get('room')).controllers.length, 1);
+  assert.equal((await storage.get('room')).tvs[0].controllers.length, 1);
 });
 
 test('unconfirmed first-time enrollment expires after 10 minutes to limit squatting', async () => {
@@ -300,7 +342,7 @@ test('lease expires without heartbeat; stale controller cannot be revived', asyn
   const { env } = setup(); await enroll(env);
   const first = await call(env, '/api/connect', { data: { pin: PIN } });
   const originalClock = Date.now;
-  Date.now = () => originalClock() + 60_000;
+  Date.now = () => originalClock() + 120_000;
   try {
     assert.equal((await call(env, '/api/command', { token: first.body.token,
       data: { key: 'select' } })).status, 401);
@@ -330,19 +372,19 @@ test('trusted controller can return after sleep and reload with no PIN', async (
   const first = await call(env, '/api/connect', { data: { pin: PIN, publicKey: identity.publicKey } });
   assert.equal(first.status, 200);
   const saved = await storage.get('room');
-  assert.deepEqual(saved.controllers[0].pairedKey, identity.publicKey);
-  assert.equal(saved.controllers[0].pairedKeyId.length, 64);
-  assert.equal(saved.pinHash, '');
-  assert.equal(saved.pinSalt, '');
+  assert.deepEqual(saved.tvs[0].controllers[0].pairedKey, identity.publicKey);
+  assert.equal(saved.tvs[0].controllers[0].pairedKeyId.length, 64);
+  assert.equal(saved.tvs[0].pinHash, '');
+  assert.equal(saved.tvs[0].pinSalt, '');
   assert.equal(JSON.stringify(saved).includes(PIN), false);
   const clock = Date.now;
-  Date.now = () => clock() + 60_000;
+  Date.now = () => clock() + 120_000;
   try {
     assert.equal((await call(env, '/api/heartbeat', { data: {}, token: first.body.token })).status, 401);
     await poll(env); // TV is still online on the same network.
     const challenge = await call(env, '/api/challenge', { data: {} });
     assert.equal(challenge.status, 200);
-    assert.equal(challenge.body.keyId, saved.controllers[0].pairedKeyId);
+    assert.equal(challenge.body.keyId, saved.tvs[0].controllers[0].pairedKeyId);
     const second = await resumeWith(env, identity, challenge.body.challenge);
     assert.equal(second.status, 200);
     assert.notEqual(second.body.token, first.body.token);
