@@ -12,6 +12,10 @@ Vela owns TV launcher/navigation, device settings, profiles, screen presentation
 | Kept Life reminders | **Proposed** | Private information off on shared displays until explicit profile/device consent. |
 | Normalized FRIDAY events and handoff | **Proposed** | Versioned authorized summaries, source app owns details; direct feeds remain fallback. |
 
+## Cost boundary
+
+The [FRIDAY cardless rule](https://github.com/vudh1/friday/blob/main/docs/COST_POLICY.md) blocks new payment credentials, billed/free-converting plans and $0 tiers requiring a card until a specific owner exception. Confirm TV relay traffic, cloud/AI free limits and degradation behavior before new integrations; source and CI do not show actual billing. Kept-to-Vela Life reminder sharing stays off until a no-card, profile-scoped authorization path is security-reviewed. **No billing impact** from this documentation change.
+
 ## Safe future integration
 
 - Only show data authorized for the active TV profile; a profile chooser or local PIN alone does not authorize household integration. Revoke access and remove cached private views within a tested window.

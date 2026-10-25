@@ -23,6 +23,10 @@ Vela owns TV/device behavior and presents only **authorized** information from o
 
 Shared TVs must hide private calendar/household content by default without explicit device- and profile-scoped grants. Existing direct Google and BallerWatch ICS subscriptions and cached views must survive any new FRIDAY adapter or outage.
 
+## FRIDAY billing safety
+
+Follow the [FRIDAY cardless cost policy](https://github.com/vudh1/friday/blob/main/docs/COST_POLICY.md). No new payment method, billed/free-converting trial, metered remote/backend service or $0 tier requiring a card by default. Recheck official provider pricing, TV/Worker traffic, quotas, overage and rollback before cloud/AI integrations. Existing keys are not cost approval and source/CI cannot verify actual $0 invoices. Vela's Home, current remote and calendar fallbacks stay independent if a proposed FRIDAY identity provider is declined.
+
 ## Verification
 
 Use a focused PR; run applicable source validators/builds. Test timezone/DST, ongoing events, duplicate feeds, revocation, stale/offline behavior and display privacy for an integration. Distinguish source merge, signed artifact, cloud deployment, TV installation and actual Sony/Samsung feature verification. Never promote to production only for documentation changes.
