@@ -63,7 +63,9 @@ the Android screensaver also checks physical display resolution rather than
 always decoding a quarter-sized image. App logos are losslessly cached as
 384px PNGs on Android, the Vela icon is 512px, and the TV banner is 1280×720.
 Other installed apps supply their own icon source quality, which Vela cannot
-improve beyond the underlying artwork.
+improve beyond the underlying artwork. Sony's optional personal wallpaper
+now preserves images up to 3840×2160 at higher JPEG quality; the TV's image
+decoder still limits what is actually displayed.
 
 ## Release branches
 

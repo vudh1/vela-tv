@@ -571,22 +571,26 @@ public final class MainActivity extends Activity {
     @Override protected void onActivityResult(int code, int result, Intent data) {
         super.onActivityResult(code, result, data);
         if (code != PHOTO_REQUEST || result != RESULT_OK || data == null || data.getData() == null) return;
-        // Decode downsampled, never retain the source photo's original high resolution in memory.
+        // Keep enough photo detail for a 4K panel, but cap unusually large inputs.
         try (InputStream in = getContentResolver().openInputStream(data.getData())) {
             android.graphics.BitmapFactory.Options probe = new android.graphics.BitmapFactory.Options();
             probe.inJustDecodeBounds = true;
             android.graphics.BitmapFactory.decodeStream(in, null, probe);
             if (probe.outWidth <= 0 || probe.outHeight <= 0) throw new IllegalStateException("Invalid image dimensions");
             int sample = 1;
-            while (probe.outWidth / sample > 1920 || probe.outHeight / sample > 1080) sample *= 2;
+            while (probe.outWidth / sample > 3840 || probe.outHeight / sample > 2160) sample *= 2;
             android.graphics.BitmapFactory.Options opts = new android.graphics.BitmapFactory.Options();
             opts.inSampleSize = sample;
             try (InputStream in2 = getContentResolver().openInputStream(data.getData())) {
                 Bitmap bitmap = android.graphics.BitmapFactory.decodeStream(in2, null, opts);
                 if (bitmap == null) throw new IllegalStateException("Not an image");
                 File dest = new File(getFilesDir(), "custom-wallpaper.jpg");
-                try (FileOutputStream out = new FileOutputStream(dest)) { bitmap.compress(Bitmap.CompressFormat.JPEG, 77, out); }
+                try (FileOutputStream out = new FileOutputStream(dest)) { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out); }
+                if (dest.length() > 12_000_000)
+                    try (FileOutputStream out = new FileOutputStream(dest)) { bitmap.compress(Bitmap.CompressFormat.JPEG, 76, out); }
+                boolean exceedsLimit = dest.length() > 12_000_000;
                 bitmap.recycle();
+                if (exceedsLimit) throw new IllegalStateException("Photo is too large");
                 prefs.edit().putBoolean("custom_wallpaper", true).apply();
                 if (web != null) web.evaluateJavascript("window.QH && QH.refreshWallpaper()", null);
             }
@@ -596,7 +600,7 @@ public final class MainActivity extends Activity {
     private String customWallpaper() {
         if (!prefs.getBoolean("custom_wallpaper", false)) return "";
         File f = new File(getFilesDir(), "custom-wallpaper.jpg");
-        if (!f.exists() || f.length() > 4_000_000) return "";
+        if (!f.exists() || f.length() > 12_000_000) return "";
         try (InputStream in = new java.io.FileInputStream(f)) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buf = new byte[8192]; int n;
