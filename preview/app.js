@@ -5,6 +5,7 @@ var bridge=window.QuietTV||null, preview=!bridge;
 var tizenMode=!!(window.VelaPlatform&&window.VelaPlatform.kind==='tizen');
 var apps=[],appsById={},catalogSignature='',fav=[],mode='dock',theme='dark',scenery='0',appLabelMode='focus';
 var profiles=[],profileId='duong',fontStyle='classic',clockFormat='auto',rotationMinutes=0,rotationTimer=null;
+var pendingRemoteSettings=false;
 var monitorEnabled=false; // profile-scoped, hidden by default; no background streaming
 // Volume settings are device-wide, not profile-specific: the TV audio output is shared.
 var volumeMode='glass',volumePercent=false,volumePosition='center',volumeDelay=1200,volumeTimer=null,lastVolume={percent:45,muted:false};
@@ -228,11 +229,11 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  screen=type;if(rotationTimer){clearTimeout(rotationTimer);rotationTimer=null;}$('#overlay').classList.remove('hidden');$('#overlay').classList.toggle('catalog',type==='all');$('#overlay').classList.toggle('profile-panel',type==='profiles');$('#overlay').classList.toggle('wallpaper-panel',type==='wallpapers');$('#overlay').classList.toggle('pairing-panel',type==='pairing');$('#overlay').classList.toggle('startup-panel',type==='startupProfiles');$('#focusLabel').classList.remove('visible');
  var title='',subtitle='',body='';
  if(type==='settings'){title='Settings';subtitle='Four simple sections.';
- body=row('homeSettings','Home & profiles','Open','Appearance, favorites and profile selection')+
+ body=row('homeSettings','Home & Profiles','Open','Appearance, favorites and profile selection')+
  row('lifeSettings','Daily life','Open',tizenMode?'Private calendar':'Calendar, screensaver and baby monitor')+
- row('appsSettings','Apps & activity','Open','Browse and sort installed apps')+
- row('deviceSettings','Device & support','Open','Updates, recovery and about');}
- else if(type==='homeSettings'){title='Home & profiles';subtitle='Personalize the Vela Home experience.';
+ row('appsSettings','Apps & Activity','Open','Browse and sort installed apps')+
+ row('deviceSettings','Device & Support','Open','Updates, recovery and about');}
+ else if(type==='homeSettings'){title='Home & Profiles';subtitle='Personalize the Vela Home experience.';
  body=row('customize','Appearance','Open','Theme, wallpapers and clock')+
  row('homeApps','Home favorites','Edit','Add and arrange pinned apps')+
  row('profiles','Profiles',currentProfile().name,'Manage profiles')+
@@ -244,7 +245,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  else if(type==='screensaverSettingsPanel'){title='Screensaver';subtitle='Vela Clock moves gently and shows up to three cached events.';
  body=row('screensaver','Choose Vela Clock','Sony settings','Set Vela Clock as your preferred screensaver')+
  '<p class="library-footnote">Current and upcoming events appear from the selected profile’s verified calendar cache. No network request is made by the screensaver.</p>';}
- else if(type==='appsSettings'){title='Apps & activity';subtitle='Your app history stays on this TV.';
+ else if(type==='appsSettings'){title='Apps & Activity';subtitle='Your app history stays on this TV.';
  body=row('all','All installed apps',apps.length+' apps','Browse and launch apps')+
  row('recent','Recently opened',recentApps().length+' apps','Last five apps opened through Vela')+
  row('appSort','App sorting',sortLabel(),'Alphabetical, recent or most used in 7, 30 or 90 days');}
@@ -254,7 +255,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  row('chooseSort','Most opened · 7 days',currentProfile().appSort==='week'?'✓':'','Last week','week')+
  row('chooseSort','Most opened · 30 days',currentProfile().appSort==='month'?'✓':'','Last month','month')+
  row('chooseSort','Most opened · 90 days',currentProfile().appSort==='quarter'?'✓':'','Last three months','quarter');}
- else if(type==='deviceSettings'){title='Device & support';subtitle='System controls in one place.';
+ else if(type==='deviceSettings'){title='Device & Support';subtitle='System controls in one place.';
  body=tizenMode?row('samsungHome','Samsung Home','Open','Return to the native Samsung interface')+
  row('samsungSettings','TV settings','Open','Open Samsung settings if supported')+
  row('about','About Vela on Samsung','Info','Tizen capabilities and privacy'):
@@ -282,10 +283,10 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  '<p class="library-footnote">Version: '+esc(updateStatus&&updateStatus.current?updateStatus.current:'See Updates')+'</p>'+
  '<p class="library-footnote">Profiles and app activity stay on this TV. Calendar links and events are stored locally with Android Keystore encryption. Returning to Sony Home remains available under Recovery. Weather: Open-Meteo (CC BY 4.0), approximate location by IP Info.</p>';}
  else if(type==='homeApps'){title='Home favorites';subtitle='Pin up to eight apps and reorder with arrows.';body=favoritesEditor();}
- else if(type==='startupProfiles'){title='Who is watching?';subtitle='Choose a profile to continue.';
+ else if(type==='startupProfiles'){title="Who's watching?";subtitle='Choose your space.';
  body='<div class="startup-avatar-grid" role="group" aria-label="Choose your profile">'+profiles.map(function(p){
  return '<button class="startup-avatar-card focusable" data-act="switchProfile" data-id="'+esc(p.id)+'" aria-label="Continue as '+esc(p.name)+'"><span class="startup-avatar">'+avatarSvg(p.avatar,p.name)+'</span><span class="startup-profile-name">'+esc(p.name)+'</span></button>';
- }).join('')+'</div>';}
+ }).join('')+'</div><p class="startup-footer">YOUR SPACE · YOUR APPS</p>';}
  else if(type==='all'){title='All apps';subtitle='Hold OK on an icon for quick actions.';
  body='<div class="app-grid">'+orderedApps().map(function(a){return tile(a,'launch');}).join('')+'</div>'+(apps.length?'<p class="library-footnote">Sorted by '+esc(sortLabel())+' · Change under Gear → Apps</p>':'<p>Loading installed apps…</p>');}
  else if(type==='recent'){title='Recently opened';subtitle='Just your last five Vela launches, on this profile.';body=recentPanel();}
@@ -362,7 +363,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
   row('renewPair','Generate new QR','↻','Refresh an expired or unscannable code')+
   row('cancelPair','Cancel pairing','Close','Close the phone connection immediately');
  }
- else if(type==='recovery'){title='About & recovery';subtitle='The original launcher stays installed and available.';var redirected=false;try{redirected=bridge?bridge.redirectEnabled():false;}catch(e){}
+ else if(type==='recovery'){title='About & Recovery';subtitle='The original launcher stays installed and available.';var redirected=false;try{redirected=bridge?bridge.redirectEnabled():false;}catch(e){}
  body='<p class="library-footnote">Try pressing Home twice quickly to show original Sony Home. This shortcut depends on Sony firmware and may not work. You can always use Open Sony Home below.</p>'+row('sony','Open Sony Home','Open','Temporarily pauses redirect')+row('redirect','Home redirect',redirected?'On':'Off','Accessibility override')+row('accessibility','Accessibility service','Open','Recovery if Home shortcut fails');}
  else if(type==='updates'){title='Updates';subtitle='Check, download and approve new Vela versions.';var s=updateStatus;
  body='<div class="version-meta">'+esc(s&&s.current?'Installed: '+s.current:'Installed version: unknown')+'</div>'+
@@ -398,7 +399,7 @@ function action(name,id,dir){
  persistAppearance();home();renderPanel('appMenu',{act:'togglePin',id:id});return;}
  if(name==='appInfo'){if(bridge&&bridge.openAppInfo)bridge.openAppInfo(id);else toast('Android app settings are only available on TV');return;}
 
- if(name==='switchProfile'){startupChooserOpen=false;panelHistory=[];if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();if(id==='guest'){profiles=profiles.filter(function(p){return p.id!=='guest';});profiles.push(makeProfile('guest','Guest',null));}profileId=id;persistProfiles();applyProfile(true);close();return;}
+ if(name==='switchProfile'){startupChooserOpen=false;panelHistory=[];if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();if(id==='guest'){profiles=profiles.filter(function(p){return p.id!=='guest';});profiles.push(makeProfile('guest','Guest',null));}profileId=id;persistProfiles();applyProfile(true);close();if(pendingRemoteSettings){pendingRemoteSettings=false;renderPanel('settings');}return;}
  if(name==='avatarPicker'){editingAvatar=id;renderPanel('avatars');return;}
  if(name==='chooseAvatar'){var p=profiles.filter(function(x){return x.id===editingAvatar;})[0];if(p){p.avatar=id;if(p.id!=='guest')persistProfiles();applyProfile(true);}renderPanel('profiles',{act:'avatarPicker',id:editingAvatar});return;}
  if(name==='pairCalendar'){if(profileId==='guest'){toast('Guest has no saved calendar');return;}startPairing();return;}
@@ -482,6 +483,10 @@ function goBack(){
  close();
 }
 function remote(key){
+ if(key==='settings'){
+  if(startupChooserOpen&&screen==='startupProfiles'){pendingRemoteSettings=true;return;}
+  panelHistory=[];renderPanel('settings');return;
+ }
  if(key==='home'){close();return;}
  if(key==='longselect'){activeList();var chosen=controls[cursor];if(chosen&&chosen.classList.contains('app-card'))openAppMenu(chosen.getAttribute('data-id'));return;}
  if(key==='back'){goBack();return;}

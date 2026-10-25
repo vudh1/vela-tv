@@ -9,9 +9,16 @@ public final class SonyIrccMessageTest {
         check("AAAAAQAAAAEAAAB0Aw==".equals(SonyIrccMessage.code("up", true)), "up");
         check("AAAAAQAAAAEAAABlAw==".equals(SonyIrccMessage.code("select", true)), "select");
         check("AAAAAgAAAJcAAAAjAw==".equals(SonyIrccMessage.code("back", true)), "back");
+        check("AAAAAQAAAAEAAAASAw==".equals(SonyIrccMessage.code("volume_up", true)), "volume up");
+        check("AAAAAQAAAAEAAAATAw==".equals(SonyIrccMessage.code("volume_down", true)), "volume down");
+        check("AAAAAQAAAAEAAAAUAw==".equals(SonyIrccMessage.code("mute", true)), "mute");
+        check("AAAAAQAAAAEAAAAvAw==".equals(SonyIrccMessage.code("power_off", true)), "standby");
+        check("AAAAAQAAAAEAAAAlAw==".equals(SonyIrccMessage.code("input", true)), "input menu");
+        check("AAAAAgAAABoAAABaAw==".equals(SonyIrccMessage.code("hdmi1", true)), "HDMI 1");
+        check("AAAAAgAAABoAAABdAw==".equals(SonyIrccMessage.code("hdmi4", true)), "HDMI 4");
         check("AAAAAgAAAJcAAAAZAw==".equals(SonyIrccMessage.code("play_pause", true)), "pause");
         check("AAAAAgAAAJcAAAAaAw==".equals(SonyIrccMessage.code("play_pause", false)), "play");
-        for (String denied : new String[]{"power", "home", "mute", "http://host", "../../", ""})
+        for (String denied : new String[]{"power", "home", "settings", "http://host", "../../", ""})
             check(SonyIrccMessage.code(denied, true).isEmpty(), "deny command " + denied);
         String xml = SonyIrccMessage.envelope(SonyIrccMessage.code("up", true));
         check(xml.contains("<IRCCCode>AAAAAQAAAAEAAAB0Aw==</IRCCCode>"), "correct envelope");

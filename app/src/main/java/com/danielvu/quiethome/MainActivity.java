@@ -68,6 +68,8 @@ import java.lang.ref.WeakReference;
 public final class MainActivity extends Activity {
     private static volatile WeakReference<MainActivity> visibleActivity = new WeakReference<>(null);
     private static final String PREFS = "quiet-home";
+    private static final String EXTRA_REMOTE_SETTINGS = "com.danielvu.quiethome.OPEN_REMOTE_SETTINGS";
+    private static final String EXTRA_REMOTE_WIFI_SETTINGS = "com.danielvu.quiethome.OPEN_REMOTE_WIFI_SETTINGS";
     private static final String STOCK = "com.google.android.apps.tv.launcherx";
     private static final int PHOTO_REQUEST = 81;
     private WebView web;
@@ -90,6 +92,8 @@ public final class MainActivity extends Activity {
     // A cold launch fallback covers those paths (at the cost of a prompt if
     // Android killed the launcher while an app was in the foreground).
     private boolean homeResumed = false;
+    private boolean pendingRemoteSettings = false;
+    private boolean pendingRemoteWifiSettings = false;
     private void markNextViewingSession() {
         prefs.edit().putBoolean("profile_choose_on_next_home", true).apply();
     }
@@ -130,6 +134,8 @@ public final class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
+        pendingRemoteSettings = getIntent() != null && getIntent().getBooleanExtra(EXTRA_REMOTE_SETTINGS, false);
+        pendingRemoteWifiSettings = getIntent() != null && getIntent().getBooleanExtra(EXTRA_REMOTE_WIFI_SETTINGS, false);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         // Crucially, don't depend on Sony broadcasting SCREEN_OFF: after a TV
         // restart the launcher may be created only *after* the wake occurred.
@@ -183,6 +189,7 @@ public final class MainActivity extends Activity {
                 if (url != null && url.startsWith("file:///android_asset/")) {
                     javascriptReady = true;
                     web.evaluateJavascript("window.QH && QH.resume()", null);
+                    deliverRemoteSettings();
                     updater.send();
                     updater.maybeCheck();
                 }
@@ -226,6 +233,39 @@ public final class MainActivity extends Activity {
             // Clock and stale app catalog refresh when Android resumes a throttled WebView.
             web.evaluateJavascript("window.QH && QH.resume()", null);
             updater.maybeCheck();
+        }
+        deliverRemoteSettings();
+        deliverRemoteWifiSettings();
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent != null && intent.getBooleanExtra(EXTRA_REMOTE_SETTINGS, false)) {
+            pendingRemoteSettings = true;
+            deliverRemoteSettings();
+        }
+        if (intent != null && intent.getBooleanExtra(EXTRA_REMOTE_WIFI_SETTINGS, false)) {
+            pendingRemoteWifiSettings = true;
+            deliverRemoteWifiSettings();
+        }
+    }
+
+    private void deliverRemoteSettings() {
+        if (!pendingRemoteSettings || !homeResumed || !javascriptReady || web == null) return;
+        pendingRemoteSettings = false;
+        sendToJs("QH.remote('settings')");
+    }
+
+    private void deliverRemoteWifiSettings() {
+        if (!pendingRemoteWifiSettings || !homeResumed) return;
+        pendingRemoteWifiSettings = false;
+        try { startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS)); }
+        catch (ActivityNotFoundException | SecurityException error) {
+            try { startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS)); }
+            catch (ActivityNotFoundException | SecurityException fallback) {
+                toast("Wi-Fi controls are unavailable; open Sony Network & Internet settings.");
+            }
         }
     }
 
@@ -640,6 +680,36 @@ public final class MainActivity extends Activity {
     static boolean isRemoteHomeVisible() {
         MainActivity activity = visibleActivity.get();
         return activity != null && activity.homeResumed && activity.javascriptReady && activity.web != null;
+    }
+
+    /** The paired phone can open Vela's own gear page from a streaming app.
+     * Android decides whether a background activity can be brought forward;
+     * it never grants remote access to Sony's global system settings. */
+    static void openRemoteSettings(Context context) {
+        MainActivity activity = visibleActivity.get();
+        if (activity != null && activity.homeResumed) {
+            activity.pendingRemoteSettings = true;
+            activity.deliverRemoteSettings();
+            return;
+        }
+        Intent open = new Intent(context, MainActivity.class);
+        open.putExtra(EXTRA_REMOTE_SETTINGS, true);
+        open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        try { context.startActivity(open); } catch (RuntimeException ignored) { }
+    }
+
+    /** Native Android TV Wi-Fi screen, opened only on an authenticated command. */
+    static void openRemoteWifiSettings(Context context) {
+        MainActivity activity = visibleActivity.get();
+        if (activity != null && activity.homeResumed) {
+            activity.pendingRemoteWifiSettings = true;
+            activity.deliverRemoteWifiSettings();
+            return;
+        }
+        Intent open = new Intent(context, MainActivity.class);
+        open.putExtra(EXTRA_REMOTE_WIFI_SETTINGS, true);
+        open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        try { context.startActivity(open); } catch (RuntimeException ignored) { }
     }
 
     private void requestAppsAsync() {

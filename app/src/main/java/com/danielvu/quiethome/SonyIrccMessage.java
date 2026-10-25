@@ -12,6 +12,19 @@ final class SonyIrccMessage {
             case "left": return "AAAAAQAAAAEAAAA0Aw==";
             case "select": return "AAAAAQAAAAEAAABlAw==";
             case "back": return "AAAAAgAAAJcAAAAjAw==";
+            // Send the same commands as Sony's physical volume keys so its
+            // HDMI-ARC/CEC audio path may also display the native volume HUD.
+            case "volume_up": return "AAAAAQAAAAEAAAASAw==";
+            case "volume_down": return "AAAAAQAAAAEAAAATAw==";
+            case "mute": return "AAAAAQAAAAEAAAAUAw==";
+            // Discrete standby avoids accidentally toggling an awake TV on a
+            // repeated tap. A sleeping TV cannot be awakened by this app.
+            case "power_off": return "AAAAAQAAAAEAAAAvAw==";
+            case "input": return "AAAAAQAAAAEAAAAlAw==";
+            case "hdmi1": return "AAAAAgAAABoAAABaAw==";
+            case "hdmi2": return "AAAAAgAAABoAAABbAw==";
+            case "hdmi3": return "AAAAAgAAABoAAABcAw==";
+            case "hdmi4": return "AAAAAgAAABoAAABdAw==";
             // Sony's IRCC interface has separate Play/Pause, not a toggle code.
             // First tap of the phone's combined button pauses; next plays.
             case "play_pause": return pause ? "AAAAAgAAAJcAAAAZAw==" : "AAAAAgAAAJcAAAAaAw==";

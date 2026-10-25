@@ -93,7 +93,7 @@ test('same public IP, exclusive controller lease and one-way key queue', async (
   assert.deepEqual([first.status, second.status].sort(), [200, 409]);
   const session = first.status === 200 ? first.body.token : second.body.token;
   assert.equal(session.length, 64);
-  assert.equal((await call(env, '/api/command', { data: { key: 'power_off' }, token: session })).status, 400);
+  assert.equal((await call(env, '/api/command', { data: { key: 'factory_reset' }, token: session })).status, 400);
   assert.equal((await call(env, '/api/command', { data: { key: 'left' }, token: session })).status, 200);
   const response = await poll(env);
   assert.equal(response.body.commands.length, 1);
@@ -104,6 +104,48 @@ test('same public IP, exclusive controller lease and one-way key queue', async (
   assert.equal((await call(env, '/api/connect', { data: { pin: PIN } })).status, 409);
   assert.equal((await rotate(env)).status, 200);
   assert.equal((await call(env, '/api/connect', { data: { pin: NEXT_PIN } })).status, 200);
+});
+
+test('settings is an explicit command; short active bursts do not run forever', async () => {
+  const { env } = setup(); await enroll(env);
+  const connected = await call(env, '/api/connect', { data: { pin: PIN } });
+  const token = connected.body.token;
+  assert.equal((await poll(env)).body.fast, false);
+  assert.equal((await call(env, '/api/heartbeat', { data: { ready: true }, token })).status, 200);
+  assert.equal((await poll(env)).body.fast, true);
+  const clock = Date.now;
+  Date.now = () => clock() + 13_000;
+  try { assert.equal((await poll(env)).body.fast, false); }
+  finally { Date.now = clock; }
+  assert.equal((await call(env, '/api/command', { data: { key: 'settings' }, token })).status, 200);
+  const response = await poll(env);
+  assert.equal(response.body.fast, true);
+  assert.deepEqual(response.body.commands.map(c => c.key), ['settings']);
+  assert.equal((await poll(env)).body.commands.length, 0);
+});
+
+test('TV-only text key, encrypted-only text relay, no plaintext stored or returned', async () => {
+  const { env, storage } = setup(); await enroll(env);
+  const connected = await call(env, '/api/connect', { data: { pin: PIN } });
+  const token = connected.body.token;
+  assert.equal((await call(env, '/api/command', { data: { key: 'type_text', text: 'secret' }, token })).status, 400);
+  assert.equal((await call(env, '/api/heartbeat', { data: {}, token })).body.textPublicKey, undefined);
+  const textPublicKey = 'A'.repeat(124);
+  assert.equal((await poll(env)).status, 200);
+  const updated = await call(env, '/api/tv/poll', { origin: null, token: TV_TOKEN,
+    data: { textPublicKey } });
+  assert.equal(updated.status, 200);
+  assert.equal((await call(env, '/api/heartbeat', { data: {}, token })).body.textPublicKey, textPublicKey);
+  const payload = { ephemeral: 'B'.repeat(124), iv: 'C'.repeat(16), cipher: 'D'.repeat(44) };
+  assert.equal((await call(env, '/api/command', { data: { key: 'type_text', payload, text: 'secret' }, token })).status, 400);
+  assert.equal((await call(env, '/api/command', { data: { key: 'type_text', payload }, token })).status, 200);
+  const queued = await poll(env);
+  assert.deepEqual(queued.body.commands.map(c => c.key), ['type_text']);
+  assert.deepEqual(queued.body.commands[0].payload, payload);
+  assert.equal(JSON.stringify(await storage.get('room')).includes('secret'), false);
+  assert.equal((await poll(env)).body.commands.length, 0);
+  assert.equal((await call(env, '/api/command', { data: { key: 'type_text', payload: {
+    ephemeral: 'x', iv: 'x', cipher: 'x' } }, token })).status, 400);
 });
 
 test('wrong PIN attempts lock out, without blocking TV-signed PIN regeneration', async () => {
