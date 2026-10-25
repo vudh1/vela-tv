@@ -263,3 +263,19 @@ body.light .monitor-button{color:#173536;border-color:rgba(19,53,55,.3);backgrou
 .event-peek.later:before{background:rgba(223,232,222,.24)}
 .startup-list{display:flex;flex-direction:column;gap:7px}
 .startup-list .panel-row{min-height:64px;padding:13px 17px}
+
+/* A TV wake is a distinct moment: show a centered, readable profile choice,
+   not the small settings drawer. No secondary selection screen on app return. */
+.overlay.startup-panel{background:rgba(5,17,20,.46);pointer-events:auto}
+.overlay.startup-panel .panel{
+ left:50%;right:auto;top:50%;transform:translate(-50%,-50%);
+ width:min(530px,65vw);min-width:340px;height:auto;max-height:82vh;
+ background:linear-gradient(145deg,rgba(33,54,55,.98),rgba(15,29,33,.98));
+ animation:none;
+}
+.overlay.startup-panel .panel-header{padding-bottom:17px}
+.overlay.startup-panel .panel h2{font-size:38px}
+.overlay.startup-panel .startup-list .panel-row{background:rgba(255,255,255,.055);border-color:rgba(255,255,255,.10);border-radius:13px}
+.overlay.startup-panel .startup-list .panel-row.selected,
+.overlay.startup-panel .startup-list .panel-row:focus{background:rgba(232,245,236,.18);border-color:rgba(234,248,238,.85)}
+@media(max-width:700px){.overlay.startup-panel .panel{width:90vw;min-width:0}}
