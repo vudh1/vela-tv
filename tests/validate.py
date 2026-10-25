@@ -136,7 +136,7 @@ assert 'if (prefersNativeVolumeHud() && !prefs.getBoolean' in main
 assert "if(volumeMode==='off'&&!previewOnly)return;" in js
 assert "if(name==='volumeDemo'){volumeChanged(lastVolume,true);return;}" in js
 assert "volumeMode==='off'?'Native only'" in js
-assert 'Enabling Glass or Minimal for live volume changes can display both indicators.' in main
+assert 'Sony can still display its own indicator; Vela cannot hide system UI.' in main
 assert 'setCustomVolumeEnabled(volumeMode!==\'off\')' in js
 print('PASS Sony native volume HUD migration and opt-in Vela HUD preview')
 
