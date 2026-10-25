@@ -27,7 +27,7 @@ main=(r/'app/src/main/java/com/danielvu/quiethome/MainActivity.java').read_text(
 assert 'getCachedApps()' in main and 'getCachedCatalogAt()' in main
 assert 'profile_data_v2' in main and 'active_profile_v2' in main
 assert 'cached_catalog' in main and 'getCacheDir(), "app-icons"' in main
-assert 'Bitmap.CompressFormat.WEBP' in main
+assert 'Bitmap.CompressFormat.PNG' in main
 assert 'shouldInterceptRequest' in main
 assert 'VelaCalendarController' in main
 assert 'now - lastKeyDown >= 24' in main
