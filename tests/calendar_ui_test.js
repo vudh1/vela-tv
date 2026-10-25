@@ -55,7 +55,7 @@ context.calEvents=[
   event(-45,'Already started')
 ];
 const connected=context.calendarEventList();
-assert.equal((connected.match(/data-act="eventInfo"/g)||[]).length,5);
+assert.equal((connected.match(/data-act="eventInfo"/g)||[]).length,4, 'completed events are hidden; ongoing ones remain');
 assert.ok(!connected.includes('data-act="calendarSettings"'), 'connected view does not expose settings');
 assert.ok(connected.includes('focusable'), 'events are D-pad navigable');
 context.calConnected=false;

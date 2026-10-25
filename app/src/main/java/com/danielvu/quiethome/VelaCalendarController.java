@@ -47,7 +47,7 @@ final class VelaCalendarController {
     }
     void shutdown(){worker.shutdownNow();}
     private static boolean profileOkay(String p){return p!=null&&p.matches("[a-zA-Z0-9_-]{1,48}");}
-    private SecretKey getKey() throws Exception {
+    private static SecretKey getKey() throws Exception {
         KeyStore ks=KeyStore.getInstance("AndroidKeyStore");ks.load(null);
         if(ks.containsAlias(ALIAS))return ((KeyStore.SecretKeyEntry)ks.getEntry(ALIAS,null)).getSecretKey();
         KeyGenerator k=KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore");
@@ -61,12 +61,26 @@ final class VelaCalendarController {
         System.arraycopy(iv,0,combined,0,iv.length);System.arraycopy(b,0,combined,iv.length,b.length);
         return Base64.encodeToString(combined,Base64.NO_WRAP);
     }
-    private String decrypt(String text) {
+    private static String decrypt(String text) {
         if(text==null||text.isEmpty())return "";
         try{byte[] b=Base64.decode(text,Base64.DEFAULT);if(b.length<29)return "";
             Cipher c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.DECRYPT_MODE,getKey(),new GCMParameterSpec(128,b,0,12));
             return new String(c.doFinal(b,12,b.length-12),StandardCharsets.UTF_8);
         }catch(Exception ignored){return "";}
+    }
+    /** Snapshot ONLY verified, today's encrypted cached events for the native DreamService.
+     * Never fetch or reveal private URLs in a dream, and fail closed on stale cache. */
+    static JSONArray cachedEventsForDream(Context ctx, String profile) {
+        JSONArray empty = new JSONArray();
+        if (!profileOkay(profile) || "guest".equals(profile)) return empty;
+        try {
+            SharedPreferences p = ctx.getSharedPreferences("vela-calendar-private", Context.MODE_PRIVATE);
+            if (p.getLong("success_"+profile, 0L) <= 0L ||
+                !LocalDate.now(ZoneId.systemDefault()).toString().equals(p.getString("day_"+profile,""))) return empty;
+            String data = decrypt(p.getString("data_"+profile,""));
+            if (data.isEmpty()) return empty;
+            return new JSONArray(data);
+        } catch(Exception ignored) { return empty; }
     }
     private static boolean googleCalendarUrl(String url){
         try{Uri u=Uri.parse(url.trim());return "https".equalsIgnoreCase(u.getScheme())&&"calendar.google.com".equalsIgnoreCase(u.getHost())

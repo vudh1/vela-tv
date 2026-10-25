@@ -252,3 +252,30 @@ body.light .monitor-button{color:#173536;border-color:rgba(19,53,55,.3);backgrou
 .reminder-when{font-size:12px;font-weight:700;letter-spacing:.055em;color:#f2d9ab}
 .reminder-title{font-size:16px;font-weight:600;line-height:1.28;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(prefers-reduced-motion:reduce){.event-reminder{transition:none}}
+
+/* Three calm event priorities. The event that is happening now receives the
+   strongest cue; next hour is warm; one-to-two hours stays muted. */
+.event-item.ongoing{border-left-color:rgba(188,237,203,.95);background:rgba(182,226,197,.13)}
+.event-item.soon{border-left-color:rgba(234,197,138,.72);background:rgba(232,190,129,.075)}
+.event-item.later{border-left-color:rgba(221,225,214,.21);background:rgba(255,255,255,.026)}
+.event-item.later .event-meta{color:rgba(239,242,237,.58)}
+.event-item.later .event-summary{font-weight:500}
+.event-peek.later:before{background:rgba(223,232,222,.24)}
+.startup-list{display:flex;flex-direction:column;gap:7px}
+.startup-list .panel-row{min-height:64px;padding:13px 17px}
+
+/* A TV wake is a distinct moment: show a centered, readable profile choice,
+   not the small settings drawer. No secondary selection screen on app return. */
+.overlay.startup-panel{background:rgba(5,17,20,.46);pointer-events:auto}
+.overlay.startup-panel .panel{
+ left:50%;right:auto;top:50%;transform:translate(-50%,-50%);
+ width:min(530px,65vw);min-width:340px;height:auto;max-height:82vh;
+ background:linear-gradient(145deg,rgba(33,54,55,.98),rgba(15,29,33,.98));
+ animation:none;
+}
+.overlay.startup-panel .panel-header{padding-bottom:17px}
+.overlay.startup-panel .panel h2{font-size:38px}
+.overlay.startup-panel .startup-list .panel-row{background:rgba(255,255,255,.055);border-color:rgba(255,255,255,.10);border-radius:13px}
+.overlay.startup-panel .startup-list .panel-row.selected,
+.overlay.startup-panel .startup-list .panel-row:focus{background:rgba(232,245,236,.18);border-color:rgba(234,248,238,.85)}
+@media(max-width:700px){.overlay.startup-panel .panel{width:90vw;min-width:0}}
