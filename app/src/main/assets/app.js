@@ -171,7 +171,7 @@ function watchChannelReady(key,value){if(!selectedEvent||eventKey(selectedEvent)
  if(profileId!=='guest')persistProfiles();renderPanel('eventDetails');toast(station?'Channel saved':'Channel cleared');}
 function detailRow(label,value){return value?'<div class="event-detail-row"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong></div>':'';}
 function eventDetailsBody(){var e=selectedEvent;if(!e)return '<p class="calendar-empty">Event is no longer available.</p>';
- var kind=e.kind==='play'?'Playing':e.kind==='watch'?'Watching':'Other';
+ var kind=e.kind==='play'?'Playing':e.kind==='watch'?'Watching':'Life';
  var date=new Date(e.start).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
  var time=e.allDay?'All day':calendarTime(e.start,false)+' – '+calendarTime(e.end,false);
  var body='<div class="event-details">'+detailRow('TYPE',kind)+detailRow('DATE',date)+detailRow('TIME',time);
@@ -490,12 +490,12 @@ function eventHTML(e,compact,index){var state=calendarState(e),when=calendarDate
 function calendarEventList(){
  if(!calConnected)return '<p class="calendar-empty">No calendar linked for this profile. Set one up in Gear → Daily life → Calendar.</p>'+
  '<div class="calendar-tools">'+row('calendarSettings','Calendar settings','Open','Connect Google Calendar or BallerWatch')+'</div>';
- var filters=[['all','All'],['play','Playing'],['watch','Watching'],['other','Other']];
+ var filters=[['all','All'],['play','Playing'],['watch','Watching'],['other','Life']];
  var tabs='<div class="calendar-filters">'+filters.map(function(f){return '<button class="calendar-filter focusable'+(calendarFilter===f[0]?' is-current':'')+'" data-act="filterCalendar" data-id="'+f[0]+'">'+f[1]+'</button>';}).join('')+'</div>';
  var events=calendarUpcoming();calendarViewEvents=events;
  return tabs+(events.length?events.map(function(e,i){return eventHTML(e,false,i);}).join('')+
  (events.length>4?'<p class="calendar-scroll-hint">↑ ↓ Browse · OK for details</p>':''):
- '<p class="calendar-empty">No '+(calendarFilter==='all'?'upcoming':calendarFilter==='play'?'playing':calendarFilter==='watch'?'watching':'other')+' events in the next seven days.</p>');
+ '<p class="calendar-empty">No '+(calendarFilter==='all'?'upcoming':calendarFilter==='play'?'playing':calendarFilter==='watch'?'watching':'life')+' events in the next seven days.</p>');
 }
 function hideUpcomingReminder(){if(reminderTimer)clearTimeout(reminderTimer);reminderTimer=null;var el=$('#eventReminder');
  if(el){el.classList.remove('visible');el.setAttribute('aria-hidden','true');}}

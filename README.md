@@ -134,10 +134,10 @@ Feeds refresh about every 15 minutes while Vela is active. Cross-origin HTTPS
 may be blocked by Samsung/Google and must be verified on the actual television.
 
 The **Calendar** page shows the next seven days, with **All**, **Playing**,
-**Watching**, and **Other** filters. Every event displays its date and time.
+**Watching**, and **Life** filters. Every event displays its date and time.
 BallerWatch `Playing · BallerWatch` events appear under Playing; `Watching ·
 professional sports` events under Watching. Google birthdays, tasks and other
-events appear under Other unless the iCal category explicitly says Playing or
+events appear under Life unless the iCal category explicitly says Playing or
 Watching. The Home preview shows at most two events today; the Sony native
 screensaver shows at most three ongoing or next-two-hour events. Both surfaces
 hide full notes, fields and channel names to keep the design uncluttered.
@@ -148,7 +148,7 @@ can store the exact Drogon TV channel name **per profile and event**. Choose
 **Open Perfect Player** to launch the installed app and then select the named
 channel yourself. The current BallerWatch feed does **not** supply Drogon
 channel mappings; Perfect Player has no verified public per-channel launch
-interface, so Vela does not claim automatic tuning. Other events display the
+interface, so Vela does not claim automatic tuning. Life events display the
 normal iCal description, location and available link in their details.
 
 To update your sports/team selection, copy the new BallerWatch URL and replace
