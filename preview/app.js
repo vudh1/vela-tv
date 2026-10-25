@@ -295,7 +295,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  '<p class="library-footnote">Verified means the selected source returned a valid calendar feed. Zero events is still a successful connection. One encrypted feed per saved profile; connecting another replaces it. '+(tizenMode?'Samsung uses device-protected local encryption. Refresh requires TV internet access and permission for direct HTTPS requests; no proxy receives your private link.':'Use private iCal addresses only on a trusted device.')+'</p>';
  }
  else if(type==='tizenCalendarEntry'){title='Private calendar';subtitle='Samsung · saved under this profile only';
- body='<p class="library-footnote">Paste your Google Calendar secret iCal address. You can use the keyboard in Samsung SmartThings remote. Vela encrypts the link before saving and does not send it to a third-party server.</p>'+
+ body='<p class="library-footnote">Paste your Google Calendar secret iCal address using the Samsung keyboard or SmartThings remote. Press Down after editing to reach Save. Vela encrypts the link before saving and does not send it to a third-party server.</p>'+
  '<label class="calendar-input-label" for="tizenCalendarUrl">Secret HTTPS iCal URL</label>'+
  '<input class="calendar-url-input" id="tizenCalendarUrl" type="url" inputmode="url" maxlength="4096" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics">'+
  row('focusCalendarInput','Enter or paste calendar address','Edit','Opens the Samsung keyboard')+

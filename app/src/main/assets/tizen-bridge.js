@@ -81,7 +81,13 @@ window.QuietTV = {
 // The native TV Back key is 10009. Don't trap Home or Volume keys.
 document.addEventListener('keydown',function(e){
   if (!window.QH)return;
-  if(document.activeElement&&/^(INPUT|TEXTAREA)$/i.test(document.activeElement.tagName))return;
+  if(document.activeElement&&/^(INPUT|TEXTAREA)$/i.test(document.activeElement.tagName)){
+    // Allow the Samsung on-screen keyboard to own text entry. After closing it,
+    // Down resumes ordinary remote focus at the Save row; Back dismisses input.
+    if(e.keyCode===40){document.activeElement.blur();e.preventDefault();window.QH.remote('down');}
+    else if(e.keyCode===10009){document.activeElement.blur();e.preventDefault();}
+    return;
+  }
   var key={37:'left',38:'up',39:'right',40:'down',13:'select',10009:'back'}[e.keyCode];
   if (!key)return;
   e.preventDefault();
