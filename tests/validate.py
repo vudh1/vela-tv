@@ -258,15 +258,21 @@ assert 'vudh1.github.io/velatv/remote' in js
 assert 'https://vudh1.github.io' in remote_worker and 'MAX_FAILED = 5' in remote_worker
 assert 'sameNetwork' in remote_worker and 'controllerHash' in remote_worker
 assert 'pinHash' in remote_worker and 'pinSalt' in remote_worker
-assert 'generatePin(' in remote_native and 'pin_encrypted' in remote_native
-assert "row('remoteRotate'" in js and "row('remoteShowPin'" in js
+assert 'generatePin(' in remote_native and 'remove("pin_encrypted")' in remote_native
+assert '.putString("pin_encrypted"' not in remote_native
+assert "row('remoteRotate'" in js and "row('remoteShowPin'" not in js
+assert 'showWebRemotePin' not in main and 'remoteHasPin' not in main
 assert 'VELA_REMOTE_PIN' not in (r/'.github/workflows/deploy-remote.yml').read_text()
 assert 'REMOTE_PIN' not in remote_worker
 assert 'sessionStorage.setItem' not in remote_js and 'localStorage.setItem' not in remote_js
+assert 'indexedDB' in remote_js and 'crypto.subtle.sign' in remote_js
+assert "'/api/challenge'" in remote_js and "'/api/resume'" in remote_js
+assert "path === '/api/resume'" in remote_worker and 'pairedKeyId' in remote_worker
+assert "addEventListener('pagehide'" not in remote_js
 assert 'content-security-policy' in remote_page.lower()
 subprocess.run(['node','--check',str(r/'remote/app.js')],check=True)
 subprocess.run(['node','--check',str(r/'remote-worker/src/index.js')],check=True)
-print('PASS TV-generated encrypted remote PIN, salted Cloudflare check, exclusive controller lease')
+print('PASS one-time TV PIN, encrypted controller signing key, Cloudflare replay-safe reconnect')
 
 # Web remote onboarding and honest cross-app capabilities.
 assert 'static void remoteControllerConnected()' in main

@@ -17,7 +17,7 @@ npx wrangler login
 npx wrangler deploy
 ```
 
-You no longer configure a PIN on Cloudflare. The TV generates 10 random digits; Cloudflare receives them over TLS during enrollment, stores a salted hash, and never stores the plaintext PIN. On the free plan, SQLite Durable Objects are supported; usage is metered, and the TV's adaptive polling avoids high request volume when idle.
+You no longer configure a PIN on Cloudflare. The TV generates 10 random digits; Cloudflare receives them over TLS during enrollment, stores a salted hash, and never stores the plaintext PIN. The PIN hash is consumed when the first controller pairs. On the free plan, SQLite Durable Objects are supported; usage is metered, and the TV's adaptive polling avoids high request volume when idle.
 
 Alternatively, set only the following **GitHub Actions secrets** in `vudh1/velatv` and run the **Deploy Vela remote Worker** workflow manually: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Cloudflare's API token needs Workers script deployment and Durable Objects permissions for this account. The old `VELA_REMOTE_PIN` repository secret is no longer used and can be deleted; after migrating all TVs, remove the obsolete `REMOTE_PIN` Worker secret too.
 
@@ -26,17 +26,17 @@ Alternatively, set only the following **GitHub Actions secrets** in `vudh1/velat
 ## 3. Sony TV
 
 1. Install a newly signed production Vela APK built from these changes using the **same signing certificate** as your existing Vela installation. Do not uninstall the old app or clear its data.
-2. Open **Vela → Gear → Device & support → Web remote → Enable remote → Generate PIN**. The TV generates and displays a 10-digit code, creates a random device credential, and registers a salted code hash at Cloudflare. This PIN is encrypted locally on the TV by Android Keystore so it can be displayed again under **Show PIN**. Enter it on the phone within **10 minutes** to confirm the very first enrollment; afterward, the same PIN remains usable until you regenerate it.
-3. Later use **Show PIN** to reconnect a phone, or **Regenerate PIN** to replace the code and immediately disconnect the old controller. Disable remote entirely to revoke the TV enrollment and all sessions.
+2. Open **Vela → Gear → Device & support → Web remote → Enable remote → Generate PIN**. The TV displays a 10-digit code once, creates an encrypted device credential, and registers a salted code hash at Cloudflare. Enter it on your phone to confirm the initial enrollment within **10 minutes**. After successful pairing, the PIN cannot be displayed or reused.
+3. Your paired phone resumes automatically after idle, tab reload, or ordinary mobile browser suspension while both devices remain on the same home Internet connection. The phone stores a non-extractable signing key in IndexedDB, not a PIN or bearer lease. **Generate new PIN** revokes the previous phone and permits pairing a replacement. **Disable remote** revokes the TV enrollment and all sessions.
 4. Optional: open **Control other apps** and explicitly enable **Vela Remote navigation** in Sony Accessibility settings. Android will explain that an accessibility service can interact with the screen. Vela's implementation only inspects the focused accessibility node after an authorized button press and never stores screen text. Many streaming apps may still not support the navigation actions.
 5. On a phone sharing the same home Internet connection, open `https://vudh1.github.io/velatv/remote/`, enter the PIN and try the D-pad on Vela Home.
 
-**One controller:** a second device receives a busy message. Use **Disconnect** on the first, or wait ~22 seconds after its session expires. Closing the tab normally sends release immediately. If the TV changes networks, Cloudflare invalidates the old controller lease automatically. Turning off remote access on the TV revokes its enrollment and connected controllers; a failed network revocation must be resolved before enrolling a new TV.
+**One controller:** the trusted phone can reacquire an expired lease by signing a single-use challenge; a different phone cannot silently take over. On a different phone, generate a new PIN on the TV, which revokes the previous one. Explicit **Disconnect** removes the phone's saved signing key and revokes the lease. Closing/suspending a tab does **not** disconnect it. If the TV changes networks, Cloudflare invalidates the trusted-phone registration. Turning off remote access on the TV revokes enrollment and connected controllers; failed network revocation must be resolved before enrolling a new TV.
 
 ## Security and physical-TV test checklist
 
-- Wrong PIN five times → lockout; no secrets appear in browser storage, source, or logs. PIN displayed intentionally on the TV should not be photographed or shared.
-- Rotation invalidates any active phone controller immediately. The stored server-side value is a salted PIN hash and no longer depends on GitHub Secrets.
+- Wrong PIN five times → lockout. The PIN is never persisted in browser storage, source, or logs; the browser stores only a non-extractable private signing key. Do not photograph or share the one-time code.
+- PIN rotation invalidates the paired phone immediately. After successful pairing, Cloudflare clears the salted PIN hash; no reusable PIN remains.
 - Phone on mobile data/VPN/different public IP → remote connection denied.
 - Concurrent PIN submissions from two devices → only one lease granted (serialized Durable Object).
 - Stale session and expired commands → rejected; TV polls authenticate with its 256-bit credential.

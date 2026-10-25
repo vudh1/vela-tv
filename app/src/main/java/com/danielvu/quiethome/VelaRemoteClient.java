@@ -25,7 +25,7 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
-/** TV-initiated HTTPS relay. The TV generates the PIN and encrypts it at rest;
+/** TV-initiated HTTPS relay. The TV generates a one-time-displayed PIN;
  * Cloudflare holds a salted hash, not a PIN copied from GitHub Secrets.
  * A controller is granted by Cloudflare only after the right PIN, matching
  * public-IP exit, and an exclusive lease. Keys are accepted only from Cloudflare.
@@ -44,6 +44,9 @@ final class VelaRemoteClient {
     private VelaRemoteClient(Context c) {
         context = c.getApplicationContext();
         prefs = context.getSharedPreferences("vela-remote", Context.MODE_PRIVATE);
+        // Migration: old builds retained a reversible PIN for "Show PIN".
+        // The owner now generates a fresh PIN if pairing another phone.
+        if (prefs.contains("pin_encrypted")) prefs.edit().remove("pin_encrypted").apply();
     }
     static synchronized VelaRemoteClient get(Context context) {
         if (instance == null) instance = new VelaRemoteClient(context);
@@ -51,7 +54,6 @@ final class VelaRemoteClient {
     }
     boolean enabled() { return prefs.getBoolean("enabled", false) && token().length() == 64; }
     boolean revocationPending() { return !prefs.getBoolean("enabled", false) && token().length() == 64; }
-    String currentPin() { return enabled() ? decrypt(prefs.getString("pin_encrypted", "")) : ""; }
     private String token() {
         if (cachedToken != null) return cachedToken;
         cachedToken = decrypt(prefs.getString("token_encrypted", ""));
@@ -117,7 +119,6 @@ final class VelaRemoteClient {
                 // Encrypt before enrollment to avoid an unreachable enrollment
                 // if local secure storage is unavailable.
                 String sealedToken = encrypt(deviceToken);
-                String sealedPin = encrypt(pin);
                 JSONObject payload = new JSONObject();
                 payload.put("pin", pin);
                 if (!rotating) payload.put("tvToken", deviceToken);
@@ -125,7 +126,7 @@ final class VelaRemoteClient {
                     rotating ? deviceToken : "", payload);
                 if (!answer.optBoolean("ok")) throw new Exception("Enrollment rejected");
                 prefs.edit().putString("token_encrypted", sealedToken)
-                    .putString("pin_encrypted", sealedPin).putBoolean("enabled", true).apply();
+                    .remove("pin_encrypted").putBoolean("enabled", true).apply();
                 cachedToken = deviceToken;
                 start();
                 callback.done(pin, "");
