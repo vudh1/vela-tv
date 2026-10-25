@@ -182,7 +182,7 @@ function orderedApps(){
   return a.name.localeCompare(b.name);
  });return sorted;
 }
-function openAppMenu(id){if(!byId(id))return;contextAppId=id;contextFrom=screen==='all'?'all':screen==='recent'?'recent':'';renderPanel('appMenu');}
+function openAppMenu(id){if(!byId(id))return;contextAppId=id;contextFrom=screen==='all'?'all':screen==='recent'?'recent':'';navigatePanel('appMenu');}
 function recentPanel(){var rows=recentApps();return rows.length?'<div class="app-grid">'+rows.map(function(a){return tile(a,'launch');}).join('')+'</div><p class="library-footnote">Only apps launched through Vela are listed. Each saved profile has its own history.</p>':'<p class="library-footnote">Apps you open from Vela will appear here. Nothing is tracked in Netflix or YouTube.</p>';}
 
 function favoritesEditor(){var b='<div class="editor-heading"><span>HOME APPS</span><small>Use arrows to reorder · max 8</small></div><div class="favorite-editor">';
@@ -306,8 +306,11 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  if(type==='customize'||type==='all')visibleIcons();}
 function navigatePanel(type){if(screen&&screen!==type)panelHistory.push(screen);renderPanel(type);}
 function checkWakeProfilePrompt(){
- if(screen||startupChooserOpen||document.hidden||!bridge||!bridge.consumeWakeProfilePrompt)return;
- try{if(bridge.consumeWakeProfilePrompt()){startupChooserOpen=true;panelHistory=[];renderPanel('startupProfiles');}}catch(e){}
+ if(startupChooserOpen||document.hidden||!bridge||!bridge.consumeWakeProfilePrompt)return;
+ try{if(bridge.consumeWakeProfilePrompt()){
+  if(screen==='pairing'&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();
+  startupChooserOpen=true;panelHistory=[];renderPanel('startupProfiles');
+ }}catch(e){}
 }
 function close(){panelHistory=[];startupChooserOpen=false;if(screen==='pairing'){stopPairClock();pairingUrl='';pairingExpiresAt=0;if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();}screen='';scheduleRotation();$('#overlay').classList.add('hidden');listDirty=true;activeList();select(Math.max(0,controls.findIndex(function(el){return el.classList.contains('app-card');})));maybeShowUpcomingReminder();}
 function rerenderWithFocus(act,id,dir){renderPanel(screen,{act:act,id:id,dir:dir},true);}
