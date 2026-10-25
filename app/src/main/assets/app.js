@@ -214,11 +214,11 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  '<div class="connection-name">'+esc(calLabel||calName||'No calendar selected')+'</div>'+(calName?'<div class="connection-detail">Calendar: '+esc(calName)+'</div>':'')+'<div class="connection-detail">Calendar ID: '+esc(calAccount||'Not provided by iCal')+'</div>'+
  '<div class="connection-detail">'+esc(calStatus||'No refresh attempted')+'</div><div class="connection-detail">Last successful sync: '+esc(stamp)+'</div></div>';
  if(profileId==='guest')body+='<p class="calendar-help">Guest is temporary: no calendar addresses or events are saved.</p>';
- else body+=row('pairCalendar','Connect with phone','QR','Scan on your home Wi-Fi and paste iCal link on phone')+
- row('connectCalendar','Enter on TV',calConnected?'Change':'Enter','Paste a private iCal address with your phone remote keyboard')+
+ else body+=row('pairCalendar',calConnected?'Replace calendar via phone':'Connect with phone','QR','Scan on your home Wi-Fi and paste a private iCal link')+
+ row('connectCalendar',calConnected?'Replace link on TV':'Enter on TV',calConnected?'Replace':'Enter','Paste a private iCal address using your phone remote keyboard')+
  row('refreshCalendar','Refresh now','↻','Normally auto-refreshes about every 15 minutes while Vela is open')+
  (calConnected?row('disconnectCalendar','Disconnect','Remove','Delete this profile’s saved link and cache'):'')+
- '<p class="library-footnote">Verified means Google returned a valid calendar feed. Zero events is still a successful connection. Account name is your own label; iCal does not authenticate a Google identity. Use private iCal addresses only on a trusted device.</p>';
+ '<p class="library-footnote">Verified means Google returned a valid calendar feed. Zero events is still a successful connection. Account name is your own label; iCal does not authenticate a Google identity. One encrypted calendar feed per profile; connecting another replaces the existing feed. Use private iCal addresses only on a trusted device.</p>';
  }
  else if(type==='pairing'){title='Connect using phone';subtitle='Scan QR on the same home Wi-Fi.';
  body='<div class="pair-stage"><div class="pair-qr" id="pairQr">'+(pairingUrl?qrSvg(pairingUrl):'<span class="pair-loading">'+(pairingExpiresAt?'Pairing expired — generate a new code':'Starting local pairing…')+'</span>')+'</div>'+
