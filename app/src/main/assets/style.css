@@ -264,36 +264,57 @@ body.light .monitor-button{color:#173536;border-color:rgba(19,53,55,.3);backgrou
 .startup-list{display:flex;flex-direction:column;gap:7px}
 .startup-list .panel-row{min-height:64px;padding:13px 17px}
 
-/* A new viewing session is a true full-screen profile gate, with a neutral
-   surface that cannot briefly expose the last profile's private Home. */
+/* Full-screen, neutral profile gate. All profile-specific wallpaper and Home
+   content stays behind an opaque surface until a person is selected. */
 body.booting .scene,body.booting .page{visibility:hidden}
-.overlay.startup-panel{z-index:80;background:#1c292d;pointer-events:auto}
+.overlay.startup-panel{z-index:80;background:#1b2328;pointer-events:auto;isolation:isolate}
+.overlay.startup-panel:before{content:"";position:absolute;inset:0;pointer-events:none;
+ background:radial-gradient(ellipse 44vw 42vh at 50% 43%,rgba(97,127,130,.14),transparent 92%)}
 .overlay.startup-panel .panel{
- left:0;right:0;top:0;transform:none;
- display:flex;flex-direction:column;align-items:center;justify-content:center;
- width:100vw;min-width:0;height:100vh;max-height:none;
- padding:5vh 5vw;background:#1c292d;border:0;border-radius:0;box-shadow:none;
- animation:none;color:#f3f7f5;
+ left:0;right:0;top:0;transform:none;display:flex;flex-direction:column;
+ align-items:center;justify-content:center;gap:clamp(22px,5vh,56px);
+ width:100vw;min-width:0;height:100vh;max-height:none;padding:5vh 5vw;
+ background:transparent;border:0;border-radius:0;box-shadow:none;animation:none;color:#f3f5f4;
 }
-.overlay.startup-panel .panel-header{width:100%;flex:none;justify-content:center;text-align:center;padding:0 0 5vh;border:0}
+.overlay.startup-panel .panel-header{width:100%;flex:none;justify-content:center;text-align:center;padding:0;border:0}
 .overlay.startup-panel .panel-header>div{width:100%}
-.overlay.startup-panel .panel h2{font:600 clamp(28px,3.3vw,51px)/1.2 Arial,sans-serif;letter-spacing:-.035em;margin:0 0 12px}
-.overlay.startup-panel .panel-header p{font-size:clamp(13px,1.1vw,17px);color:#c0ccc9;letter-spacing:.02em}
+.overlay.startup-panel .panel .eyebrow{display:block;color:#9baead;font-size:clamp(10px,.9vw,12px);letter-spacing:.36em;margin-bottom:clamp(16px,2.5vh,30px)}
+.overlay.startup-panel .panel h2{font:500 clamp(36px,4vw,66px)/1.12 Arial,sans-serif;letter-spacing:-.045em;margin:0}
+.overlay.startup-panel .panel-header p{font-size:clamp(13px,1.1vw,17px);color:#a4b3b5;letter-spacing:.01em;margin:16px auto 0}
 .overlay.startup-panel .close,.overlay.startup-panel .panel-foot{display:none}
-.overlay.startup-panel .panel-body{width:min(980px,90vw);max-height:65vh;margin:0;overflow-y:auto;contain:none}
-.startup-avatar-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:clamp(15px,2.7vw,43px);padding:7px 8px 16px}
-.startup-avatar-card{display:flex;flex-direction:column;align-items:center;gap:16px;width:clamp(118px,13vw,175px);padding:6px;
- color:#d7e2df;background:transparent;border:0;border-radius:14px;outline:none;text-align:center}
-.startup-avatar{display:flex;align-items:center;justify-content:center;width:clamp(105px,12vw,160px);height:clamp(105px,12vw,160px);
- border-radius:13px;background:linear-gradient(155deg,#466b73,#263f49);border:3px solid transparent;transition:transform .12s,border-color .12s}
-.startup-avatar-card:nth-child(2n) .startup-avatar{background:linear-gradient(145deg,#777578,#403f52)}
-.startup-avatar-card:nth-child(3n) .startup-avatar{background:linear-gradient(145deg,#7d826d,#415950)}
-.startup-avatar svg{width:55%;height:55%;stroke-width:1.5}
-.startup-avatar .avatar-initials{font-size:clamp(30px,4vw,56px);font-weight:600}
-.startup-profile-name{display:block;max-width:100%;font-size:clamp(16px,1.6vw,23px);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.startup-avatar-card.selected .startup-avatar,.startup-avatar-card:focus .startup-avatar{border-color:#f4f8f6;transform:scale(1.035)}
+.overlay.startup-panel .panel-body{width:min(1190px,94vw);flex:none;max-height:62vh;margin:0;overflow-y:auto;contain:none}
+.startup-avatar-grid{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;
+ gap:clamp(16px,2.2vw,37px);padding:12px 14px 22px}
+.startup-avatar-card{display:flex;flex-direction:column;align-items:center;gap:clamp(15px,2vh,23px);
+ width:clamp(140px,13.4vw,202px);padding:5px;background:transparent;border:0;outline:0;
+ border-radius:19px;color:#b9c6c8;text-align:center;transition:color .12s ease-out}
+.startup-avatar{display:flex;align-items:center;justify-content:center;
+ width:clamp(127px,12.5vw,190px);height:clamp(127px,12.5vw,190px);
+ border-radius:clamp(17px,1.8vw,27px);border:4px solid transparent;
+ background:linear-gradient(155deg,#608a88,#315252);box-shadow:0 15px 35px rgba(0,0,0,.18);
+ transition:transform .12s ease-out,border-color .12s ease-out,box-shadow .12s ease-out}
+.startup-avatar-card:nth-child(2n) .startup-avatar{background:linear-gradient(145deg,#978f9f,#544e65)}
+.startup-avatar-card:nth-child(3n) .startup-avatar{background:linear-gradient(145deg,#9b9a7a,#536757)}
+.startup-avatar-card:nth-child(4n) .startup-avatar{background:linear-gradient(145deg,#a78573,#70505b)}
+.startup-avatar svg{width:51%;height:51%;stroke-width:1.35;color:#f6f8f4;opacity:.97}
+.startup-avatar .avatar-initials{font-size:clamp(42px,4.2vw,69px);font-weight:500;letter-spacing:-.04em;color:#f8faf7}
+.startup-profile-name{display:block;width:100%;font-size:clamp(17px,1.6vw,24px);font-weight:500;
+ overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.startup-avatar-card.selected .startup-avatar,.startup-avatar-card:focus .startup-avatar{
+ border-color:#f0f6f4;transform:translateY(-4px) scale(1.04);
+ box-shadow:0 0 0 5px rgba(227,243,240,.14),0 23px 45px rgba(0,0,0,.25)}
 .startup-avatar-card.selected .startup-profile-name,.startup-avatar-card:focus .startup-profile-name{color:#fff}
-@media(max-height:650px){.overlay.startup-panel .panel{padding:3vh 4vw}.overlay.startup-panel .panel-header{padding-bottom:3vh}.startup-avatar-grid{gap:10px 26px}.startup-avatar{width:94px;height:94px}.startup-avatar-card{width:110px;gap:9px}}
+.overlay.startup-panel .startup-footer{margin:clamp(12px,3vh,38px) auto 0;text-align:center;
+ color:#7d959a;font-size:clamp(10px,.85vw,12px);letter-spacing:.24em}
+@media(max-height:650px){.overlay.startup-panel .panel{padding:3vh 4vw;gap:3vh}
+ .overlay.startup-panel .panel .eyebrow{margin-bottom:12px}
+ .overlay.startup-panel .panel h2{font-size:clamp(30px,4.5vh,42px)}
+ .overlay.startup-panel .panel-header p{margin-top:8px}
+ .startup-avatar-grid{gap:12px 20px;padding:5px 12px 10px}
+ .startup-avatar{width:105px;height:105px;border-radius:17px}
+ .startup-avatar-card{width:120px;gap:9px}
+ .startup-profile-name{font-size:16px}
+ .overlay.startup-panel .startup-footer{margin-top:8px}}
 /* Samsung firmware owns Calendar integrations, TV Home and the system saver. */
 body.tizen-tv #monitorButton{display:none!important}
 .calendar-input-label{display:block;color:rgba(229,241,234,.82);font-size:12px;letter-spacing:.08em;margin:20px 4px 9px}

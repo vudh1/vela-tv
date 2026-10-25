@@ -10,7 +10,8 @@ const RESUME_CHALLENGE_MS = 45_000;
 const MAX_FAILED = 5;
 const RATE_WINDOW_MS = 15 * 60_000;
 const KEYS = new Set(['up', 'down', 'left', 'right', 'select', 'back', 'home',
-  'volume_up', 'volume_down', 'mute', 'play_pause']);
+  'volume_up', 'volume_down', 'mute', 'play_pause', 'settings',
+  'power_off', 'wifi_settings', 'input', 'hdmi1', 'hdmi2', 'hdmi3', 'hdmi4']);
 
 function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
@@ -163,6 +164,8 @@ export class RemoteRoom {
       tvSeen: stored.tvSeen || 0, controllerHash: stored.controllerHash || '',
       controllerIp: stored.controllerIp || '', lease: stored.lease || 0,
       commands: stored.commands || [], lastCommandAt: stored.lastCommandAt || 0,
+      readyUntil: stored.readyUntil || 0,
+      textPublicKey: stored.textPublicKey || '',
       pairedKey: stored.pairedKey || null, pairedKeyId: stored.pairedKeyId || '',
       challenges: stored.challenges || [],
       failures: stored.failures || {},
@@ -175,7 +178,8 @@ export class RemoteRoom {
       state.pinSalt = ''; state.pinHash = ''; state.pendingUntil = 0;
       state.controllerHash = ''; state.controllerIp = ''; state.lease = 0;
       state.pairedKey = null; state.pairedKeyId = ''; state.challenges = [];
-      state.commands = [];
+      state.commands = []; state.readyUntil = 0;
+      state.textPublicKey = '';
     }
     // Do not retain old attacker IP hashes forever in Durable Object storage.
     for (const key of Object.keys(state.failures)) {
@@ -203,6 +207,7 @@ export class RemoteRoom {
       // The secret PIN alone never authorizes TV takeover.
       if (state.tvHash) return json({ error: 'already_enrolled' }, 409);
       state.tvHash = await sha256(data.tvToken);
+      state.textPublicKey = '';
       state.tvIp = ip;
       state.tvSeen = now;
       state.pendingUntil = now + UNCLAIMED_MS;
@@ -248,7 +253,7 @@ export class RemoteRoom {
       state.pairedKey = verifiedKey;
       state.pairedKeyId = verifiedKey ? await sha256(verifiedKey.x + ':' + verifiedKey.y) : '';
       state.challenges = [];
-      state.commands = [];
+      state.commands = []; state.readyUntil = 0;
       await persist();
       return json({ token, leaseSeconds: LEASE_MS / 1000 });
     }
@@ -295,7 +300,7 @@ export class RemoteRoom {
       state.controllerHash = await sha256(token);
       state.controllerIp = ip;
       state.lease = now + LEASE_MS;
-      state.commands = [];
+      state.commands = []; state.readyUntil = 0;
       await persist();
       return json({ token, leaseSeconds: LEASE_MS / 1000 });
     }
@@ -312,7 +317,7 @@ export class RemoteRoom {
         // Regeneration immediately invalidates previously paired controllers.
         state.controllerHash = ''; state.controllerIp = ''; state.lease = 0;
         state.pairedKey = null; state.pairedKeyId = ''; state.challenges = [];
-        state.commands = []; state.tvIp = ip; state.tvSeen = now;
+        state.commands = []; state.readyUntil = 0; state.tvIp = ip; state.tvSeen = now;
         await persist();
         return json({ ok: true });
       }
@@ -322,16 +327,24 @@ export class RemoteRoom {
       }
       if (!sameHomeNetwork(state.tvIp, ip)) {
         // Network changed; invalidate the old controller's authorization.
-        state.controllerHash = ''; state.lease = 0; state.commands = [];
+        state.controllerHash = ''; state.lease = 0; state.commands = []; state.readyUntil = 0;
         state.pairedKey = null; state.pairedKeyId = ''; state.challenges = [];
       }
       state.tvIp = ip;
       state.tvSeen = now;
+      // The enrolled TV, and only the TV, publishes its local encryption key.
+      // The server cannot decrypt typed text; only the paired controller sees
+      // this public key and only the Sony device holds the wrapped private key.
+      if (typeof data.textPublicKey === 'string' &&
+          /^[A-Za-z0-9+/]{100,200}={0,2}$/.test(data.textPublicKey))
+        state.textPublicKey = data.textPublicKey;
       const commands = state.commands.filter(c => c.at > now - 6_000);
       state.commands = [];
       await persist();
       return json({ active: !!state.controllerHash && state.lease > now,
-        fast: state.lastCommandAt > now - 4_000,
+        // Briefly speed up polling after real interaction or a newly opened
+        // controller. An untouched phone must not consume fast polls all day.
+        fast: active && (state.lastCommandAt > now - 12_000 || state.readyUntil > now),
         commands });
     }
     const token = bearer(req);
@@ -339,20 +352,34 @@ export class RemoteRoom {
         || !sameHomeNetwork(ip, state.controllerIp) || !sameNetwork)
       return json({ error: 'session_expired' }, 401);
     if (path === '/api/release') {
-      state.controllerHash = ''; state.lease = 0; state.commands = [];
+      state.controllerHash = ''; state.lease = 0; state.commands = []; state.readyUntil = 0;
       state.pairedKey = null; state.pairedKeyId = ''; state.challenges = [];
       await persist();
       return json({ ok: true });
     }
     state.lease = now + LEASE_MS;
+    if (path === '/api/heartbeat' && data.ready === true) state.readyUntil = now + 12_000;
     if (path === '/api/command') {
-      if (!KEYS.has(data.key)) return json({ error: 'invalid_key' }, 400);
+      if (data.key !== 'type_text' && !KEYS.has(data.key)) return json({ error: 'invalid_key' }, 400);
+      if (data.key === 'type_text') {
+        const payload = data.payload;
+        if (Object.keys(data).some(key => key !== 'key' && key !== 'payload')
+            || !state.textPublicKey || !payload || typeof payload !== 'object' || Array.isArray(payload)
+            || Object.keys(payload).some(key => !['ephemeral', 'iv', 'cipher'].includes(key))
+            || typeof payload.ephemeral !== 'string' || !/^[A-Za-z0-9+/]{100,200}={0,2}$/.test(payload.ephemeral)
+            || typeof payload.iv !== 'string' || !/^[A-Za-z0-9+/]{16}$/.test(payload.iv)
+            || typeof payload.cipher !== 'string' || !/^[A-Za-z0-9+/]{24,440}={0,2}$/.test(payload.cipher))
+          return json({ error: 'invalid_encrypted_text' }, 400);
+      }
       // Never carry stale inputs into a future controller session.
       state.commands = state.commands.filter(c => c.at > now - 6_000).slice(-15);
-      state.commands.push({ key: data.key, at: now, id: randomToken().slice(0, 12) });
+      state.commands.push({ key: data.key, ...(data.key === 'type_text' ? { payload: {
+        ephemeral: data.payload.ephemeral, iv: data.payload.iv, cipher: data.payload.cipher } } : {}),
+        at: now, id: randomToken().slice(0, 12) });
       state.lastCommandAt = now;
     }
     await persist();
-    return json({ ok: true, leaseSeconds: LEASE_MS / 1000 });
+    return json({ ok: true, leaseSeconds: LEASE_MS / 1000,
+      ...(path === '/api/heartbeat' && state.textPublicKey ? { textPublicKey: state.textPublicKey } : {}) });
   }
 }

@@ -1,0 +1,25 @@
+/* Three direct actions without sideways scroll on compact phones. */
+.utility-row{gap:clamp(8px,2.8vw,18px);width:100%}
+.round-action{flex:1 1 0;width:auto;max-width:130px;min-width:0;gap:7px;padding:0 6px}
+.round-action svg{flex:none;width:21px;height:21px}
+@media(max-width:365px){
+  .round-action{flex-direction:column;gap:2px}
+  .round-action svg{width:20px;height:20px}
+  .round-action span{font-size:10px}
+}
+/* Keep primary navigation compact; show advanced controls only on demand. */
+.remote-tools{display:flex;gap:10px;justify-content:center;margin-top:-8px}
+.remote-tools button{flex:1;max-width:176px;border:1px solid #ffffff21;border-radius:13px;background:#ffffff0b;color:#d4e8e3;padding:11px 10px;font-size:12px}
+.remote-tools button[aria-expanded="true"]{background:#c4e8d824;border-color:#c4e8d866}
+.tool-panel{border:1px solid #ffffff24;border-radius:18px;background:#182d32;padding:17px;margin-top:-10px;display:grid;gap:13px}
+.tool-title{margin:0;color:#e7f4f0;font-size:14px;font-weight:600}
+.source-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.source-grid button,.device-options button{border:1px solid #ffffff22;border-radius:10px;background:#ffffff10;color:#e5f2ef;padding:12px 5px;font-size:12px}
+.device-options{display:flex;gap:8px}
+.device-options button{flex:1}
+.device-options .danger-button{color:#ffc6bd;border-color:#ffc6bd55}
+.tool-note{color:#98b0b2;margin:0;font-size:11px;line-height:1.55}
+#textForm{max-width:none}
+#textForm input{width:100%;font-size:16px;letter-spacing:normal;padding:12px}
+#textForm .primary{margin-top:10px;padding:12px;font-size:13px}
+@media(max-height:740px){.controller{gap:11px}}

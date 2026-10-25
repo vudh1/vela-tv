@@ -9,6 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="ux.css">
   <title>Vela · Remote</title>
 </head>
 <body>
@@ -22,7 +23,7 @@
       <div class="pair-illustration" aria-hidden="true"><span class="screen"></span><span class="halo"></span></div>
       <p class="eyebrow">YOUR LIVING ROOM, IN YOUR HAND</p>
       <h1>Connect to Vela</h1>
-      <p class="support">On Vela TV, open Settings → Device & support → Web remote to generate a PIN. Connect your phone to the same home network and enter it here.</p>
+      <p class="support">On Vela TV, open Settings → Device & Support → Web remote to generate a PIN. Connect your phone to the same home network and enter it here.</p>
       <form id="pinForm" autocomplete="off">
         <label for="pin">Remote PIN</label>
         <input id="pin" name="pin" type="password" inputmode="numeric" pattern="[0-9]{10}" minlength="10" maxlength="10" autocomplete="off" placeholder="10-digit TV PIN" required>
@@ -37,7 +38,35 @@
       <div class="utility-row">
         <button data-key="home" class="round-action" aria-label="Vela home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3.7 11 8.3-7 8.3 7M6.5 9v10h11V9M10 19v-6h4v6"/></svg><span>Home</span></button>
         <button data-key="back" class="round-action" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h12a6 6 0 0 1 6 6"/></svg><span>Back</span></button>
+        <button data-key="settings" class="round-action" aria-label="Open Vela settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2h0a2 2 0 0 1 2 2l.1.5a8 8 0 0 1 2 .9l.4-.2a2 2 0 0 1 2.8 2.8l-.2.4a8 8 0 0 1 .9 2l.5.1a2 2 0 0 1 0 4l-.5.1a8 8 0 0 1-.9 2l.2.4a2 2 0 0 1-2.8 2.8l-.4-.2a8 8 0 0 1-2 .9l-.1.5a2 2 0 0 1-4 0l-.1-.5a8 8 0 0 1-2-.9l-.4.2a2 2 0 0 1-2.8-2.8l.2-.4a8 8 0 0 1-.9-2L3.5 14a2 2 0 0 1 0-4l.5-.1a8 8 0 0 1 .9-2l-.2-.4a2 2 0 0 1 2.8-2.8l.4.2a8 8 0 0 1 2-.9L10 4a2 2 0 0 1 2-2Z"/></svg><span>Settings</span></button>
       </div>
+      <div class="remote-tools" role="group" aria-label="More remote controls">
+        <button id="deviceToggle" type="button" aria-expanded="false" aria-controls="devicePanel">TV & Inputs</button>
+        <button id="keyboardToggle" type="button" aria-expanded="false" aria-controls="keyboardPanel">Type on TV</button>
+      </div>
+      <section id="devicePanel" class="tool-panel hidden" aria-label="TV device controls">
+        <p class="tool-title">Choose a TV source</p>
+        <div class="source-grid">
+          <button data-key="input" type="button">Input menu</button>
+          <button data-key="hdmi1" type="button">HDMI 1</button>
+          <button data-key="hdmi2" type="button">HDMI 2</button>
+          <button data-key="hdmi3" type="button">HDMI 3</button>
+          <button data-key="hdmi4" type="button">HDMI 4</button>
+        </div>
+        <div class="device-options">
+          <button id="wifiButton" type="button">Wi-Fi settings</button>
+          <button id="powerOffButton" type="button" class="danger-button">Turn TV off</button>
+        </div>
+        <p class="tool-note">Power on needs an always-on local controller. Vela cannot wake a TV after its app stops in standby. TV source selection is separate from your Vizio soundbar's audio input.</p>
+      </section>
+      <section id="keyboardPanel" class="tool-panel hidden" aria-label="Type on TV">
+        <form id="textForm" autocomplete="off">
+          <label for="remoteText">TV search or text field</label>
+          <input id="remoteText" type="text" maxlength="160" autocomplete="off" autocapitalize="sentences" placeholder="Select a text box on TV first">
+          <button id="sendText" class="primary" type="submit">Send text securely</button>
+        </form>
+        <p class="tool-note">Replaces the selected non-password field when Accessibility supports it. Text is encrypted for your TV; never enter passwords here.</p>
+      </section>
       <div class="dpad" role="group" aria-label="Directional navigation">
         <button data-key="up" class="direction up" aria-label="Up"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
         <button data-key="left" class="direction left" aria-label="Left"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>
