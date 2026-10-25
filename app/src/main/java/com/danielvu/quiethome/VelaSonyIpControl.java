@@ -159,9 +159,8 @@ final class VelaSonyIpControl {
 
     private List<String> ownHosts() {
         List<String> hosts = new ArrayList<>();
-        if (!lastHost.isEmpty()) hosts.add(lastHost);
         // Local self-connection has no route to another appliance.
-        if (!hosts.contains("127.0.0.1")) hosts.add("127.0.0.1");
+        hosts.add("127.0.0.1");
         try {
             ConnectivityManager manager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
             Network network = manager == null ? null : manager.getActiveNetwork();
@@ -175,6 +174,9 @@ final class VelaSonyIpControl {
                 if (!hosts.contains(value)) hosts.add(value);
             }
         } catch (SecurityException ignored) { }
+        // A host cached before a Wi-Fi change may now belong to a different
+        // LAN device. Only prioritize it if it is STILL this TV's own IP.
+        if (!lastHost.isEmpty() && hosts.remove(lastHost)) hosts.add(0, lastHost);
         return hosts;
     }
 }
