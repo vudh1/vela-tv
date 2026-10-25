@@ -8,7 +8,7 @@ var monitorEnabled=false; // profile-scoped, hidden by default; no background st
 // Volume settings are device-wide, not profile-specific: the TV audio output is shared.
 var volumeMode='glass',volumePercent=false,volumePosition='center',volumeDelay=1200,volumeTimer=null,lastVolume={percent:45,muted:false};
 var calEvents=[],calConnected=false,calVerified=false,calStatus='',calLabel='',calName='',calAccount='',calLastSuccess=0,calLastAttempt=0,calTimer=null,calendarProfile='',calendarChecked=0,pairingUrl='',pairingExpiresAt=0,pairTimer=null;
-var reminderTimer=null,remindedEvents={},reminderWindowMs=15*60000,reminderVisibleMs=7000;
+var reminderTimer=null,remindedEvents={},reminderWindowMs=15*60000,reminderVisibleMs=7000,lastCalendarMarkup='';
 var avatars={orbit:'<circle cx="12" cy="12" r="3.5"/><ellipse cx="12" cy="12" rx="10" ry="5" transform="rotate(-30 12 12)"/><path d="M20 4l-1 3"/>',flower:'<circle cx="12" cy="12" r="2.5"/><path d="M12 3c2 0 3 3 0 6-3-3-2-6 0-6Zm0 18c-2 0-3-3 0-6 3 3 2 6 0 6ZM3 12c0-2 3-3 6 0-3 3-6 2-6 0Zm18 0c0 2-3 3-6 0 3-3 6-2 6 0Z"/>',guest:'<circle cx="12" cy="8" r="3.6"/><path d="M5 21v-1c0-7 14-7 14 0v1"/>',mountain:'<path d="m2 20 7.5-13 4 7 2.5-4L22 20Z"/><path d="m7 11 2.5 2.5 2.2-2"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/>',moon:'<path d="M20 14.5A8.8 8.8 0 0 1 9.5 4 8.7 8.7 0 1 0 20 14.5Z"/><path d="m17 4 .6 1.6L19 6l-1.4.5L17 8l-.5-1.5L15 6l1.5-.4Z"/>',wave:'<path d="M2 15c3-4 6 4 10 0s7-4 10 0M2 20c3-4 6 4 10 0s7-4 10 0M4 9c2-4 4-5 8-5"/>',star:'<path d="m12 2 2.9 6.9 7.4.6-5.7 4.9 1.8 7.2L12 17.7l-6.4 3.9 1.8-7.2-5.7-4.9 7.4-.6Z"/>',leaf:'<path d="M20 3C7 3 3 9 4 17c7 5 17-2 16-14Z"/><path d="M4 21c3-8 7-10 12-13"/>',cat:'<path d="m4 11 1-7 5 4c1-.4 3-.4 4 0l5-4 1 7c2 8-2 11-8 11S2 19 4 11Z"/><path d="M8 15h.1M16 15h.1m-5 3h2m-1 0-2 1m2-1 2 1"/>'};
 var avatarList=['initial','orbit','flower','guest','mountain','sun','moon','wave','star','leaf','cat'];
 function profileInitials(name){var words=String(name||'').trim().split(/\s+/).filter(Boolean);return (words.length>1?words[0].charAt(0)+words[words.length-1].charAt(0):(words[0]||'G').charAt(0)).toUpperCase();}
@@ -239,6 +239,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  row('autoDownload','Download updates automatically',s&&s.autoDownload===false?'Off':'On','Save and SHA-256 verify new APKs in the background; installation requires approval');}
  $('#panelTitle').textContent=title;$('#panelDescription').textContent=subtitle;host.innerHTML=body;host.scrollTop=scrollTop;
  listDirty=true;activeList();var focusIndex=0;if(focusKey){for(var i=0;i<controls.length;i++){var b=controls[i];if(b.getAttribute('data-act')===focusKey.act&&(focusKey.id===undefined||b.getAttribute('data-id')===focusKey.id)&&(!focusKey.dir||b.getAttribute('data-dir')===focusKey.dir)){focusIndex=i;break;}}}
+ if(type==='calendar')lastCalendarMarkup=body;else lastCalendarMarkup='';
  if(!focusKey){focusIndex=type==='pairing'?0:controls.findIndex(function(b){return b.getAttribute('data-act')!=='close';});if(focusIndex<0)focusIndex=0;}select(focusIndex);if(type==='pairing')pairingTick();
  if(type==='customize'||type==='all')visibleIcons();}
 function close(){if(screen==='pairing'){stopPairClock();pairingUrl='';pairingExpiresAt=0;if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();}screen='';scheduleRotation();$('#overlay').classList.add('hidden');listDirty=true;activeList();select(Math.max(0,controls.findIndex(function(el){return el.classList.contains('app-card');})));maybeShowUpcomingReminder();}
@@ -331,7 +332,7 @@ function calendarEventList(){
 function hideUpcomingReminder(){if(reminderTimer)clearTimeout(reminderTimer);reminderTimer=null;var el=$('#eventReminder');
  if(el){el.classList.remove('visible');el.setAttribute('aria-hidden','true');}}
 function maybeShowUpcomingReminder(){
- if(screen||document.hidden||!calConnected||!calVerified||profileId==='guest')return;
+ if(screen||document.hidden||reminderTimer||!calConnected||!calVerified||profileId==='guest')return;
  var now=Date.now(),next=calendarToday().filter(function(e){
   var delta=Number(e.start)-now;return !e.allDay&&delta>0&&delta<=reminderWindowMs&&Number(e.end)>now;
  }).sort(function(a,b){return a.start-b.start;});
@@ -389,8 +390,8 @@ function renderCalendarBody(){if(screen!=='calendar')return;
  var host=$('#panelContent'),oldScroll=host.scrollTop;
  var focus=focusedControl?{act:focusedControl.getAttribute('data-act'),id:focusedControl.getAttribute('data-id')}:null;
  var next=calendarEventList();
- if(host.innerHTML===next)return;
- host.innerHTML=next;host.scrollTop=oldScroll;listDirty=true;activeList();
+ if(lastCalendarMarkup===next)return;
+ lastCalendarMarkup=next;host.innerHTML=next;host.scrollTop=oldScroll;listDirty=true;activeList();
  if(controls.length){
   var i=focus?controls.findIndex(function(el){return el.getAttribute('data-act')===focus.act&&el.getAttribute('data-id')===focus.id;}):-1;
   if(i<0)i=controls.findIndex(function(el){return el.getAttribute('data-act')!=='close';});
