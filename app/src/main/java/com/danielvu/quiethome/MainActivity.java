@@ -525,6 +525,11 @@ public final class MainActivity extends Activity {
         sendToJs("QH.receiveCalendar(" + JSONObject.quote(json) + ")");
     }
 
+    /** A phone submission, not a cached calendar event, completes a pairing session. */
+    void onPhoneCalendarSubmitted(String profile) {
+        sendToJs("QH.pairingCompleted(" + JSONObject.quote(profile) + ")");
+    }
+
     public void showCalendarError(String message) {
         runOnUiThread(() -> toast(message));
     }
@@ -537,8 +542,8 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void loadCalendar(String profile, boolean force) { calendar.load(profile,force); }
         @JavascriptInterface public void pairCalendar(String profile) {
             // Called from Android WebView bridge thread, never block the UI.
-            try { String link=pairing.start(profile);sendToJs("QH.pairingReady("+JSONObject.quote(link)+")"); }
-            catch(Exception e){showCalendarError("Connect the TV and phone to the same private home network");sendToJs("QH.pairingReady('')");}
+            try { String link=pairing.start(profile);sendToJs("QH.pairingReady("+JSONObject.quote(link)+","+pairing.expiresAt()+")"); }
+            catch(Exception e){showCalendarError("Connect the TV and phone to the same private home network");sendToJs("QH.pairingReady('',0)");}
         }
         @JavascriptInterface public void cancelCalendarPair(){if(pairing!=null)pairing.stop();}
         @JavascriptInterface public void editCalendar(String profile) { calendar.edit(profile); }

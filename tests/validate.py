@@ -76,3 +76,16 @@ assert 'p.recent' in js and "if(profileId!=='guest')persistProfiles();" in js
 assert 'Vela-2.5.apk' in (r/'scripts/build.sh').read_text()
 assert 'Vela-2.5.apk' in (r/'scripts/tv.sh').read_text()
 print('PASS Vela 2.4 TV clock, long-OK menu, per-profile app history')
+
+# QR pairing regressions: normal calendar refreshes must never cancel phone pairing.
+pair_server=(r/'app/src/main/java/com/danielvu/quiethome/VelaPairingServer.java').read_text()
+assert 'onPhoneCalendarSubmitted(profile)' in pair_server
+assert '10*60*1000L' in pair_server and 'synchronized long expiresAt()' in pair_server
+assert 'pairingCompleted:pairingCompleted' in js
+assert "if(screen==='pairing'&&calConnected)" not in js
+assert "if(type==='pairing')pairingTick()" in js
+assert 'host.contains(el)' in js
+assert '.overlay.pairing-panel .panel' in css and 'max-height:32vh' in css
+assert 'QH.pairingReady(' in main and 'pairing.expiresAt()' in main
+assert 'renewPair' in js and 'pair-countdown' in css
+print('PASS QR pairing lifecycle, expiry countdown, renewal, and unclipped panel')

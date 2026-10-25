@@ -215,3 +215,17 @@ body.light .monitor-button{color:#173536;border-color:rgba(19,53,55,.3);backgrou
 .context-app{display:flex;align-items:center;gap:14px;padding:7px 10px 21px;font-size:17px;font-weight:600;color:rgba(255,255,255,.92)}
 .context-app .app-icon-frame{width:55px;height:55px;border-radius:12px;flex:none}
 .context-app .app-icon-frame img{max-width:100%;max-height:100%}
+
+/* QR pairing panel: avoid clipping at typical 720p/1080p Android TV sizes. */
+.overlay.pairing-panel .panel{width:min(560px,55vw);min-width:380px;height:min(90vh,760px);top:5vh;right:3.4vw}
+.overlay.pairing-panel .panel-body{overflow-y:auto;min-height:0;margin-top:8px}
+.pair-stage{display:flex;flex-direction:column;align-items:center;min-width:0;padding:0 3px 5px}
+.pair-qr{min-height:0;min-width:0;width:100%;display:flex;justify-content:center;align-items:center;padding:5px 0}
+.pair-svg{display:block;width:min(29vh,230px);height:auto;aspect-ratio:1;max-width:100%;max-height:32vh;flex:none;border-radius:12px;padding:8px;background:#fff}
+.pair-loading{display:block;text-align:center;padding:30px 10px;max-width:100%}
+.pair-countdown{font:700 12px/1.35 Arial,sans-serif!important;color:#d5f2e1!important;text-align:center;margin:5px 0!important}
+.pair-url{font-size:11px!important;line-height:1.3!important;max-width:100%;overflow-wrap:anywhere;margin:3px 0 7px!important}
+.pair-help{font-size:11px!important;line-height:1.4!important;max-width:400px!important;text-align:center;margin:3px auto 8px!important;color:rgba(250,250,250,.72)!important}
+.overlay.pairing-panel .panel-row{min-height:48px;padding:9px 12px}
+@media(max-height:650px){.overlay.pairing-panel .panel{height:94vh;top:3vh;padding-top:12px}.pair-svg{width:min(29vh,190px)}.pair-help{font-size:10px!important}}
+@media(max-width:850px){.overlay.pairing-panel .panel{width:65vw;min-width:330px;right:2vw}}

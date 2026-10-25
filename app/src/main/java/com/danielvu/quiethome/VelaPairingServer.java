@@ -14,7 +14,7 @@ import java.util.*;
  * never the private iCal URL. No URLs are written to logs.
  */
 final class VelaPairingServer {
-    private static final long LIFE_MS=3*60*1000L;
+    private static final long LIFE_MS=10*60*1000L;
     private final MainActivity activity;
     private final VelaCalendarController calendar;
     private volatile ServerSocket socket;
@@ -27,6 +27,7 @@ final class VelaPairingServer {
     private final SecureRandom random=new SecureRandom();
     VelaPairingServer(MainActivity a,VelaCalendarController c){activity=a;calendar=c;}
     synchronized void stop(){try{if(socket!=null)socket.close();}catch(Exception ignored){}socket=null;token="";}
+    synchronized long expiresAt(){return expires;}
     private static String localIp(){
         try{
             Enumeration<NetworkInterface> it=NetworkInterface.getNetworkInterfaces();
@@ -63,7 +64,7 @@ final class VelaPairingServer {
     private static String clean(String s){return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;");}
     private String page(){return "<!doctype html><html lang='en'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"+
         "<title>Vela phone setup</title><style>body{font:16px system-ui;background:#11262c;color:#fff;margin:auto;max-width:480px;padding:36px 20px}input,button{box-sizing:border-box;width:100%;font:inherit;padding:14px;margin:8px 0 18px;border-radius:10px;border:0}button{background:#c5e6db;color:#123;padding:15px;font-weight:700}p,small{line-height:1.6;opacity:.8}</style>"+
-        "<h1>Connect calendar to Vela</h1><p>Profile: "+clean(profile)+" · this pairing expires in 3 minutes.</p><form method='post'>"+
+        "<h1>Connect calendar to Vela</h1><p>Profile: "+clean(profile)+" · this pairing expires in 10 minutes.</p><form method='post'>"+
         "<label>Calendar address or label (optional)</label><input name='label' maxlength='80' placeholder='e.g. Duong · personal'>"+
         "<label>Google Calendar secret iCal address</label><input name='url' type='url' maxlength='4096' required autocomplete='off' placeholder='https://calendar.google.com/calendar/ical/…/basic.ics'>"+
         "<button type='submit'>Connect to Vela</button></form><small>On Google Calendar (desktop view): Settings → your calendar → Integrate calendar → Secret address in iCal format.</small>"+
@@ -114,5 +115,6 @@ final class VelaPairingServer {
         }
         saved=true;calendar.saveLink(profile,url,label);
         respond(out,200,"<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{font:18px system-ui;background:#10272b;color:white;padding:50px 30px;line-height:1.6}</style><h2>Link transferred to Vela ✓</h2><p>Look at your TV for verification. A saved link is not yet a verified calendar. You may close this tab.</p>");
+        activity.onPhoneCalendarSubmitted(profile);
     }
 }
