@@ -24,7 +24,7 @@ Samsung build stages it with `samsung/config.xml` and `tizen-bridge.js`.
   choose Vela → Gear → Daily life → Calendar → Google Calendar, paste the
   secret Google iCal URL, then separately connect the BallerWatch iCal feed.
   Either source may be replaced or disconnected without affecting the other.
-  The Calendar page filters the next seven days by Playing, Watching or Life;
+  The Calendar page filters a one-calendar-month list (Today, Tomorrow and later day dividers) by Playing, Watching or Life;
   it shows date/time in the list and full description, field/location and
   watched-TV channel only when the event is opened. Watched matches can store
   a manual Drogon TV channel name and launch installed Perfect Player; an

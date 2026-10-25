@@ -13,6 +13,7 @@ public final class SonyIrccMessageTest {
         check("AAAAAQAAAAEAAAATAw==".equals(SonyIrccMessage.code("volume_down", true)), "volume down");
         check("AAAAAQAAAAEAAAAUAw==".equals(SonyIrccMessage.code("mute", true)), "mute");
         check("AAAAAQAAAAEAAAAvAw==".equals(SonyIrccMessage.code("power_off", true)), "standby");
+        check("AAAAAQAAAAEAAAAVAw==".equals(SonyIrccMessage.code("power_toggle", true)), "Sony power toggle");
         check("AAAAAQAAAAEAAAAlAw==".equals(SonyIrccMessage.code("input", true)), "input menu");
         check("AAAAAgAAABoAAABaAw==".equals(SonyIrccMessage.code("hdmi1", true)), "HDMI 1");
         check("AAAAAgAAABoAAABdAw==".equals(SonyIrccMessage.code("hdmi4", true)), "HDMI 4");

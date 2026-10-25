@@ -230,9 +230,9 @@ final class VelaCalendarController {
                     JSONArray list=cachedSource(profile,source,day.toString());
                     try{
                         String feed=download(url);if(!validCalendarFeed(feed))throw new IllegalStateException("Invalid iCal feed");
-                        // Keep a month of events for the full calendar; the
-                        // compact Home peek still chooses only timely events.
-                        List<CalendarIcs.Event> events=CalendarIcs.upcoming(feed,zone,day,30);
+                        // Keep future source data beyond the one-month TV list;
+                        // Home and screensaver still select only timely events.
+                        List<CalendarIcs.Event> events=CalendarIcs.upcoming(feed,zone,day,120);
                         JSONArray fresh=new JSONArray();for(CalendarIcs.Event e:events){
                             JSONObject j=new JSONObject();j.put("title",e.title);j.put("start",e.start).put("end",e.end).put("allDay",e.allDay)
                                 .put("uid",e.uid).put("kind",e.kind).put("location",e.location).put("description",e.description)

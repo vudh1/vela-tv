@@ -1,6 +1,11 @@
 name: Deploy Vela remote Worker
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'remote-worker/**'
+      - '.github/workflows/deploy-remote.yml'
 permissions:
   contents: read
 jobs:
@@ -21,6 +26,8 @@ jobs:
       - name: Install Worker tooling
         working-directory: remote-worker
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify isolated TV pairings before deployment
+        run: node --test remote-worker/test/*.test.js
       - name: Deploy Worker
         working-directory: remote-worker
         env:
