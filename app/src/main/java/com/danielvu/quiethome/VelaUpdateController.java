@@ -41,6 +41,7 @@ final class VelaUpdateController {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private volatile boolean busy = false;
     private volatile boolean available = false;
+    private volatile boolean downloaded = false;
     private volatile String status = "Not checked";
     private volatile String latestVersion = "";
     private volatile String url = "";
@@ -53,9 +54,16 @@ final class VelaUpdateController {
         this.prefs = prefs;
     }
     boolean autoEnabled() { return prefs.getBoolean("update_auto_check", true); }
+    boolean autoDownloadEnabled() { return prefs.getBoolean("update_auto_download", true); }
     void setAutoEnabled(boolean value) {
         prefs.edit().putBoolean("update_auto_check", value).apply();
         send();
+        if (value) maybeCheck();
+    }
+    void setAutoDownloadEnabled(boolean value) {
+        prefs.edit().putBoolean("update_auto_download", value).apply();
+        send();
+        if (value && available && !downloaded) prefetch();
     }
     long installedCode() {
         try {
@@ -76,6 +84,8 @@ final class VelaUpdateController {
             j.put("available", available);
             j.put("checking", busy);
             j.put("auto", autoEnabled());
+            j.put("autoDownload", autoDownloadEnabled());
+            j.put("downloaded", downloaded);
             j.put("status", status);
             activity.deliverUpdateStatus(j.toString());
         } catch (Exception ignored) { }
@@ -137,8 +147,27 @@ final class VelaUpdateController {
                 sha = digest.substring(7).toLowerCase(Locale.US);
                 size = length;
                 available = code > installedCode();
-                status = available ? "New update ready to download" : "You're up to date";
+                downloaded = available && cachedValid(sha, size);
                 prefs.edit().putLong("last_update_check", System.currentTimeMillis()).apply();
+                if (!available) {
+                    status = "You're up to date";
+                } else if (downloaded) {
+                    status = "Update downloaded and verified · select Install downloaded update";
+                } else if (autoDownloadEnabled()) {
+                    status = "New release found · downloading in the background…";
+                    send();
+                    try {
+                        cacheApk(url, sha, size);
+                        downloaded = true;
+                        status = "Update downloaded and verified · ready for your approval";
+                    } catch (Exception downloadError) {
+                        Log.w("VelaUpdate", "Automatic APK download failed", downloadError);
+                        status = "Automatic download failed: " + downloadError.getMessage()
+                            + ". Select Download & install to retry.";
+                    }
+                } else {
+                    status = "New update available · select Download & install";
+                }
             } catch (Exception error) {
                 Log.w("VelaUpdate", "Update check failed", error);
                 status = "Update check failed: " + error.getMessage();
@@ -146,35 +175,78 @@ final class VelaUpdateController {
             } finally { busy = false; send(); }
         });
     }
+    /** Background-only download triggered by an opted-in setting; never starts installer. */
+    private void prefetch() {
+        if (busy || !available || downloaded || url.isEmpty() || sha.isEmpty()) return;
+        busy = true;
+        status = "Downloading update in the background…";
+        send();
+        final String address = url, digest = sha;
+        final long length = size;
+        worker.execute(() -> {
+            try {
+                cacheApk(address, digest, length);
+                downloaded = true;
+                status = "Update downloaded and verified · ready for your approval";
+            } catch (Exception error) {
+                Log.w("VelaUpdate", "Background APK download failed", error);
+                status = "Automatic download failed: " + error.getMessage();
+            } finally {
+                busy = false;
+                send();
+            }
+        });
+    }
+
+    private File cachedApk() {
+        return new File(new File(activity.getCacheDir(), "updates"), "vela-update.apk");
+    }
+
+    private boolean cachedValid(String digest, long expectedSize) {
+        File apk = cachedApk();
+        if (!apk.isFile() || apk.length() != expectedSize) return false;
+        try { return sha256(apk).equals(digest); }
+        catch (Exception ignored) { return false; }
+    }
+
+    /** Cache a checksum-verified APK. Download runs on the update worker, never UI. */
+    private File cacheApk(String address, String digest, long expectedSize) throws Exception {
+        File dir = new File(activity.getCacheDir(), "updates");
+        if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("Could not create update storage");
+        File apk = cachedApk();
+        if (cachedValid(digest, expectedSize)) return apk;
+        StatFs fs = new StatFs(dir.getAbsolutePath());
+        long required = expectedSize * 2 + 64L * 1024L * 1024L;
+        if (fs.getAvailableBytes() < required)
+            throw new IllegalStateException("Not enough TV storage. Free space in Sony Settings and retry.");
+        File temp = new File(dir, "vela-update.part");
+        if (temp.exists()) temp.delete();
+        try {
+            download(address, expectedSize, temp);
+            if (!sha256(temp).equals(digest))
+                throw new SecurityException("APK checksum does not match GitHub release");
+            if (apk.exists() && !apk.delete()) throw new IllegalStateException("Could not replace cached update");
+            if (!temp.renameTo(apk)) throw new IllegalStateException("Could not finalize download");
+            return apk;
+        } finally {
+            if (temp.exists()) temp.delete();
+        }
+    }
+
+    /** Deliberate TV interaction is required before Android installer is launched. */
     void install() {
         if (busy || !available || url.isEmpty() || sha.isEmpty()) {
             status = "Check for an available update first"; send(); return;
         }
         busy = true;
-        status = "Preparing update…";
+        status = downloaded ? "Opening Android installer…" : "Preparing update…";
         send();
-        final String expectedUrl = url, expectedSha = sha;
-        final long expectedSize = size;
+        final String address = url, digest = sha;
+        final long length = size;
         worker.execute(() -> {
             try {
-                File dir = new File(activity.getCacheDir(), "updates");
-                if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("Could not create update storage");
-                File apk = new File(dir, "vela-update.apk");
-                if (!apk.isFile() || apk.length() != expectedSize || !sha256(apk).equals(expectedSha)) {
-                    StatFs fs = new StatFs(dir.getAbsolutePath());
-                    long required = expectedSize * 2 + 64L * 1024L * 1024L;
-                    if (fs.getAvailableBytes() < required)
-                        throw new IllegalStateException("Not enough TV storage. Free space in Sony Settings and retry.");
-                    File temp = new File(dir, "vela-update.part");
-                    if (temp.exists()) temp.delete();
-                    download(expectedUrl, expectedSize, temp);
-                    if (!sha256(temp).equals(expectedSha)) {
-                        temp.delete();
-                        throw new SecurityException("APK checksum does not match GitHub release");
-                    }
-                    if (apk.exists() && !apk.delete()) throw new IllegalStateException("Could not replace cached update");
-                    if (!temp.renameTo(apk)) throw new IllegalStateException("Could not finalize download");
-                }
+                File apk = cacheApk(address, digest, length);
+                downloaded = true;
                 status = "Ready for Android installation approval";
                 send();
                 activity.runOnUiThread(() -> promptInstaller(apk));
