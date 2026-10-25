@@ -286,6 +286,7 @@ assert 'width:100vw;min-width:0;height:100vh' in css
 assert 'startup-avatar-grid' in js and 'startup-profile-name' in js
 assert "if(screen==='startupProfiles')return;" in js
 assert "document.body.classList.remove('booting')" in js
+assert "document.body.classList.remove('booting');listDirty=true;activeList()" in js
 
 # A refresh is not verified just because an older cache succeeded today.
 assert 'CalendarIcs.upcoming(feed,zone,day,30)' in calendar
