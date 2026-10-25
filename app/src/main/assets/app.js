@@ -23,7 +23,7 @@ var wallpapers=[
  {name:'Lavender Bay',src:'wallpapers/lavender-bay.webp',thumb:'wallpapers/thumb-lavender-bay.webp'}
 ];
 var screen='',cursor=0,controls=[],geometry=[],listDirty=true,focusedControl=null,iconCache={},pendingIcons={};
-var contextAppId='',contextFrom='',recentMax=5;
+var contextAppId='',contextFrom='',recentMax=5,panelHistory=[],startupChooserOpen=false;
 var lastCatalog=0,clockValue='',customPhoto='',toastTimer=null,clockTimer=null,updateStatus=null;
 var $=function(s){return document.querySelector(s);};
 var defaults=['com.google.android.youtube.tv','com.netflix.ninja','com.apple.atve.androidtv.appletv','com.niklabs.pp','com.wbd.stream','com.spotify.tv.android','com.disney.disneyplus','com.amazon.amazonvideo.livingroom'];
@@ -75,14 +75,14 @@ function setScenery(){var n=parseInt(scenery,10)||0;if(n<0||n>=wallpapers.length
  document.body.setAttribute('data-scenery',scenery);
  $('#wallpaper').style.backgroundImage=customPhoto?'url("'+customPhoto+'")':'url("'+wallpapers[n].src+'")';}
 function makeProfile(id,name,legacy){return {id:id,name:name,avatar:id==='tram'?'flower':id==='guest'?'guest':'initial',favorites:legacy&&legacy.favorites?legacy.favorites:null,
- layout:legacy&&legacy.layout||'dock',theme:legacy&&legacy.theme||'dark',scenery:legacy&&legacy.scenery||'0',font:'classic',clockFormat:'auto',recent:[],rotate:0,monitorEnabled:false};}
+ layout:legacy&&legacy.layout||'dock',theme:legacy&&legacy.theme||'dark',scenery:legacy&&legacy.scenery||'0',font:'classic',clockFormat:'auto',recent:[],usage:[],appSort:'name',rotate:0,monitorEnabled:false};}
 function currentProfile(){for(var i=0;i<profiles.length;i++)if(profiles[i].id===profileId)return profiles[i];return profiles[0];}
 function persistProfiles(){save('profile_data_v2',JSON.stringify({profiles:profiles.filter(function(p){return p.id!=='guest';})}));save('active_profile_v2',profileId==='guest'?'duong':profileId);}
 function persistAppearance(){var p=currentProfile();if(!p)return;p.favorites=fav.slice(0,8);p.layout=mode;p.theme=theme;p.scenery=scenery;p.font=fontStyle;p.rotate=rotationMinutes;p.monitorEnabled=monitorEnabled;p.clockFormat=clockFormat;persistProfiles();}
 function initProfiles(){var parsed=null;try{parsed=JSON.parse(get('profile_data_v2')||'null');}catch(e){}
  if(parsed&&Array.isArray(parsed.profiles)&&parsed.profiles.length){profiles=parsed.profiles.filter(function(p){return p&&p.id!=='guest'&&typeof p.id==='string'&&typeof p.name==='string';}).map(function(p){
    return {id:p.id,name:p.name.slice(0,24),avatar:p.avatar==='initial'?'initial':avatars[p.avatar]?p.avatar:(p.id==='tram'?'flower':'initial'),favorites:Array.isArray(p.favorites)?p.favorites.slice(0,8):null,
-    layout:p.layout==='list'?'list':'dock',theme:p.theme==='light'?'light':'dark',scenery:String(p.scenery||'0'),font:p.font==='modern'?'modern':'classic',clockFormat:['auto','12','24'].indexOf(p.clockFormat)>=0?p.clockFormat:'auto',recent:Array.isArray(p.recent)?p.recent.filter(function(v){return typeof v==='string';}).slice(0,5):[],rotate:p.rotate===30?30:0,monitorEnabled:p.monitorEnabled===true};
+    layout:p.layout==='list'?'list':'dock',theme:p.theme==='light'?'light':'dark',scenery:String(p.scenery||'0'),font:p.font==='modern'?'modern':'classic',clockFormat:['auto','12','24'].indexOf(p.clockFormat)>=0?p.clockFormat:'auto',recent:Array.isArray(p.recent)?p.recent.filter(function(v){return typeof v==='string';}).slice(0,5):[],usage:Array.isArray(p.usage)?p.usage.filter(function(v){return v&&typeof v.id==='string'&&Number.isFinite(v.at);}).slice(-750):[],appSort:['name','recent','week','month','quarter'].indexOf(p.appSort)>=0?p.appSort:'name',rotate:p.rotate===30?30:0,monitorEnabled:p.monitorEnabled===true};
  });}
  if(!profiles.length){var oldFav=null;try{var f=JSON.parse(get('favorites')||'null');if(Array.isArray(f)&&f.length)oldFav=f;}catch(e){}
    var legacy={favorites:oldFav,layout:get('layout')||'dock',theme:get('theme')||'dark',scenery:get('scenery')||'0'};
@@ -157,7 +157,31 @@ function appRow(act,title,right,sub,id){return row(act,title,right,sub).replace(
 function recentApps(){var p=currentProfile();return p&&Array.isArray(p.recent)?p.recent.map(byId).filter(Boolean):[];}
 function rememberApp(id){if(!byId(id))return;var p=currentProfile();if(!p)return;
  p.recent=[id].concat((p.recent||[]).filter(function(x){return x!==id&&!!byId(x);})).slice(0,recentMax);
+ var now=Date.now(),cutoff=now-91*86400000;
+ p.usage=(Array.isArray(p.usage)?p.usage:[]).filter(function(v){return v&&v.at>=cutoff&&v.at<=now;}).slice(-749);
+ p.usage.push({id:id,at:now});
  if(profileId!=='guest')persistProfiles();}
+function sortLabel(){var mode=currentProfile().appSort||'name';
+ return {name:'Name A–Z',recent:'Last opened',week:'Most opened · 7 days',month:'Most opened · 30 days',quarter:'Most opened · 90 days'}[mode]||'Name A–Z';}
+function orderedApps(){
+ var sorted=apps.slice(),p=currentProfile(),mode=p.appSort||'name',counts={},latest={},now=Date.now();
+ var limit=mode==='week'?7:mode==='month'?30:mode==='quarter'?90:90;
+ (p.usage||[]).forEach(function(v){if(v.at<now-limit*86400000||v.at>now)return;
+  counts[v.id]=(counts[v.id]||0)+1;latest[v.id]=Math.max(latest[v.id]||0,v.at);
+ });
+ var recentOrder={};(p.recent||[]).forEach(function(id,i){recentOrder[id]=i;});
+ sorted.sort(function(a,b){
+  if(mode==='recent'){
+   var ar=Object.prototype.hasOwnProperty.call(recentOrder,a.id)?recentOrder[a.id]:9999,
+       br=Object.prototype.hasOwnProperty.call(recentOrder,b.id)?recentOrder[b.id]:9999;
+   if(ar!==br)return ar-br;
+  }else if(mode!=='name'){
+   var diff=(counts[b.id]||0)-(counts[a.id]||0);if(diff)return diff;
+   diff=(latest[b.id]||0)-(latest[a.id]||0);if(diff)return diff;
+  }
+  return a.name.localeCompare(b.name);
+ });return sorted;
+}
 function openAppMenu(id){if(!byId(id))return;contextAppId=id;contextFrom=screen==='all'?'all':screen==='recent'?'recent':'';renderPanel('appMenu');}
 function recentPanel(){var rows=recentApps();return rows.length?'<div class="app-grid">'+rows.map(function(a){return tile(a,'launch');}).join('')+'</div><p class="library-footnote">Only apps launched through Vela are listed. Each saved profile has its own history.</p>':'<p class="library-footnote">Apps you open from Vela will appear here. Nothing is tracked in Netflix or YouTube.</p>';}
 
@@ -175,7 +199,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  if(type==='settings'){title='Settings';subtitle='A quieter TV, exactly how you like it.';
  body=row('customize','Personalize','Edit','Apps, wallpaper and screensaver')+row('monitorSettings','Baby monitor',monitorEnabled?'Visible':'Hidden','Optional camera button near Calendar')+row('profiles','Profiles',currentProfile().name,'Switch between layouts')+row('calendarSettings','Calendar',calVerified?'Verified':calConnected?'Saved':'Connect','Read-only calendar for this profile')+row('all','All apps',apps.length+' apps','Open installed applications')+(recentApps().length?row('recent','Recently opened',recentApps().length+' apps','Quickly relaunch an app'):'')+row('updates','Updates','Check','Production version')+row('recovery','About & recovery','Open','Original Sony Home and redirect controls');}
  else if(type==='all'){title='All apps';subtitle='Hold OK on an icon for quick actions.';
- body='<div class="app-grid">'+apps.map(function(a){return tile(a,'launch');}).join('')+'</div>'+(apps.length?'':'<p>Loading installed apps…</p>');}
+ body='<div class="app-grid">'+orderedApps().map(function(a){return tile(a,'launch');}).join('')+'</div>'+(apps.length?'<p class="library-footnote">Sorted by '+esc(sortLabel())+' · Change under Gear → Apps</p>':'<p>Loading installed apps…</p>');}
  else if(type==='recent'){title='Recently opened';subtitle='Just your last five Vela launches, on this profile.';body=recentPanel();}
  else if(type==='appMenu'){var app=byId(contextAppId),pinned=fav.indexOf(contextAppId)>=0;title=app?app.name:'App actions';subtitle='Hold OK on an app to open these quick actions.';
  body=app?'<div class="context-app">'+icon(app)+'<span>'+esc(app.name)+'</span></div>'+appRow('launch','Open app','Open','Launch this application',contextAppId)+appRow('togglePin',pinned?'Remove from Home':'Add to Home',pinned?'Unpin':'Pin',pinned?'Keep in All apps':'Show in your favorites dock',contextAppId)+appRow('appInfo','App information','Settings','Open the Android app settings for this app',contextAppId):'<p>App no longer installed.</p>';}
