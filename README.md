@@ -61,8 +61,9 @@ On consumer Samsung TVs, Vela cannot replace the system Home or automatically
 appear at power-on. It can ask for a profile when the user opens the Vela app.
 
 The startup chooser uses an opaque near-black cinematic backdrop regardless of
-the previously selected wallpaper, with a restrained glass-like profile shelf,
-monochrome icon tiles and names below. It blocks Home until a profile is
+the previously selected wallpaper, with floating glass-like profile tiles,
+no enclosing shelf or selection outlines, and names below. Focus gently brightens
+the chosen tile with a soft glow. It blocks Home until a profile is
 chosen; normal profile management remains in the compact settings drawer.
 The glass effect uses layered translucency without runtime blur on TV hardware.
 Settings headings and action labels use consistent Title Case. This visual-only
