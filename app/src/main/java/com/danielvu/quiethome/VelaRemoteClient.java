@@ -47,6 +47,7 @@ final class VelaRemoteClient {
         return instance;
     }
     boolean enabled() { return prefs.getBoolean("enabled", false) && token().length() == 64; }
+    boolean revocationPending() { return !prefs.getBoolean("enabled", false) && token().length() == 64; }
     private String token() {
         if (cachedToken != null) return cachedToken;
         cachedToken = decrypt(prefs.getString("token_encrypted", ""));
@@ -108,14 +109,18 @@ final class VelaRemoteClient {
     }
     void disable(Callback callback) {
         String oldToken = token();
-        prefs.edit().remove("token_encrypted").putBoolean("enabled", false).apply();
-        cachedToken = "";
+        // Stop locally immediately, but retain the encrypted device credential
+        // until Cloudflare confirms revocation. An offline failure must not
+        // strand the owner with an irrevocably enrolled device.
+        prefs.edit().putBoolean("enabled", false).apply();
         polling = false;
         generation++;
         new Thread(() -> {
             try { if (oldToken.length() == 64) post("/api/tv/disable", oldToken, new JSONObject());
+                prefs.edit().remove("token_encrypted").apply();
+                cachedToken = "";
                 callback.done("Remote access disabled."); }
-            catch (Exception ex) { callback.done("Remote disabled on TV; revoke its enrollment in Cloudflare before re-pairing."); }
+            catch (Exception ex) { callback.done("Remote paused. Revoke again when Cloudflare is reachable."); }
         }, "VelaRemoteDisable").start();
     }
     synchronized void start() {

@@ -694,6 +694,9 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public boolean remoteEnabled() {
             return VelaRemoteClient.get(MainActivity.this).enabled();
         }
+        @JavascriptInterface public boolean remoteRevocationPending() {
+            return VelaRemoteClient.get(MainActivity.this).revocationPending();
+        }
         @JavascriptInterface public void pairWebRemote() {
             runOnUiThread(() -> {
                 EditText pin = new EditText(MainActivity.this);

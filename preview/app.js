@@ -267,6 +267,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  body=(bridge&&bridge.remoteEnabled&&bridge.remoteEnabled()?row('remotePair','Reconnect this TV','Connected','Confirm your Cloudflare PIN again')+
  row('remoteDisable','Disable remote','Revoke','Disconnect controllers and revoke this TV key'):
  row('remotePair','Enable remote','Connect','Enter the private Cloudflare PIN on this TV'))+
+ (bridge&&bridge.remoteRevocationPending&&bridge.remoteRevocationPending()?row('remoteDisable','Retry Cloudflare revocation','Pending','The TV is paused until Cloudflare confirms removal'):'')+
  row('remoteAccessibility','Control other apps','Sony settings','Optional accessibility service; app compatibility varies')+
  '<p class="library-footnote">Requires the same home Internet connection and your private 8–12 digit PIN. Cloudflare allows one controller at a time. Your PIN is never saved by Vela. The physical Sony remote remains available.</p>';
  }

@@ -22,7 +22,7 @@ jobs:
           [[ "$VELA_REMOTE_PIN" =~ ^[0-9]{8,12}$ ]] || { echo 'VELA_REMOTE_PIN must be 8–12 digits'; exit 1; }
       - name: Install Worker tooling
         working-directory: remote-worker
-        run: npm install --ignore-scripts --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Deploy Worker
         working-directory: remote-worker
         env:
