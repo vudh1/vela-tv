@@ -31,6 +31,25 @@ function sameString(a, b) {
     diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
   return diff === 0;
 }
+function ipv6LanPrefix(ip) {
+  // Public IPv6 addresses commonly rotate their interface-id within a home
+  // /64. Comparing the complete address would incorrectly reject a phone and
+  // TV on the same Wi-Fi. A PIN and exclusive lease remain mandatory.
+  if (!/^[0-9a-f:]+$/i.test(ip) || !ip.includes(':')) return '';
+  const pieces = ip.toLowerCase().split('::');
+  if (pieces.length > 2) return '';
+  const left = pieces[0] ? pieces[0].split(':') : [];
+  const right = pieces.length === 2 && pieces[1] ? pieces[1].split(':') : [];
+  if (left.some(x => !x || x.length > 4) || right.some(x => !x || x.length > 4)) return '';
+  const missing = 8 - left.length - right.length;
+  if ((pieces.length === 2 && missing < 1) || (pieces.length === 1 && missing !== 0)) return '';
+  const words = [...left, ...Array(missing).fill('0'), ...right];
+  if (words.length !== 8) return '';
+  return words.slice(0, 4).map(x => x.padStart(4, '0')).join(':');
+}
+function sameHomeNetwork(a, b) {
+  return a === b || (!!ipv6LanPrefix(a) && ipv6LanPrefix(a) === ipv6LanPrefix(b));
+}
 function bearer(req) {
   const match = /^Bearer ([a-f0-9]{64})$/i.exec(req.headers.get('authorization') || '');
   return match ? match[1].toLowerCase() : '';
@@ -132,7 +151,7 @@ export class RemoteRoom {
     }
     const online = !!state.tvHash && state.tvSeen > now - TV_ONLINE_MS;
     const active = !!state.controllerHash && state.lease > now;
-    const sameNetwork = online && state.tvIp === ip;
+    const sameNetwork = online && sameHomeNetwork(state.tvIp, ip);
     const persist = () => this.ctx.storage.put('room', state);
     const rateKey = await sha256(ip);
     const times = state.failures[rateKey] || [];
@@ -183,7 +202,7 @@ export class RemoteRoom {
         await this.ctx.storage.delete('room');
         return json({ ok: true });
       }
-      if (state.tvIp !== ip) {
+      if (!sameHomeNetwork(state.tvIp, ip)) {
         // Network changed; invalidate the old controller's authorization.
         state.controllerHash = ''; state.lease = 0; state.commands = [];
       }
@@ -198,7 +217,7 @@ export class RemoteRoom {
     }
     const token = bearer(req);
     if (!token || !active || !sameString(await sha256(token), state.controllerHash)
-        || !sameString(ip, state.controllerIp) || !sameNetwork)
+        || !sameHomeNetwork(ip, state.controllerIp) || !sameNetwork)
       return json({ error: 'session_expired' }, 401);
     if (path === '/api/release') {
       state.controllerHash = ''; state.lease = 0; state.commands = [];

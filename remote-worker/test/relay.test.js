@@ -104,3 +104,14 @@ test('lease expires without heartbeat; stale controller cannot be revived', asyn
     assert.notEqual(second.body.token, first.body.token);
   } finally { Date.now = originalClock; }
 });
+test('IPv6 /64 household prefix works with private interface addresses', async () => {
+  const env = setup();
+  const tvIp = '2001:db8:45:78::a501';
+  const phoneIp = '2001:0db8:0045:0078::b110';
+  const elsewhere = '2001:db8:45:79::b110';
+  assert.equal((await call(env, '/api/tv/enroll', { origin: null, ip: tvIp,
+    data: { pin: PIN, tvToken: TV_TOKEN } })).status, 200);
+  assert.equal((await call(env, '/api/status', { ip: phoneIp })).body.sameNetwork, true);
+  assert.equal((await call(env, '/api/status', { ip: elsewhere })).body.sameNetwork, false);
+  assert.equal((await call(env, '/api/connect', { ip: phoneIp, data: { pin: PIN } })).status, 200);
+});

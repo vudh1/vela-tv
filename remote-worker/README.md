@@ -40,4 +40,4 @@ Alternatively, set the following **GitHub Actions secrets** in `vudh1/velatv` an
 - Commands outside the exact allowlist → rejected; worker origin/CORS allows only `https://vudh1.github.io`.
 - Test Sony Vela focus movement, OK, Back, Home, soundbar/CEC volume, playback, standby/reboot, Wi-Fi change, and streaming-app focus separately. Do not label unsupported system actions as working.
 
-This design enforces matching **public IP**, not identical private IP. Phones and TVs must generally have different private LAN addresses; comparing those for equality would reject a valid home network.
+This design enforces a matching **public IPv4 address or IPv6 /64 prefix**, not identical private IP. Phones and TVs must generally have different private LAN addresses; comparing those for equality would reject a valid home network. If one client uses IPv4 and the other uses IPv6, Cloudflare cannot prove shared egress and will deny the connection rather than bypass the check.
