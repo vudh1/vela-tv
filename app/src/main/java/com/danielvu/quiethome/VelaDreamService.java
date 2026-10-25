@@ -30,9 +30,9 @@ import java.util.Locale;
 public final class VelaDreamService extends DreamService {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private FrameLayout root;
-    private LinearLayout clockGroup, eventBlock;
+    private LinearLayout clockGroup, eventBlock, weatherGroup;
     private ImageView scenery;
-    private TextView time, date;
+    private TextView time, date, weatherNow, weatherWhere, weatherRain;
     private int dp(float n) { return Math.round(n * getResources().getDisplayMetrics().density); }
     private String currentProfile() {
         return getSharedPreferences("quiet-home", Context.MODE_PRIVATE)
@@ -91,6 +91,30 @@ public final class VelaDreamService extends DreamService {
         view.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         view.setSingleLine(true); view.setEllipsize(TextUtils.TruncateAt.END);
         return view;
+    }
+    private void showWeather(String text) {
+        if (weatherGroup == null || weatherNow == null) return;
+        try {
+            JSONObject s = new JSONObject(text);
+            long age = System.currentTimeMillis() - s.optLong("updatedAt", 0);
+            double temp = s.optDouble("temperature", Double.NaN);
+            if (age < 0 || age > 90 * 60_000L || !Double.isFinite(temp)) {
+                weatherGroup.setVisibility(View.GONE);return;
+            }
+            String unit = "C".equals(s.optString("unit")) ? "C" : "F";
+            String condition = s.optString("condition", "Cloudy");
+            weatherNow.setText(Math.round(temp) + "°" + unit + "  ·  " + condition);
+            String city = s.optString("city", ""),country = s.optString("country", "");
+            String area = "US".equals(country) ? s.optString("region", "") : country;
+            weatherWhere.setText(city + (!city.isEmpty() && !area.isEmpty() ? ", " : "") + area);
+            double precip = s.optDouble("precipitation", 0);
+            String u = "in".equals(s.optString("precipUnit")) ? "in" : "mm";
+            String current = precip > 0 ? "Precip now " + String.format(Locale.US,u.equals("in")?"%.2f":"%.1f",precip) + " " + u : "Dry now";
+            Object chance = s.opt("rainChance");
+            if (chance instanceof Number) current += "  ·  " + ((Number)chance).intValue() + "% next hour";
+            weatherRain.setText(current);
+            weatherGroup.setVisibility(View.VISIBLE);
+        } catch (Exception ignored) { weatherGroup.setVisibility(View.GONE); }
     }
     /** Current events stay until their end; upcoming window is two hours. */
     private void refreshEvents() {
@@ -160,11 +184,18 @@ public final class VelaDreamService extends DreamService {
                 Math.min(Math.round(w * .41f), dp(650)), -2, Gravity.END | Gravity.BOTTOM);
             right.rightMargin = horizontal; right.bottomMargin = bottom;
             eventBlock.setLayoutParams(right);
+            if (weatherGroup != null) {
+                FrameLayout.LayoutParams weather = new FrameLayout.LayoutParams(
+                    Math.min(Math.round(w * .35f), dp(550)), -2, Gravity.END | Gravity.TOP);
+                weather.rightMargin = horizontal;weather.topMargin = Math.max(dp(35),Math.round(h*.18f));
+                weatherGroup.setLayoutParams(weather);
+            }
             int step = (int) ((System.currentTimeMillis() / 300000L) % 4);
             float[] dx = {0f, 1f, 0f, -1f}, dy = {0f, 0f, -1f, 1f};
             float x = dp(9) * dx[step], y = dp(7) * dy[step];
             clockGroup.setTranslationX(x); clockGroup.setTranslationY(y);
             eventBlock.setTranslationX(x); eventBlock.setTranslationY(y);
+            if (weatherGroup != null) {weatherGroup.setTranslationX(-x);weatherGroup.setTranslationY(-y);}
         });
     }
     private final Runnable ticker = new Runnable() {
@@ -174,6 +205,9 @@ public final class VelaDreamService extends DreamService {
             time.setText(DateFormat.getTimeFormat(VelaDreamService.this).format(now));
             date.setText(new SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(now));
             refreshEvents(); positionContent();
+            // Native dream refresh is independent of Home WebView timers.
+            VelaWeatherRepository.refresh(VelaDreamService.this,
+                json -> handler.post(() -> showWeather(json)));
             handler.postDelayed(this, 60000L - (System.currentTimeMillis() % 60000L) + 60L);
         }
     };
@@ -215,14 +249,42 @@ public final class VelaDreamService extends DreamService {
         glass.setStroke(dp(1), Color.argb(41, 219, 236, 223));
         eventBlock.setBackground(glass);
         root.addView(eventBlock, new FrameLayout.LayoutParams(-2, -2, Gravity.END | Gravity.BOTTOM));
+        weatherGroup = new LinearLayout(this);
+        weatherGroup.setGravity(Gravity.START);
+        weatherGroup.setOrientation(LinearLayout.VERTICAL);
+        weatherGroup.setPadding(dp(20), dp(15), dp(20), dp(15));
+        GradientDrawable weatherGlass = new GradientDrawable();
+        weatherGlass.setColor(Color.argb(38, 12, 29, 32));
+        weatherGlass.setCornerRadius(dp(17));
+        weatherGlass.setStroke(dp(1),Color.argb(25, 230, 244, 234));
+        weatherGroup.setBackground(weatherGlass);
+        TextView weatherHeader = label("LOCAL WEATHER  ·  APPROX.", 11, Color.rgb(186,207,197));
+        weatherHeader.setLetterSpacing(.16f);
+        weatherGroup.addView(weatherHeader, new LinearLayout.LayoutParams(-1, -2));
+        weatherNow = label("", 30, Color.rgb(245, 250, 246));
+        LinearLayout.LayoutParams currentParams = new LinearLayout.LayoutParams(-1,-2);
+        currentParams.topMargin = dp(8);
+        weatherGroup.addView(weatherNow,currentParams);
+        weatherWhere = label("", 14, Color.rgb(217, 231, 221));
+        LinearLayout.LayoutParams placeParams = new LinearLayout.LayoutParams(-1,-2);
+        placeParams.topMargin=dp(4);
+        weatherGroup.addView(weatherWhere,placeParams);
+        weatherRain = label("", 13, Color.rgb(188, 207, 197));
+        LinearLayout.LayoutParams rainParams = new LinearLayout.LayoutParams(-1,-2);
+        rainParams.topMargin=dp(6);
+        weatherGroup.addView(weatherRain,rainParams);
+        weatherGroup.setVisibility(View.GONE);
+        root.addView(weatherGroup,new FrameLayout.LayoutParams(-2,-2,Gravity.END | Gravity.TOP));
         setContentView(root); refreshEvents(); positionContent();
+        showWeather(VelaWeatherRepository.cached(this));
     }
     @Override public void onDreamingStarted() { super.onDreamingStarted(); handler.removeCallbacks(ticker); ticker.run(); }
     @Override public void onDreamingStopped() { handler.removeCallbacks(ticker); super.onDreamingStopped(); }
     @Override public void onDetachedFromWindow() {
         handler.removeCallbacks(ticker);
         if (scenery != null) scenery.setImageDrawable(null);
-        scenery = null; clockGroup = null; root = null; time = null; date = null; eventBlock = null;
+        scenery = null; clockGroup = null; root = null; time = null; date = null;
+        eventBlock = null; weatherGroup = null;weatherNow = null;weatherWhere = null;weatherRain = null;
         super.onDetachedFromWindow();
     }
 }

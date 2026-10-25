@@ -9,7 +9,8 @@ Samsung build stages it with `samsung/config.xml` and `tizen-bridge.js`.
 - Available in this source: offline wallpaper/clock, saved profiles, profile
   choice on Vela app launch, favorites, app browsing, per-profile usage sorting,
   Tizen application launch requests, Samsung remote navigation, three app-label
-  layouts, and encrypted private Google Calendar/BallerWatch iCal subscriptions.
+  layouts, ambient IP-local weather, and encrypted private Google
+  Calendar/BallerWatch iCal subscriptions.
 - Like CleanFrame, Vela includes dock/list layouts, wallpaper gallery and
   rotation, light/dark contrast, app favorites, streaming-app discovery,
   per-profile appearance and app sorting. Built-in artwork has a UHD option;
@@ -26,6 +27,9 @@ Samsung build stages it with `samsung/config.xml` and `tizen-bridge.js`.
   downloads and UI behavior still need verification on this QN85 model**.
   If the TV blocks a feed, Vela keeps the encrypted link and last verified
   cache, and shows an unverified status; it does not silently use a proxy.
+- Weather uses public-IP city detection and Open-Meteo's current conditions
+  and near-term precipitation. Requests run after Home initializes, are
+  cached, and cannot block opening an app. It is not the Samsung screensaver.
 - Launching preinstalled streaming apps from another app is firmware-dependent;
   the application API may reject individual targets. If so, Samsung Home remains
   the way to open them.

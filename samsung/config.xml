@@ -11,6 +11,8 @@
     <tizen:privilege name="http://tizen.org/privilege/internet"/>
     <access origin="https://calendar.google.com" subdomains="false"/>
     <access origin="https://ballerwatch-web.vudhone.workers.dev" subdomains="false"/>
+    <access origin="https://ip-info.com" subdomains="false"/>
+    <access origin="https://api.open-meteo.com" subdomains="false"/>
     <content src="index.html"/>
     <icon src="icon.png"/>
     <name>Vela TV</name>

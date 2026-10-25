@@ -3,6 +3,28 @@
 Minimalist TV Home experience. One shared interface with platform-specific
 integration and installation targets.
 
+## Ambient weather
+
+Vela Home shows a small, non-interactive weather card with current
+temperature/conditions, approximate city/region, precipitation now and the
+next-hour rain probability. On Sony, the **native Vela Clock screensaver** also
+shows the weather near the upper-right, leaving the clock at the lower-left
+and calendar events at the lower-right. On Samsung, weather appears within
+the Vela app; Samsung's system screensaver remains unchanged.
+
+Weather is approximate, based on the TV's **public internet IP** (not GPS or
+the router's private 192.168.x.x address). It may identify a neighboring city
+or VPN/ISP exit point. Vela refreshes asynchronously every 10–15 minutes and
+rechecks its IP location about every 30 minutes, so changing Wi-Fi or moving
+does not require reconfiguration. Weather never intercepts remote focus, delays
+app launch, or shows a network-error modal. The last verified conditions can
+appear briefly while refreshing and are hidden when older than 90 minutes.
+
+IP geolocation comes from [IP Info](https://ip-info.com/), and weather from
+[Open-Meteo](https://open-meteo.com/) (CC BY 4.0 attribution). Provider credit
+is kept here and in About, not on Home or screensaver surfaces. No public IP
+address, credentials, or ISP/network identifier is persisted.
+
 | Device | Target | Build | Capability |
 | --- | --- | --- | --- |
 | Sony BRAVIA / Android TV | Signed `.apk` | `bash scripts/build.sh` | Launcher, native clock/screensaver, private calendar, updater |

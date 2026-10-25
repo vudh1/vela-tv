@@ -302,3 +302,31 @@ body[data-app-labels="names"] .favorites.list{width:clamp(154px,19vw,270px)}
 body[data-app-labels="names"] .favorites.list .app-card{width:100%}
 body[data-app-labels="both"] .favorites.list .app-card{width:clamp(105px,13vw,170px)}
 body[data-app-labels="both"] .favorites.list{width:clamp(110px,13vw,177px)}
+
+/* Weather: small, passive ambient information opposite the clock. It cannot
+   receive remote focus or obscure the main favorite-app dock. */
+.weather-card{position:fixed;top:27vh;right:6.5vw;width:min(300px,27vw);z-index:3;
+ display:flex;flex-direction:column;align-items:flex-start;gap:7px;pointer-events:none;
+ padding:18px 20px 18px;border-radius:17px;
+ background:rgba(8,24,29,.17);color:rgba(240,247,242,.91);border:1px solid rgba(239,250,242,.105);
+ text-shadow:0 1px 9px rgba(0,0,0,.17)}
+.weather-card.hidden{display:none!important}
+.weather-kicker{font-size:10px;font-weight:700;letter-spacing:.18em;opacity:.77;white-space:nowrap}
+.weather-kicker span{font-weight:400;letter-spacing:.045em;opacity:.68}
+.weather-main{display:flex;align-items:center;gap:10px;width:100%;min-height:58px}
+.weather-symbol{flex:none;width:49px;height:49px;color:rgba(236,248,238,.87)}
+.weather-symbol .weather-cloud,.weather-symbol .weather-rain{display:none}
+.weather-card[data-kind="cloud"] .weather-symbol .weather-cloud,
+.weather-card[data-kind="rain"] .weather-symbol .weather-cloud,
+.weather-card[data-kind="snow"] .weather-symbol .weather-cloud{display:block}
+.weather-card[data-kind="cloud"] .weather-symbol .weather-sun,
+.weather-card[data-kind="rain"] .weather-symbol .weather-sun,
+.weather-card[data-kind="snow"] .weather-symbol .weather-sun{display:none}
+.weather-card[data-kind="rain"] .weather-symbol .weather-rain{display:block}
+.weather-temp{font:400 clamp(31px,2.8vw,45px)/1 Georgia,serif;letter-spacing:-.06em;white-space:nowrap}
+.weather-condition{font-size:12px;line-height:1.28;opacity:.86;min-width:0}
+.weather-location{font-size:12px;font-weight:600;letter-spacing:.01em;max-width:100%;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.weather-precip{font-size:11px;line-height:1.5;color:rgba(219,236,226,.75)}
+body.light .weather-card{background:rgba(237,246,239,.15);color:#16373c;border-color:rgba(18,57,56,.13);text-shadow:none}
+body.light .weather-precip{color:rgba(13,50,51,.72)}
+@media(max-width:950px){.weather-card{top:20vh;right:4vw;width:min(260px,29vw);padding:12px 14px}.weather-symbol{width:36px;height:36px}.weather-main{gap:6px}.weather-temp{font-size:29px}.weather-condition{font-size:11px}}

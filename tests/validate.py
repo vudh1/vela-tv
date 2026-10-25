@@ -5,7 +5,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 r=Path(__file__).resolve().parents[1]
 asset=r/'app/src/main/assets'
-for f in ['app.js','style.css','index.html','landscape.svg','landscape-1.svg','landscape-2.svg','landscape-3.svg']:
+for f in ['app.js','style.css','index.html','weather.js','landscape.svg','landscape-1.svg','landscape-2.svg','landscape-3.svg']:
     assert (asset/f).read_bytes()==(r/'preview'/f).read_bytes(),f
 js=(asset/'app.js').read_text();css=(asset/'style.css').read_text()
 assert 'favoritesEditor()' in js and "data-act=\\\"swap\\\"" not in js # controls generated dynamically
@@ -21,6 +21,13 @@ assert 'getCachedApps' in js and 'catalogRefreshed' in js
 assert 'geometry=controls.map' in js
 assert 'avatarSvg' in js and 'avatarPicker' in js
 assert 'calendarPeek' in (asset/'index.html').read_text()
+assert 'id="weatherCard"' in (asset/'index.html').read_text()
+assert 'weatherReady:' in js and 'VelaWeatherClient.start()' in js
+assert '.weather-card' in css and 'pointer-events:none' in css
+weather_js=(asset/'weather.js').read_text()
+assert "https://ip-info.com/json" in weather_js and "https://api.open-meteo.com/v1/forecast" in weather_js
+assert 'MAX_AGE=90*60000' in weather_js and 'setTimeout(refresh,900)' in weather_js
+assert 'window.location' not in weather_js and 'weather_snapshot_v1' in weather_js
 assert 'receiveCalendar' in js and 'calendarState' in js
 assert 'app-monogram' not in js and 'vela-icons.local/icon/' in js
 main=(r/'app/src/main/java/com/danielvu/quiethome/MainActivity.java').read_text()
@@ -40,6 +47,7 @@ assert any(s.get(a+'name')=='.VelaDreamService' for s in app.findall('service'))
 for script in ['build.sh','tv.sh','profile.sh']:
     subprocess.run(['bash','-n',str(r/'scripts'/script)],check=True)
 subprocess.run(['node','--check',str(asset/'app.js')],check=True)
+subprocess.run(['node','--check',str(asset/'weather.js')],check=True)
 assert 'Vela-2.5.apk' in (r/'scripts/build.sh').read_text()
 assert 'Vela-2.5.apk' in (r/'scripts/tv.sh').read_text()
 print('PASS static UI, native bridge, screensaver, updater, no-destructive-install and scripts')
@@ -180,6 +188,12 @@ dream=(r/'app/src/main/java/com/danielvu/quiethome/VelaDreamService.java').read_
 calendar=(r/'app/src/main/java/com/danielvu/quiethome/VelaCalendarController.java').read_text()
 assert 'cachedEventsForDream(this, currentProfile())' in dream
 assert 'positionContent()' in dream and 'Math.min(3, events.size())' in dream
+assert 'VelaWeatherRepository.refresh' in dream and 'showWeather(' in dream
+weather_native=(r/'app/src/main/java/com/danielvu/quiethome/VelaWeatherRepository.java').read_text()
+assert 'weather_cache_v1' in weather_native and 'weather_location_v1' in weather_native
+assert 'Executors.newSingleThreadExecutor' in weather_native and 'getApplicationContext()' in weather_native
+assert 'setConnectTimeout(5500)' in weather_native and 'weather_data_v1' not in weather_native
+assert 'requestWeather(boolean ignoredForce)' in main
 assert 'Gravity.START | Gravity.BOTTOM' in dream and 'Gravity.END | Gravity.BOTTOM' in dream
 assert 'eventBlock.setTranslationX(x)' in dream and 'clockGroup.setTranslationX(x)' in dream
 assert 'static JSONArray cachedEventsForDream(Context ctx, String profile)' in calendar
@@ -202,7 +216,7 @@ assert 'markNextViewingSession();' not in onresume.split('if (!screenIsInteracti
 assert 'Intent.ACTION_SCREEN_OFF' in main
 
 # Samsung uses the same UI with a separate Tizen adapter, not Android APK APIs.
-for f in ['app.js','style.css','index.html','tizen-bridge.js','tizen-calendar.js','tizen-private-calendar.js']:
+for f in ['app.js','style.css','index.html','weather.js','tizen-bridge.js','tizen-calendar.js','tizen-private-calendar.js']:
     assert (asset/f).read_bytes()==(r/'preview'/f).read_bytes(),f
 tizen=(asset/'tizen-bridge.js').read_text()
 assert "window.VelaPlatform = {kind:'tizen'}" in tizen
@@ -224,6 +238,8 @@ assert config.find(t+'profile').get('name')=='tv'
 assert any(p.get('name')=='http://tizen.org/privilege/appmanager.launch' for p in config.findall(t+'privilege'))
 assert any(p.get('name')=='http://tizen.org/privilege/internet' for p in config.findall(t+'privilege'))
 assert not any(p.get('name')=='http://tizen.org/privilege/keymanager' for p in config.findall(t+'privilege'))
+origins=[x.get('origin') for x in config.findall('{http://www.w3.org/ns/widgets}access')]
+assert 'https://ip-info.com' in origins and 'https://api.open-meteo.com' in origins
 subprocess.run(['bash','-n',str(r/'scripts/build-tizen.sh')],check=True)
 subprocess.run(['bash','-n',str(r/'scripts/device.sh')],check=True)
 print('PASS cold-process profile fallback, calm two-column screensaver and Samsung Tizen staging')

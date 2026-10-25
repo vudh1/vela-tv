@@ -740,6 +740,10 @@ public final class MainActivity extends Activity {
         }
         @JavascriptInterface public String volumeSupportMessage() { return MainActivity.this.volumeSupportMessage(); }
         @JavascriptInterface public void requestApps() { requestAppsAsync(); }
+        @JavascriptInterface public void requestWeather(boolean ignoredForce) {
+            VelaWeatherRepository.refresh(MainActivity.this, json ->
+                sendToJs("QH.weatherReady(" + JSONObject.quote(json) + ")"));
+        }
         @JavascriptInterface public void requestAppIcon(String id) { requestIconAsync(id); }
         @JavascriptInterface public void requestWallpaper() { requestWallpaperAsync(); }
         private boolean isAllowedUiSetting(String key) {
