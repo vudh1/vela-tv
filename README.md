@@ -28,3 +28,23 @@ When `production` receives a new commit, Actions builds and signs `Vela-release.
 ## Security and compatibility
 
 Never commit signing keystores (`*.jks`), APKs, calendar iCal URLs, access tokens or passwords. Preserve the app package name `com.danielvu.quiethome` and the existing signing certificate to allow Android upgrades. Keep the original APK as a recovery copy and the original signing key safely backed up.
+
+## BallerWatch calendar subscription
+
+Vela accepts a read-only iCalendar (`.ics`) URL from the existing Google Calendar
+secret-feed format **or** from the BallerWatch Worker at
+`https://ballerwatch-web.vudhone.workers.dev/web/calendar.ics`. In BallerWatch,
+open Settings → Share my calendar and copy the generated URL with your RATS,
+pickup and watched professional-sports selections.
+
+On the TV, choose **Gear → Calendar → Connect with phone** (or Enter on TV)
+and paste the URL. Vela verifies the feed over HTTPS, keeps the address in
+encrypted per-profile native preferences, and refreshes about every 15 minutes.
+There is no Google login, paid provider or additional TV permission required.
+
+Current limitation: Vela stores one calendar subscription per profile;
+adding BallerWatch replaces that profile's prior Google iCal subscription.
+To change the teams published by BallerWatch, copy and paste the updated feed
+URL again. Match feeds are public fixtures only; do not put private details in
+a calendar URL. Vela accepts only the approved Google and BallerWatch hosts,
+with no redirects to arbitrary external services.
