@@ -79,6 +79,19 @@ public final class MainActivity extends Activity {
     private VelaUpdateController updater;
     private VelaCalendarController calendar;
     private VelaPairingServer pairing;
+    // TV standby is not the same as leaving Vela to use a streaming app.
+    // Receiver lives for the launcher process; an Android kill during standby
+    // may prevent wake detection, so a guaranteed wake prompt is not possible.
+    private boolean homeResumed = false;
+    private final BroadcastReceiver tvPower = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
+                prefs.edit().putBoolean("profile_choose_on_next_home", true).apply();
+            } else if (Intent.ACTION_SCREEN_ON.equals(intent.getAction()) && homeResumed) {
+                sendToJs("QH && QH.checkWakeProfilePrompt && QH.checkWakeProfilePrompt()");
+            }
+        }
+    };
     private final BroadcastReceiver packagesChanged = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
             synchronized (MainActivity.this) { iconCache.clear(); }
@@ -122,6 +135,10 @@ public final class MainActivity extends Activity {
         packageFilter.addAction(Intent.ACTION_PACKAGE_REPLACED);
         packageFilter.addDataScheme("package");
         registerReceiver(packagesChanged, packageFilter);
+        IntentFilter powerFilter = new IntentFilter();
+        powerFilter.addAction(Intent.ACTION_SCREEN_OFF);
+        powerFilter.addAction(Intent.ACTION_SCREEN_ON);
+        registerReceiver(tvPower, powerFilter);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
@@ -183,6 +200,7 @@ public final class MainActivity extends Activity {
 
     @Override public void onResume() {
         super.onResume();
+        homeResumed = true;
         startVolumeObservation();
         if (web != null && javascriptReady) {
             // Clock and stale app catalog refresh when Android resumes a throttled WebView.
@@ -192,6 +210,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onPause() {
+        homeResumed = false;
         stopVolumeObservation();
         if (pendingLongSelect != null) longSelectHandler.removeCallbacks(pendingLongSelect);
         pendingLongSelect = null;
@@ -208,6 +227,7 @@ public final class MainActivity extends Activity {
             web.removeJavascriptInterface("QuietTV"); web.destroy(); web = null;
         }
         try { unregisterReceiver(packagesChanged); } catch (Exception ignored) { }
+        try { unregisterReceiver(tvPower); } catch (Exception ignored) { }
         if (updater != null) updater.shutdown();
         if (pairing != null) pairing.stop();
         if (calendar != null) calendar.shutdown();
@@ -638,6 +658,19 @@ public final class MainActivity extends Activity {
     }
 
     public final class Bridge {
+        @JavascriptInterface public boolean wakeProfilePromptEnabled() {
+            return prefs.getBoolean("profile_prompt_enabled", true);
+        }
+        @JavascriptInterface public void setWakeProfilePromptEnabled(boolean enabled) {
+            prefs.edit().putBoolean("profile_prompt_enabled", enabled).apply();
+        }
+        @JavascriptInterface public boolean consumeWakeProfilePrompt() {
+            if (!prefs.getBoolean("profile_prompt_enabled", true)) return false;
+            boolean pending = prefs.getBoolean("profile_choose_on_next_home", false);
+            if (pending) prefs.edit().putBoolean("profile_choose_on_next_home", false).apply();
+            return pending;
+        }
+
         @JavascriptInterface public void loadCalendar(String profile, boolean force) { calendar.load(profile,force); }
         @JavascriptInterface public void pairCalendar(String profile) {
             // Called from Android WebView bridge thread, never block the UI.
