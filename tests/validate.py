@@ -184,7 +184,7 @@ assert 'setWakeProfilePromptEnabled(boolean enabled)' in main
 assert 'QH && QH.checkWakeProfilePrompt' in main
 assert 'function checkWakeProfilePrompt()' in js
 assert 'checkWakeProfilePrompt:checkWakeProfilePrompt' in js
-assert "else if(type==='startupProfiles')" in js and 'Who\'s watching?' in js
+assert "else if(type==='startupProfiles')" in js and 'Who\'s Watching?' in js
 assert 'startup-avatar-grid' in js and 'startup-footer' in js
 assert 'function goBack()' in js and "else if(key==='left'&&screen)goBack()" in js
 for screen in ['homeSettings','lifeSettings','appsSettings','deviceSettings','appSort','homeApps','screensaverSettingsPanel']:
@@ -296,7 +296,10 @@ assert 'ACTION_SCROLL_FORWARD' in navigation and 'ACTION_SCROLL_BACKWARD' in nav
 # A standby profile choice must never expose Home behind a translucent drawer.
 assert '<body class="booting">' in (asset/'index.html').read_text()
 assert 'body.booting .scene,body.booting .page{visibility:hidden}' in css
-assert '.overlay.startup-panel{z-index:80;background:#1b2328' in css
+assert '.overlay.startup-panel{z-index:80;background:radial-gradient(' in css
+assert '#050607 100%' in css and 'border:1px solid rgba(255,255,255,.145)' in css
+assert 'function uiTitle(text)' in js and "esc(uiTitle(title))" in js
+assert "row('lifeSettings','Daily Life'" in js and "title='Daily Life'" in js
 assert 'width:100vw;min-width:0;height:100vh' in css
 assert 'startup-avatar-grid' in js and 'startup-profile-name' in js
 assert 'startup-footer' in css and 'background:transparent;border:0;border-radius:0' in css
