@@ -444,7 +444,7 @@ public final class MainActivity extends Activity {
         try { updateTime = getPackageManager().getPackageInfo(pkg, 0).lastUpdateTime; }
         catch (Exception ignored) { return ""; }
         // Versioned cache identity discards the old 80px lossy images across upgrades.
-        File cached = new File(dir, Integer.toHexString(id.hashCode()) + "-" + updateTime + "-hq192-v2.png");
+        File cached = new File(dir, Integer.toHexString(id.hashCode()) + "-" + updateTime + "-hq384-v3.png");
         String encoded = "";
         if (cached.isFile() && cached.length() > 0 && cached.length() < 512000) {
             try (FileInputStream in = new FileInputStream(cached)) {
@@ -480,7 +480,7 @@ public final class MainActivity extends Activity {
         if (drawable == null) try { drawable = pm.getApplicationIcon(pkg); } catch (Exception ignored) { }
         if (drawable == null) return "";
         try {
-            final int size = 192;
+            final int size = 384;
             Bitmap bitmap = Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888);
             Canvas canvas = new Canvas(bitmap);
             drawable.setBounds(0,0,size,size);drawable.draw(canvas);

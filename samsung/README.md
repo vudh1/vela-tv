@@ -8,11 +8,24 @@ Samsung build stages it with `samsung/config.xml` and `tizen-bridge.js`.
 
 - Available in this source: offline wallpaper/clock, saved profiles, profile
   choice on Vela app launch, favorites, app browsing, per-profile usage sorting,
-  Tizen application launch requests, and Samsung remote navigation.
+  Tizen application launch requests, Samsung remote navigation, three app-label
+  layouts, and encrypted private Google Calendar/BallerWatch iCal subscriptions.
+- Like CleanFrame, Vela includes dock/list layouts, wallpaper gallery and
+  rotation, light/dark contrast, app favorites, streaming-app discovery,
+  per-profile appearance and app sorting. Built-in artwork has a UHD option;
+  four SVG landscapes remain vector at any TV resolution.
 - Not available on Samsung: replacement of Samsung Home, automatic visible
   launch on TV power-on, replacement of the system screensaver, Android-only
-  volume overlay, the secure Android Google Calendar/iCal service, phone pairing,
-  Nanit shortcut, Android recovery controls, and APK updater.
+  volume overlay, phone pairing, Nanit shortcut, Android recovery controls,
+  custom on-device photo picker, and APK updater.
+- The Samsung calendar uses the Tizen KeyManager + AES-GCM to protect each
+  saved private iCal link and cache on-device. **This is not Google OAuth:**
+  paste the secret Google iCal URL under Vela → Gear → Daily life → Calendar.
+  Google and Samsung can restrict direct cross-origin HTTPS requests. The
+  parser and encryption pass simulated-device tests, but **actual calendar
+  downloads and UI behavior still need verification on this QN85 model**.
+  If the TV blocks a feed, Vela keeps the encrypted link and last verified
+  cache, and shows an unverified status; it does not silently use a proxy.
 - Launching preinstalled streaming apps from another app is firmware-dependent;
   the application API may reject individual targets. If so, Samsung Home remains
   the way to open them.
@@ -48,7 +61,19 @@ repository deliberately contains no credentials or pre-signed package.
 
 ## Moving to a different Wi-Fi/network
 
-All bundled content, profiles, and sorting work offline. The app does not store
-the router IP/SSID. The TV still needs to join the new Wi-Fi through Samsung
-settings. For a future developer install, update Developer Mode's computer IP
-if it changes. No app setting needs a hardcoded LAN address.
+All bundled content, profiles, saved calendar links, and sorting remain local;
+the app does not store the router IP/SSID. An already installed Vela does not
+need reinstallation after moving house. Calendar updates resume when the TV
+joins an Internet-connected Wi-Fi, subject to the same HTTPS/CORS restrictions.
+The TV still needs to join the new Wi-Fi through Samsung settings. For a
+future developer install, update Developer Mode's computer IP if it changes.
+No app setting needs a hardcoded LAN address.
+
+## Upstream inspiration and limits
+
+The consumer-app filtering and interaction options draw on the public
+[CleanFrame project](https://github.com/nthnclrk/CleanFrame). Vela keeps its
+own visual design and assets. CleanFrame's firmware-specific, undocumented
+native override of Samsung Home is intentionally **not included**: the
+QN85QN85DDFXZA has not been validated for that modification, and a bad
+system launcher override could leave the TV difficult to recover.

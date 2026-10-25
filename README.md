@@ -6,7 +6,7 @@ integration and installation targets.
 | Device | Target | Build | Capability |
 | --- | --- | --- | --- |
 | Sony BRAVIA / Android TV | Signed `.apk` | `bash scripts/build.sh` | Launcher, native clock/screensaver, private calendar, updater |
-| Samsung Neo QLED / Tizen | Signed `.wgt` | `bash scripts/build-tizen.sh package` | Regular TV app: Home dashboard, profiles, favorites, app browser |
+| Samsung Neo QLED / Tizen | Signed `.wgt` | `bash scripts/build-tizen.sh package` | Regular TV app: Home dashboard, profiles, favorites, app browser, encrypted private iCal |
 
 For Samsung setup, certificate signing, developer installation and its
 platform limitations, see [Samsung Tizen instructions](samsung/README.md).
@@ -49,7 +49,21 @@ password changes. Using the same SSID/password on the new router can avoid
 that step, provided the TV joins successfully. Phone pairing and developer
 installation require the phone/computer to be on the appropriate local network.
 No re-entry of the saved Google iCal secret is required solely because Wi-Fi
-changes.
+changes. Samsung's encrypted calendar also stays saved on the TV; any feed
+still requires Internet and Tizen's cross-origin HTTPS access to work.
+
+### High-resolution artwork
+
+The four native SVG wallpapers scale cleanly at any screen size. The four
+photographic wallpapers have 3840×2160 WebP exports alongside lightweight
+720p fallbacks, with updated gallery thumbnails. These are high-quality
+resampled exports of generated illustrations, **not photographs with genuine
+4K source detail**. Vela selects higher-resolution assets on larger TV modes;
+the Android screensaver also checks physical display resolution rather than
+always decoding a quarter-sized image. App logos are losslessly cached as
+384px PNGs on Android, the Vela icon is 512px, and the TV banner is 1280×720.
+Other installed apps supply their own icon source quality, which Vela cannot
+improve beyond the underlying artwork.
 
 ## Release branches
 
@@ -86,10 +100,14 @@ secret-feed format **or** from the BallerWatch Worker at
 open Settings → Share my calendar and copy the generated URL with your RATS,
 pickup and watched professional-sports selections.
 
-On the TV, choose **Gear → Calendar → Connect with phone** (or Enter on TV)
-and paste the URL. Vela verifies the feed over HTTPS, keeps the address in
-encrypted per-profile native preferences, and refreshes about every 15 minutes.
-There is no Google login, paid provider or additional TV permission required.
+On Sony, choose **Gear → Daily life → Calendar → Connect with phone** (or
+Enter on TV) and paste the URL. Vela verifies the feed over HTTPS, keeps the
+address in encrypted per-profile native preferences, and refreshes about every
+15 minutes. On Samsung, use **Gear → Daily life → Calendar → Connect private
+calendar** to paste the secret URL with the Samsung keyboard; it is encrypted
+under Tizen KeyManager, and refreshes directly over HTTPS. Cross-origin
+requests may be blocked by Samsung/Google and require a test on the actual TV.
+There is no Google login or paid provider.
 
 Current limitation: Vela stores one calendar subscription per profile;
 adding BallerWatch replaces that profile's prior Google iCal subscription.

@@ -48,11 +48,42 @@ public final class VelaDreamService extends DreamService {
                 JSONObject p = profiles.optJSONObject(i);
                 if (p != null && currentProfile().equals(p.optString("id"))) {
                     int selected = Integer.parseInt(p.optString("scenery", "4"));
-                    return "wallpapers/" + images[Math.floorMod(selected - 4, images.length)] + ".webp";
+                    return "wallpapers/" + images[Math.floorMod(selected - 4, images.length)];
                 }
             }
         } catch (Exception ignored) {}
-        return "wallpapers/mist-lake.webp";
+        return "wallpapers/mist-lake";
+    }
+    private Bitmap loadScenery() {
+        // Use the display's physical mode when available; launcher UI pixels can be 1080p on 4K sets.
+        int target = getResources().getDisplayMetrics().widthPixels;
+        try {
+            android.view.WindowManager manager = (android.view.WindowManager) getSystemService(Context.WINDOW_SERVICE);
+            android.view.Display display = manager == null ? null : manager.getDefaultDisplay();
+            if (display != null && android.os.Build.VERSION.SDK_INT >= 23)
+                target = Math.max(target, display.getMode().getPhysicalWidth());
+        } catch (Exception ignored) {}
+        String base = chooseWallpaper();
+        boolean highRes = target > 1280;
+        String asset = base + (highRes ? "-4k.webp" : ".webp");
+        try {
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inJustDecodeBounds = true;
+            try (InputStream bounds = getAssets().open(asset)) {
+                BitmapFactory.decodeStream(bounds, null, options);
+            }
+            int sample = 1;
+            while (options.outWidth / (sample * 2) >= target && options.outHeight / (sample * 2) >= 720)
+                sample *= 2;
+            options.inJustDecodeBounds = false;
+            options.inSampleSize = sample;
+            options.inPreferredConfig = Bitmap.Config.RGB_565; // Scenic photographs need no alpha; halve memory.
+            try (InputStream data = getAssets().open(asset)) {
+                return BitmapFactory.decodeStream(data, null, options);
+            }
+        } catch (Exception | OutOfMemoryError ignored) {
+            return null; // Keep the opaque, safe solid background if the asset cannot be decoded.
+        }
     }
     private TextView label(String value, int size, int color) {
         TextView view = new TextView(this);
@@ -154,12 +185,8 @@ public final class VelaDreamService extends DreamService {
         scenery = new ImageView(this);
         scenery.setScaleType(ImageView.ScaleType.CENTER_CROP);
         scenery.setAlpha(.72f);
-        try (InputStream in = getAssets().open(chooseWallpaper())) {
-            BitmapFactory.Options options = new BitmapFactory.Options();
-            options.inSampleSize = 2;
-            Bitmap bitmap = BitmapFactory.decodeStream(in, null, options);
-            if (bitmap != null) scenery.setImageBitmap(bitmap);
-        } catch (Exception ignored) {}
+        Bitmap bitmap = loadScenery();
+        if (bitmap != null) scenery.setImageBitmap(bitmap);
         root.addView(scenery, new FrameLayout.LayoutParams(-1, -1));
         FrameLayout veil = new FrameLayout(this);
         veil.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,

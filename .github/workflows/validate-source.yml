@@ -27,6 +27,7 @@ jobs:
       - name: Test Samsung adapter and staged shared app
         run: |
           node tests/tizen_bridge_test.js
+          node tests/tizen_calendar_test.js
           bash scripts/build-tizen.sh stage
           test -f build/tizen/config.xml
           cmp app/src/main/assets/app.js build/tizen/app.js

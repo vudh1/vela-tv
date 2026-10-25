@@ -21,7 +21,8 @@ const ctx={
   tizen:{application:{
     getAppsInfo(success){success([
       {id:'VelaTv0001.VelaTV',name:'Vela',show:true},
-      {id:'com.example.stream',name:'Stream',show:true,iconPath:'file:///icon.png'},
+      {id:'ABCDEFGHIJ.Stream',name:'Stream',show:true,iconPath:'file:///icon.png'},
+      {id:'KLMNOPQRST.Background',name:'Background Worker',show:true},
       {id:'hidden.app',name:'Private',show:false}
     ]);},
     launch(id,done){launches.push(id);done();}
@@ -38,10 +39,10 @@ bridge.setSetting('active_profile_v2','tram');
 assert.equal(bridge.getSetting('active_profile_v2'),'tram');
 bridge.requestApps();
 assert.equal(apps.length,1,'only installed/visible apps listed');
-assert.equal(apps[0].id,'com.example.stream');
-bridge.launchApp('com.example.stream');
+assert.equal(apps[0].id,'ABCDEFGHIJ.Stream');
+bridge.launchApp('ABCDEFGHIJ.Stream');
 bridge.launchApp('hidden.app');
-assert.deepEqual(launches,['com.example.stream'],'cannot launch an undiscovered target');
+assert.deepEqual(launches,['ABCDEFGHIJ.Stream'],'cannot launch an undiscovered target');
 let prevented=false;
 listeners.keydown({keyCode:10009,preventDefault(){prevented=true;}});
 assert.ok(prevented);

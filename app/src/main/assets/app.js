@@ -3,7 +3,7 @@
 'use strict';
 var bridge=window.QuietTV||null, preview=!bridge;
 var tizenMode=!!(window.VelaPlatform&&window.VelaPlatform.kind==='tizen');
-var apps=[],appsById={},catalogSignature='',fav=[],mode='dock',theme='dark',scenery='0';
+var apps=[],appsById={},catalogSignature='',fav=[],mode='dock',theme='dark',scenery='0',appLabelMode='focus';
 var profiles=[],profileId='duong',fontStyle='classic',clockFormat='auto',rotationMinutes=0,rotationTimer=null;
 var monitorEnabled=false; // profile-scoped, hidden by default; no background streaming
 // Volume settings are device-wide, not profile-specific: the TV audio output is shared.
@@ -18,16 +18,17 @@ function avatarSvg(id,name){if(id==='initial')return '<span class="avatar-initia
 var wallpapers=[
  {name:'Alpine',src:'landscape.svg'}, {name:'Dusk',src:'landscape-1.svg'},
  {name:'Dawn',src:'landscape-2.svg'}, {name:'Moonlight',src:'landscape-3.svg'},
- {name:'Misty Lake',src:'wallpapers/mist-lake.webp',thumb:'wallpapers/thumb-mist-lake.webp'},
- {name:'Blue Coast',src:'wallpapers/blue-coast.webp',thumb:'wallpapers/thumb-blue-coast.webp'},
- {name:'Amber Dunes',src:'wallpapers/amber-dunes.webp',thumb:'wallpapers/thumb-amber-dunes.webp'},
- {name:'Lavender Bay',src:'wallpapers/lavender-bay.webp',thumb:'wallpapers/thumb-lavender-bay.webp'}
+ {name:'Misty Lake',src:'wallpapers/mist-lake.webp',src4k:'wallpapers/mist-lake-4k.webp',thumb:'wallpapers/thumb-mist-lake.webp'},
+ {name:'Blue Coast',src:'wallpapers/blue-coast.webp',src4k:'wallpapers/blue-coast-4k.webp',thumb:'wallpapers/thumb-blue-coast.webp'},
+ {name:'Amber Dunes',src:'wallpapers/amber-dunes.webp',src4k:'wallpapers/amber-dunes-4k.webp',thumb:'wallpapers/thumb-amber-dunes.webp'},
+ {name:'Lavender Bay',src:'wallpapers/lavender-bay.webp',src4k:'wallpapers/lavender-bay-4k.webp',thumb:'wallpapers/thumb-lavender-bay.webp'}
 ];
 var screen='',cursor=0,controls=[],geometry=[],listDirty=true,focusedControl=null,iconCache={},pendingIcons={};
 var contextAppId='',contextFrom='',recentMax=5,panelHistory=[],startupChooserOpen=false;
 var lastCatalog=0,clockValue='',customPhoto='',toastTimer=null,clockTimer=null,updateStatus=null;
 var $=function(s){return document.querySelector(s);};
 var defaults=['com.google.android.youtube.tv','com.netflix.ninja','com.apple.atve.androidtv.appletv','com.niklabs.pp','com.wbd.stream','com.spotify.tv.android','com.disney.disneyplus','com.amazon.amazonvideo.livingroom'];
+var tizenDefaults=['org.tizen.netflix-app','9Ur5IzDKqV.TizenYouTube','com.samsung.tv.aria-video','org.tizen.primevideo','MCmYXNxgcu.DisneyPlus','rJeHak5zRg.Spotify','3KA0pm7a7V.TubiTV'];
 var demo=[['YouTube','com.google.android.youtube.tv'],['Netflix','com.netflix.ninja'],['Apple TV','com.apple.atve.androidtv.appletv'],['Perfect Player','com.niklabs.pp'],['Spotify','com.spotify.tv.android'],['Max','com.wbd.stream'],['Disney+','com.disney.disneyplus'],['Prime Video','com.amazon.amazonvideo.livingroom'],['Tubi','com.tubitv'],['Peacock','com.peacocktv.peacockandroid'],['Crunchyroll','com.crunchyroll.crunchyroid']];
 function esc(s){return String(s||'').replace(/[&<>"']/g,function(x){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x];});}
 function get(k){try{return bridge?bridge.getSetting(k):localStorage.getItem('vela_'+k)||'';}catch(e){return '';}}
@@ -74,16 +75,19 @@ function volumeChanged(payload,previewOnly){
 function rescheduleClock(){clock();if(clockTimer)clearTimeout(clockTimer);clockTimer=setTimeout(rescheduleClock,60000-(Date.now()%60000)+40);}
 function setScenery(){var n=parseInt(scenery,10)||0;if(n<0||n>=wallpapers.length)n=0;scenery=String(n);
  document.body.setAttribute('data-scenery',scenery);
- $('#wallpaper').style.backgroundImage=customPhoto?'url("'+customPhoto+'")':'url("'+wallpapers[n].src+'")';}
+ // Keep UHD artwork for 1080p+ and true 4K screens; 720p sets avoid a 4K decode.
+ var effectiveWidth=Math.max(window.screen&&window.screen.width||0,window.innerWidth||0)*(window.devicePixelRatio||1);
+ var artwork=wallpapers[n].src4k&&effectiveWidth>=1280?wallpapers[n].src4k:wallpapers[n].src;
+ $('#wallpaper').style.backgroundImage=customPhoto?'url("'+customPhoto+'")':'url("'+artwork+'")';}
 function makeProfile(id,name,legacy){return {id:id,name:name,avatar:id==='tram'?'flower':id==='guest'?'guest':'initial',favorites:legacy&&legacy.favorites?legacy.favorites:null,
- layout:legacy&&legacy.layout||'dock',theme:legacy&&legacy.theme||'dark',scenery:legacy&&legacy.scenery||'0',font:'classic',clockFormat:'auto',recent:[],usage:[],appSort:'name',rotate:0,monitorEnabled:false};}
+ layout:legacy&&legacy.layout||'dock',theme:legacy&&legacy.theme||'dark',scenery:legacy&&legacy.scenery||'0',font:'classic',clockFormat:'auto',recent:[],usage:[],appSort:'name',labels:'focus',rotate:0,monitorEnabled:false};}
 function currentProfile(){for(var i=0;i<profiles.length;i++)if(profiles[i].id===profileId)return profiles[i];return profiles[0];}
 function persistProfiles(){save('profile_data_v2',JSON.stringify({profiles:profiles.filter(function(p){return p.id!=='guest';})}));save('active_profile_v2',profileId==='guest'?'duong':profileId);}
-function persistAppearance(){var p=currentProfile();if(!p)return;p.favorites=fav.slice(0,8);p.layout=mode;p.theme=theme;p.scenery=scenery;p.font=fontStyle;p.rotate=rotationMinutes;p.monitorEnabled=monitorEnabled;p.clockFormat=clockFormat;persistProfiles();}
+function persistAppearance(){var p=currentProfile();if(!p)return;p.favorites=fav.slice(0,8);p.layout=mode;p.theme=theme;p.scenery=scenery;p.font=fontStyle;p.rotate=rotationMinutes;p.monitorEnabled=monitorEnabled;p.clockFormat=clockFormat;p.labels=appLabelMode;persistProfiles();}
 function initProfiles(){var parsed=null;try{parsed=JSON.parse(get('profile_data_v2')||'null');}catch(e){}
  if(parsed&&Array.isArray(parsed.profiles)&&parsed.profiles.length){profiles=parsed.profiles.filter(function(p){return p&&p.id!=='guest'&&typeof p.id==='string'&&typeof p.name==='string';}).map(function(p){
    return {id:p.id,name:p.name.slice(0,24),avatar:p.avatar==='initial'?'initial':avatars[p.avatar]?p.avatar:(p.id==='tram'?'flower':'initial'),favorites:Array.isArray(p.favorites)?p.favorites.slice(0,8):null,
-    layout:p.layout==='list'?'list':'dock',theme:p.theme==='light'?'light':'dark',scenery:String(p.scenery||'0'),font:p.font==='modern'?'modern':'classic',clockFormat:['auto','12','24'].indexOf(p.clockFormat)>=0?p.clockFormat:'auto',recent:Array.isArray(p.recent)?p.recent.filter(function(v){return typeof v==='string';}).slice(0,5):[],usage:Array.isArray(p.usage)?p.usage.filter(function(v){return v&&typeof v.id==='string'&&Number.isFinite(v.at);}).slice(-750):[],appSort:['name','recent','week','month','quarter'].indexOf(p.appSort)>=0?p.appSort:'name',rotate:p.rotate===30?30:0,monitorEnabled:p.monitorEnabled===true};
+    layout:p.layout==='list'?'list':'dock',theme:p.theme==='light'?'light':'dark',scenery:String(p.scenery||'0'),font:p.font==='modern'?'modern':'classic',clockFormat:['auto','12','24'].indexOf(p.clockFormat)>=0?p.clockFormat:'auto',recent:Array.isArray(p.recent)?p.recent.filter(function(v){return typeof v==='string';}).slice(0,5):[],usage:Array.isArray(p.usage)?p.usage.filter(function(v){return v&&typeof v.id==='string'&&Number.isFinite(v.at);}).slice(-750):[],appSort:['name','recent','week','month','quarter'].indexOf(p.appSort)>=0?p.appSort:'name',labels:['focus','both','names'].indexOf(p.labels)>=0?p.labels:'focus',rotate:p.rotate===30?30:0,monitorEnabled:p.monitorEnabled===true};
  });}
  if(!profiles.length){var oldFav=null;try{var f=JSON.parse(get('favorites')||'null');if(Array.isArray(f)&&f.length)oldFav=f;}catch(e){}
    var legacy={favorites:oldFav,layout:get('layout')||'dock',theme:get('theme')||'dark',scenery:get('scenery')||'0'};
@@ -93,8 +97,9 @@ function initProfiles(){var parsed=null;try{parsed=JSON.parse(get('profile_data_
  profileId=get('active_profile_v2')||'duong';if(profileId==='guest')profileId='duong';if(!profiles.some(function(p){return p.id===profileId;}))profileId=profiles[0].id;
  applyProfile(false);persistProfiles();}
 function applyProfile(showHome){var p=currentProfile();if(!p)return;
- fav=Array.isArray(p.favorites)?p.favorites.slice(0,8):[];if(p.favorites===null&&apps.length){var seeded=[];defaults.forEach(function(pkg){apps.forEach(function(a){if(a.package===pkg&&seeded.indexOf(a.id)<0)seeded.push(a.id);});});if(!seeded.length)seeded=apps.slice(0,7).map(function(a){return a.id;});fav=seeded.slice(0,8);p.favorites=fav.slice();if(profileId!=='guest')persistProfiles();}mode=p.layout==='list'?'list':'dock';theme=p.theme==='light'?'light':'dark';
+ fav=Array.isArray(p.favorites)?p.favorites.slice(0,8):[];if(p.favorites===null&&apps.length){var seeded=[];(tizenMode?tizenDefaults:defaults).forEach(function(pkg){apps.forEach(function(a){if((tizenMode?a.id:a.package)===pkg&&seeded.indexOf(a.id)<0)seeded.push(a.id);});});if(!seeded.length)seeded=apps.slice(0,7).map(function(a){return a.id;});fav=seeded.slice(0,8);p.favorites=fav.slice();if(profileId!=='guest')persistProfiles();}mode=p.layout==='list'?'list':'dock';theme=p.theme==='light'?'light':'dark';
  scenery=p.scenery||'0';fontStyle=p.font==='modern'?'modern':'classic';clockFormat=['auto','12','24'].indexOf(p.clockFormat)>=0?p.clockFormat:'auto';clockValue='';clock();rotationMinutes=p.rotate===30?30:0;
+ appLabelMode=['focus','both','names'].indexOf(p.labels)>=0?p.labels:'focus';document.body.setAttribute('data-app-labels',appLabelMode);
  monitorEnabled=p.monitorEnabled===true;$('#monitorButton').classList.toggle('hidden',!monitorEnabled);
  document.body.classList.toggle('light',theme==='light');document.body.classList.toggle('modern-clock',fontStyle==='modern');
  var btn=$('#profileButton');btn.innerHTML=avatarSvg(p.avatar,p.name);btn.title=p.name+' — Switch profile';btn.setAttribute('aria-label','Profile: '+p.name+'. Switch profile');
@@ -122,14 +127,14 @@ function profileChooser(){var s='<div class="profiles-list">';profiles.forEach(f
 var editingAvatar='';
 function avatarPicker(){var p=profiles.filter(function(x){return x.id===editingAvatar;})[0],b='<div class="avatar-grid">';avatarList.forEach(function(a){b+='<button class="avatar-option focusable'+(p&&p.avatar===a?' is-current':'')+'" data-act="chooseAvatar" data-id="'+esc(a)+'" aria-label="'+esc(a)+' avatar">'+avatarSvg(a,p&&p.name||'Guest')+'<span>'+esc(a.charAt(0).toUpperCase()+a.slice(1))+'</span></button>';});return b+'</div>';}
 function appFallback(){return '<svg class="fallback-app-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M8 8h8v8H8z"/></svg>';}
-function icon(a){var uri=preview?'':tizenMode?(a.icon&&/^file:\/\//.test(a.icon)?a.icon:''):'https://vela-icons.local/icon/'+encodeURIComponent(a.id)+'?quality=hq192-v2';return '<span class="app-icon-frame">'+appFallback()+(uri?'<img class="app-icon" loading="eager" decoding="async" alt="" src="'+esc(uri)+'" onerror="this.style.display=\'none\'">':'')+'</span>';}
+function icon(a){var uri=preview?'':tizenMode?(a.icon&&/^file:\/\//.test(a.icon)?a.icon:''):'https://vela-icons.local/icon/'+encodeURIComponent(a.id)+'?quality=hq384-v3';return '<span class="app-icon-frame">'+appFallback()+(uri?'<img class="app-icon" loading="eager" decoding="async" alt="" src="'+esc(uri)+'" onerror="this.style.display=\'none\'">':'')+'</span>';}
 
-function tile(a,act){return '<button class="app-card focusable" data-act="'+act+'" data-id="'+esc(a.id)+'" data-name="'+esc(a.name)+'" title="'+esc(a.name)+'" aria-label="'+esc(a.name)+'">'+icon(a)+'</button>';}
+function tile(a,act){return '<button class="app-card focusable" data-act="'+act+'" data-id="'+esc(a.id)+'" data-name="'+esc(a.name)+'" title="'+esc(a.name)+'" aria-label="'+esc(a.name)+'">'+icon(a)+'<span class="app-name home-tile-name">'+esc(a.name)+'</span></button>';}
 function populateCatalog(incoming,fromCache){if(!Array.isArray(incoming))return;
  var signature=JSON.stringify(incoming);if(signature===catalogSignature){lastCatalog=Date.now();return;}
  catalogSignature=signature;apps=incoming;appsById={};for(var i=0;i<apps.length;i++)appsById[apps[i].id]=apps[i];
  var p=currentProfile();var next=fav.filter(function(id){return !!byId(id);});
- if(p&&p.favorites===null){defaults.forEach(function(pkg){apps.forEach(function(a){if(a.package===pkg&&next.indexOf(a.id)<0)next.push(a.id);});});
+ if(p&&p.favorites===null){(tizenMode?tizenDefaults:defaults).forEach(function(pkg){apps.forEach(function(a){if((tizenMode?a.id:a.package)===pkg&&next.indexOf(a.id)<0)next.push(a.id);});});
  if(!next.length)next=apps.slice(0,7).map(function(a){return a.id;});}
  fav=next.slice(0,8);if(p){p.favorites=fav.slice();if(profileId!=='guest')persistProfiles();}lastCatalog=Date.now();home();if(screen){renderPanel(screen,null,true);}
 }
@@ -146,7 +151,7 @@ function home(){var arr=fav.map(byId).filter(Boolean),f=$('#favorites');f.classN
 /* Geometry is calculated only when markup, scroll or viewport changes—not for every remote key. */
 function activeList(){if(!listDirty)return;var root=screen?$('#overlay'):$('.page');controls=Array.prototype.slice.call(root.querySelectorAll('button.focusable:not([disabled])'));
  geometry=controls.map(function(el){var r=el.getBoundingClientRect();return {x:(r.left+r.right)/2,y:(r.top+r.bottom)/2,top:r.top};});listDirty=false;}
-function labelSelected(el){var label=$('#focusLabel');if(screen||!el||!el.classList.contains('app-card')){label.classList.remove('visible');return;}
+function labelSelected(el){var label=$('#focusLabel');if(screen||appLabelMode!=='focus'||!el||!el.classList.contains('app-card')){label.classList.remove('visible');return;}
  var a=byId(el.getAttribute('data-id'));if(!a){label.classList.remove('visible');return;}var g=geometry[cursor];if(!g)return;
  label.textContent=a.name;label.style.left=g.x+'px';label.style.top=(g.top-39)+'px';label.classList.add('visible');}
 function select(i){activeList();if(!controls.length)return;var old=focusedControl;cursor=Math.max(0,Math.min(controls.length-1,i));if(old){old.classList.remove('selected');old.setAttribute('tabindex','-1');}
@@ -199,7 +204,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  var title='',subtitle='',body='';
  if(type==='settings'){title='Settings';subtitle='Four simple sections.';
  body=row('homeSettings','Home & profiles','Open','Appearance, favorites and profile selection')+
- (tizenMode?'':row('lifeSettings','Daily life','Open','Calendar, screensaver and baby monitor'))+
+ row('lifeSettings','Daily life','Open',tizenMode?'Private calendar':'Calendar, screensaver and baby monitor')+
  row('appsSettings','Apps & activity','Open','Browse and sort installed apps')+
  row('deviceSettings','Device & support','Open','Updates, recovery and about');}
  else if(type==='homeSettings'){title='Home & profiles';subtitle='Personalize the Vela Home experience.';
@@ -209,8 +214,8 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  row('wakeProfileToggle',tizenMode?'Ask for profile on Vela launch':'Ask for profile on TV wake',bridge&&bridge.wakeProfilePromptEnabled&&!bridge.wakeProfilePromptEnabled()?'Off':'On',tizenMode?'When you open Vela; Samsung controls TV startup':'After standby; not when returning from a streaming app');}
  else if(type==='lifeSettings'){title='Daily life';subtitle='Small conveniences, no Home clutter.';
  body=row('calendarSettings','Calendar',calVerified?'Verified':calConnected?'Saved':'Connect','Today events and subscriptions')+
- row('screensaverSettingsPanel','Screensaver','Open','Moving clock and current events')+
- row('monitorSettings','Baby monitor',monitorEnabled?'Visible':'Hidden','Optional camera shortcut');}
+ (tizenMode?'':row('screensaverSettingsPanel','Screensaver','Open','Moving clock and current events')+
+ row('monitorSettings','Baby monitor',monitorEnabled?'Visible':'Hidden','Optional camera shortcut'));}
  else if(type==='screensaverSettingsPanel'){title='Screensaver';subtitle='Vela Clock moves gently and shows up to three cached events.';
  body=row('screensaver','Choose Vela Clock','Sony settings','Set Vela Clock as your preferred screensaver')+
  '<p class="library-footnote">Current and upcoming events appear from the selected profile’s verified calendar cache. No network request is made by the screensaver.</p>';}
@@ -225,14 +230,16 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  row('chooseSort','Most opened · 30 days',currentProfile().appSort==='month'?'✓':'','Last month','month')+
  row('chooseSort','Most opened · 90 days',currentProfile().appSort==='quarter'?'✓':'','Last three months','quarter');}
  else if(type==='deviceSettings'){title='Device & support';subtitle='System controls in one place.';
- body=tizenMode?row('about','About Vela on Samsung','Info','Tizen capabilities and privacy'):
+ body=tizenMode?row('samsungHome','Samsung Home','Open','Return to the native Samsung interface')+
+ row('samsungSettings','TV settings','Open','Open Samsung settings if supported')+
+ row('about','About Vela on Samsung','Info','Tizen capabilities and privacy'):
  row('updates','Software updates','Open','Download and approve Vela updates')+
  row('recovery','Recovery','Open','Return to Sony Home and restore controls')+
  row('about','About Vela','Info','Version and privacy');
  }
  else if(type==='about'){title='About Vela';subtitle='A calmer TV launcher.';
  body=tizenMode?
- '<p class="library-footnote">Samsung Tizen build. Profiles, favorites and app history are local to this TV. Samsung owns the power-on Home screen and system screensaver; Vela opens as a regular app. Calendar, private pairing and automatic updates are not yet supported on Tizen.</p>':
+ '<p class="library-footnote">Samsung Tizen build. Profiles, favorites and app history stay on this TV. Private iCal subscriptions and cached events use AES-GCM with a Samsung KeyManager-protected key. Samsung owns the system screensaver and power-on interface; Vela opens as an app. A Samsung device certificate is required for installation. Automatic WGT updates are not yet available.</p>':
  '<p class="library-footnote">Version: '+esc(updateStatus&&updateStatus.current?updateStatus.current:'See Updates')+'</p>'+
  '<p class="library-footnote">Profiles and app activity stay on this TV. Calendar links and events are stored locally with Android Keystore encryption. Returning to Sony Home remains available under Recovery.</p>';}
  else if(type==='homeApps'){title='Home favorites';subtitle='Pin up to eight apps and reorder with arrows.';body=favoritesEditor();}
@@ -247,7 +254,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  body=app?'<div class="context-app">'+icon(app)+'<span>'+esc(app.name)+'</span></div>'+appRow('launch','Open app','Open','Launch this application',contextAppId)+appRow('togglePin',pinned?'Remove from Home':'Add to Home',pinned?'Unpin':'Pin',pinned?'Keep in All apps':'Show in your favorites dock',contextAppId)+(tizenMode?'':appRow('appInfo','App information','Settings','Open the Android app settings for this app',contextAppId)):'<p>App no longer installed.</p>';}
 
  else if(type==='customize'){title='Personalize';subtitle='Changes appear behind this panel immediately.';
- body=(tizenMode?'':row('volumeSettings','Volume indicator',volumeMode==='off'?'Native only':volumeMode==='glass'?'Glass':'Minimal','Sony native by default; optional custom preview'))+row('layout','Home layout',mode==='dock'?'Dock':'List','Switch between dock and list')+row('theme','Contrast',theme==='dark'?'Dark':'Light','Match your wallpaper')+row('wallpapers','Wallpaper library',wallpapers[parseInt(scenery,10)||0].name,'Browse eight bundled backgrounds')+row('rotate','Wallpaper rotation',rotationMinutes?'Every 30 min':'Off','Only rotates while Home is visible')+row('font','Clock type',fontStyle==='modern'?'Modern':'Classic','Change the clock font without extra downloads')+row('clockFormat','Time format',clockFormat==='auto'?'TV setting':clockFormat==='24'?'24-hour':'12-hour','Use TV setting when available')+(tizenMode?'':row('photo','Custom photo','Choose','Use a picture stored on this TV')+row('resetPhoto','Reset photo','Restore','Return to the selected built-in wallpaper'));}
+ body=(tizenMode?'':row('volumeSettings','Volume indicator',volumeMode==='off'?'Native only':volumeMode==='glass'?'Glass':'Minimal','Sony native by default; optional custom preview'))+row('layout','Home layout',mode==='dock'?'Dock':'List','Switch between dock and list')+row('appLabels','App labels',appLabelMode==='focus'?'On focus':appLabelMode==='both'?'Icon + name':'Name only','Cycle three clean launcher styles')+row('theme','Contrast',theme==='dark'?'Dark':'Light','Match your wallpaper')+row('wallpapers','Wallpaper library',wallpapers[parseInt(scenery,10)||0].name,'Browse eight bundled backgrounds')+row('rotate','Wallpaper rotation',rotationMinutes?'Every 30 min':'Off','Only rotates while Home is visible')+row('font','Clock type',fontStyle==='modern'?'Modern':'Classic','Change the clock font without extra downloads')+row('clockFormat','Time format',clockFormat==='auto'?'TV setting':clockFormat==='24'?'24-hour':'12-hour','Use TV setting when available')+(tizenMode?'':row('photo','Custom photo','Choose','Use a picture stored on this TV')+row('resetPhoto','Reset photo','Restore','Return to the selected built-in wallpaper'));}
  else if(type==='volumeSettings'){title='Volume overlay';subtitle='Experimental Home-only overlay. Streaming apps continue using Sony’s native volume controls.';
  body=row('volumeStyle','Appearance',volumeMode==='glass'?'Glass':volumeMode==='minimal'?'Minimal':'Native only','Switch Glass → Minimal → Native only')+
  row('volumePercent','Show percentage',volumePercent?'On':'Off','Bar only is the cleanest look')+
@@ -280,12 +287,20 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  '<div class="connection-name">'+esc(calLabel||calName||'No calendar selected')+'</div>'+(calName?'<div class="connection-detail">Calendar: '+esc(calName)+'</div>':'')+'<div class="connection-detail">Calendar ID: '+esc(calAccount||'Not provided by iCal')+'</div>'+
  '<div class="connection-detail">'+esc(calStatus||'No refresh attempted')+'</div><div class="connection-detail">Last successful sync: '+esc(stamp)+'</div></div>';
  if(profileId==='guest')body+='<p class="calendar-help">Guest is temporary: no calendar addresses or events are saved.</p>';
- else body+=row('pairCalendar',calConnected?'Replace calendar via phone':'Connect with phone','QR','Scan on trusted home Wi-Fi and paste a Google or BallerWatch iCal link')+
- row('connectCalendar',calConnected?'Replace link on TV':'Enter on TV',calConnected?'Replace':'Enter','Paste a Google or BallerWatch iCal address')+
+ else body+=(tizenMode?row('tizenCalendarEntry',calConnected?'Replace private calendar':'Connect private calendar','Open','Paste a Google or BallerWatch HTTPS iCal URL using your remote'):
+ row('pairCalendar',calConnected?'Replace calendar via phone':'Connect with phone','QR','Scan on trusted home Wi-Fi and paste a Google or BallerWatch iCal link')+
+ row('connectCalendar',calConnected?'Replace link on TV':'Enter on TV',calConnected?'Replace':'Enter','Paste a Google or BallerWatch iCal address'))+
  row('refreshCalendar','Refresh now','↻','Normally auto-refreshes about every 15 minutes while Vela is open')+
  (calConnected?row('disconnectCalendar','Disconnect','Remove','Delete this profile’s saved link and cache'):'')+
- '<p class="library-footnote">Verified means the selected source returned a valid calendar feed. Zero events is still a successful connection. Calendar labels are for display only; subscriptions do not authenticate user identity. One encrypted feed per profile currently; connecting another replaces it. Use private iCal addresses only on a trusted device.</p>';
+ '<p class="library-footnote">Verified means the selected source returned a valid calendar feed. Zero events is still a successful connection. One encrypted feed per saved profile; connecting another replaces it. '+(tizenMode?'Samsung uses device-protected local encryption. Refresh requires TV internet access and permission for direct HTTPS requests; no proxy receives your private link.':'Use private iCal addresses only on a trusted device.')+'</p>';
  }
+ else if(type==='tizenCalendarEntry'){title='Private calendar';subtitle='Samsung · saved under this profile only';
+ body='<p class="library-footnote">Paste your Google Calendar secret iCal address. You can use the keyboard in Samsung SmartThings remote. Vela encrypts the link before saving and does not send it to a third-party server.</p>'+
+ '<label class="calendar-input-label" for="tizenCalendarUrl">Secret HTTPS iCal URL</label>'+
+ '<input class="calendar-url-input" id="tizenCalendarUrl" type="url" inputmode="url" maxlength="4096" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics">'+
+ row('focusCalendarInput','Enter or paste calendar address','Edit','Opens the Samsung keyboard')+
+ row('saveTizenCalendar','Save and verify','Save','Encrypt locally and check today’s events')+
+ '<p class="library-footnote">Only Google or BallerWatch direct HTTPS feeds are accepted. Vela cannot sign in to your Google account; use the private iCal link from Google Calendar settings.</p>';}
  else if(type==='pairing'){title='Connect using phone';subtitle='Scan QR on the same home Wi-Fi.';
  body='<div class="pair-stage"><div class="pair-qr" id="pairQr">'+(pairingUrl?qrSvg(pairingUrl):'<span class="pair-loading">'+(pairingExpiresAt?'Pairing expired — generate a new code':'Starting local pairing…')+'</span>')+'</div>'+
   '<p class="pair-countdown" id="pairCountdown" aria-live="off"></p>'+
@@ -339,6 +354,9 @@ function action(name,id,dir){
  if(name==='connectCalendar'){if(profileId==='guest'){toast('Guest has no saved calendar');return;}if(bridge&&bridge.editCalendar)bridge.editCalendar(profileId);else toast('Connect a calendar on your TV');return;}
  if(name==='disconnectCalendar'){if(bridge&&bridge.removeCalendar){bridge.removeCalendar(profileId);requestCalendar(false);}return;}
  if(name==='refreshCalendar'){requestCalendar(true);toast('Refreshing calendar…');return;}
+ if(name==='focusCalendarInput'){var input=$('#tizenCalendarUrl');if(input)input.focus();return;}
+ if(name==='saveTizenCalendar'){var field=$('#tizenCalendarUrl'),url=field?field.value.trim():'';if(bridge&&bridge.saveCalendar)bridge.saveCalendar(profileId,url,'Private Google Calendar');return;}
+ if(name==='samsungHome'||name==='samsungSettings'){if(bridge&&bridge[name])bridge[name]();return;}
  if(name==='chooseSort'){var p=currentProfile();p.appSort=id;if(profileId!=='guest')persistProfiles();renderPanel('appSort',{act:'chooseSort',id:id},true);return;}
  if(name==='wakeProfileToggle'){if(bridge&&bridge.setWakeProfilePromptEnabled){bridge.setWakeProfilePromptEnabled(!bridge.wakeProfilePromptEnabled());}renderPanel('homeSettings',{act:'wakeProfileToggle'},true);return;}
  if(name==='eventInfo'){var chosen=calendarToday()[Number(id)];if(chosen){toast(chosen.allDay?'All-day event':calendarTime(chosen.start,false)+' – '+calendarTime(chosen.end,false));}return;}
@@ -347,10 +365,11 @@ function action(name,id,dir){
  if(name==='deleteProfile'){requestProfileDeletion(id);return;}
  if(name==='chooseWallpaper'){var num=parseInt(id,10);if(num>=0&&num<wallpapers.length){scenery=String(num);if(customPhoto){customPhoto='';if(bridge)bridge.resetWallpaper();}persistAppearance();setScenery();rerenderWithFocus('chooseWallpaper',id);}return;}
  if(name==='rotate'){rotationMinutes=rotationMinutes?0:30;persistAppearance();scheduleRotation();rerenderWithFocus('rotate');return;}
+ if(name==='appLabels'){appLabelMode=appLabelMode==='focus'?'both':appLabelMode==='both'?'names':'focus';document.body.setAttribute('data-app-labels',appLabelMode);persistAppearance();home();rerenderWithFocus('appLabels');return;}
  if(name==='font'){fontStyle=fontStyle==='modern'?'classic':'modern';document.body.classList.toggle('modern-clock',fontStyle==='modern');persistAppearance();rerenderWithFocus('font');return;}
  if(name==='clockFormat'){clockFormat=clockFormat==='auto'?'12':clockFormat==='12'?'24':'auto';clockValue='';clock();persistAppearance();rerenderWithFocus('clockFormat');return;}
  if(name==='launch'){rememberApp(id);if(preview){toast('App launch is available on your TV.');return;}if(bridge)bridge.launchApp(id);return;}
- if(['settings','homeSettings','lifeSettings','appsSettings','deviceSettings','about','appSort','homeApps','screensaverSettingsPanel','all','customize','recovery','updates','profiles','wallpapers','calendar','calendarSettings','monitor','monitorSettings','volumeSettings','recent'].indexOf(name)>=0){navigatePanel(name);if(name==='updates'&&bridge&&bridge.updateStatus)bridge.updateStatus();return;}
+ if(['settings','homeSettings','lifeSettings','appsSettings','deviceSettings','about','appSort','homeApps','screensaverSettingsPanel','all','customize','recovery','updates','profiles','wallpapers','calendar','calendarSettings','tizenCalendarEntry','monitor','monitorSettings','volumeSettings','recent'].indexOf(name)>=0){navigatePanel(name);if(name==='updates'&&bridge&&bridge.updateStatus)bridge.updateStatus();return;}
  if(name==='monitorToggle'){monitorEnabled=!monitorEnabled;$('#monitorButton').classList.toggle('hidden',!monitorEnabled);persistAppearance();renderPanel('monitorSettings',{act:'monitorToggle'},true);return;}
  if(name==='nanitWeb'){if(bridge&&bridge.openNanitWeb)bridge.openNanitWeb();else toast('Open https://my.nanit.com in your TV browser');return;}
  if(name==='cameraApps'){navigatePanel('all');return;}
@@ -445,6 +464,8 @@ function updateCalendarView(){var n=Date.now(),today=calendarToday();
  if(screen==='calendar')renderCalendarBody();else maybeShowUpcomingReminder();}
 function receiveCalendar(json){try{var obj=typeof json==='string'?JSON.parse(json):json;if(!obj||obj.profile!==profileId)return;
  calendarProfile=obj.profile;calConnected=!!obj.connected;calVerified=!!obj.verified;calName=obj.calendarName||'';calLabel=obj.label||'';calAccount=obj.calendarId||'';calLastSuccess=Number(obj.lastSuccess)||0;calLastAttempt=Number(obj.lastAttempt)||0;calEvents=Array.isArray(obj.events)?obj.events.filter(function(e){return Number.isFinite(e.start)&&Number.isFinite(e.end);}).slice(0,60):[];calStatus=obj.status||'';calendarChecked=Date.now();updateCalendarView();if(screen==='calendarSettings')renderPanel('calendarSettings');/* Cached calendar status must never close a live phone pairing. */}catch(e){toast('Could not read calendar data');}}
+function calendarSaveReady(profile,okay,message){if(profile!==profileId)return;
+ if(okay){renderPanel('calendarSettings');toast('Private calendar saved');}else toast(message||'Could not save calendar');}
 function qrSvg(url){if(!window.VelaQRCode)return '<span class="pair-url">'+esc(url)+'</span>';
  try {var q=new window.VelaQRCode(0,0);q.addData(url);q.make();var n=q.getModuleCount(),out='<svg class="pair-svg" viewBox="0 0 '+(n+8)+' '+(n+8)+'" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#fff"/>';
  for(var y=0;y<n;y++)for(var x=0;x<n;x++)if(q.isDark(y,x))out+='<rect x="'+(x+4)+'" y="'+(y+4)+'" width="1" height="1" fill="#101b1c"/>';return out+'</svg>';}
@@ -501,6 +522,6 @@ document.addEventListener('keydown',function(e){if(!preview)return;
  if(e.key==='Enter'){e.preventDefault();if(!e.repeat){previewEnterAt=Date.now();previewLong=false;}else if(!previewLong&&Date.now()-previewEnterAt>=500){previewLong=true;remote('longselect');}return;}
  var k={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',Escape:'back',Backspace:'back'}[e.key];if(k){e.preventDefault();remote(k);}});
 document.addEventListener('keyup',function(e){if(preview&&e.key==='Enter'){e.preventDefault();if(!previewLong)remote('select');previewEnterAt=0;previewLong=false;}});
-window.QH={pause:pause,checkWakeProfilePrompt:checkWakeProfilePrompt,profileNameReady:profileNameReady,profileDeleteConfirmed:profileDeleteConfirmed,remote:remote,refreshApps:refreshApps,receiveApps:receiveApps,catalogRefreshed:catalogRefreshed,iconReady:iconReady,refreshWallpaper:refreshWallpaper,wallpaperReady:wallpaperReady,resume:resume,tick:clock,updateStatusReady:receiveUpdateStatus,receiveCalendar:receiveCalendar,pairingReady:pairingReady,pairingCompleted:pairingCompleted,volumeChanged:volumeChanged};
+window.QH={pause:pause,checkWakeProfilePrompt:checkWakeProfilePrompt,profileNameReady:profileNameReady,profileDeleteConfirmed:profileDeleteConfirmed,remote:remote,refreshApps:refreshApps,receiveApps:receiveApps,catalogRefreshed:catalogRefreshed,iconReady:iconReady,refreshWallpaper:refreshWallpaper,wallpaperReady:wallpaperReady,resume:resume,tick:clock,updateStatusReady:receiveUpdateStatus,receiveCalendar:receiveCalendar,calendarSaveReady:calendarSaveReady,pairingReady:pairingReady,pairingCompleted:pairingCompleted,volumeChanged:volumeChanged};
 init();
 })();

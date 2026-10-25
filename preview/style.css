@@ -280,4 +280,25 @@ body.light .monitor-button{color:#173536;border-color:rgba(19,53,55,.3);backgrou
 .overlay.startup-panel .startup-list .panel-row:focus{background:rgba(232,245,236,.18);border-color:rgba(234,248,238,.85)}
 @media(max-width:700px){.overlay.startup-panel .panel{width:90vw;min-width:0}}
 /* Samsung firmware owns Calendar integrations, TV Home and the system saver. */
-body.tizen-tv #calendarButton,body.tizen-tv #monitorButton{display:none!important}
+body.tizen-tv #monitorButton{display:none!important}
+.calendar-input-label{display:block;color:rgba(229,241,234,.82);font-size:12px;letter-spacing:.08em;margin:20px 4px 9px}
+.calendar-url-input{display:block;width:calc(100% - 8px);padding:15px 17px;margin:0 4px 13px;border-radius:11px;
+ border:1px solid rgba(217,234,225,.36);background:rgba(6,24,28,.62);color:#fff;font-size:15px;outline:none}
+.calendar-url-input:focus{border-color:rgba(229,245,235,.9);box-shadow:0 0 0 3px rgba(229,245,235,.14)}
+
+/* CleanFrame-inspired per-profile launcher presentation modes. Names stay readable
+   in either dock or list without text baked into low-resolution icon bitmaps. */
+.home-tile-name{display:none!important}
+body[data-app-labels="both"] .favorites .home-tile-name,
+body[data-app-labels="names"] .favorites .home-tile-name{
+ display:block!important;line-height:1.22;width:100%;max-width:100%;color:#f3f8f5;
+ font-size:clamp(10px,.95vw,14px);font-weight:600;text-align:center;
+ text-overflow:ellipsis;overflow:hidden;white-space:nowrap}
+body[data-app-labels="both"] .favorites .app-card{gap:7px}
+body[data-app-labels="both"] .favorites .app-icon-frame{width:clamp(48px,6.5vh,72px);height:clamp(48px,6.5vh,72px)}
+body[data-app-labels="names"] .favorites .app-icon-frame{display:none}
+body[data-app-labels="names"] .favorites .app-card{padding:9px 10px;background:rgba(9,24,27,.23)}
+body[data-app-labels="names"] .favorites.list{width:clamp(154px,19vw,270px)}
+body[data-app-labels="names"] .favorites.list .app-card{width:100%}
+body[data-app-labels="both"] .favorites.list .app-card{width:clamp(105px,13vw,170px)}
+body[data-app-labels="both"] .favorites.list{width:clamp(110px,13vw,177px)}

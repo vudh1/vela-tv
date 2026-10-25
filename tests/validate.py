@@ -93,7 +93,8 @@ print('PASS QR pairing lifecycle, expiry countdown, renewal, and unclipped panel
 # Volume and scenic DreamService checks: no polling, no display blackout, TV fallback retained.
 dream=(r/'app/src/main/java/com/danielvu/quiethome/VelaDreamService.java').read_text()
 assert 'setScreenBright(true)' in dream and 'setScreenBright(false)' not in dream
-assert 'getAssets().open(chooseWallpaper())' in dream
+assert 'Bitmap loadScenery()' in dream and 'getAssets().open(asset)' in dream
+assert 'display.getMode().getPhysicalWidth()' in dream
 assert 'root.addView(scenery' in dream and 'clockGroup.addView(time' in dream
 assert 'onDreamingStarted()' in dream and 'onDreamingStopped()' in dream
 assert 'handler.postDelayed(this, 60000L' in dream
@@ -149,12 +150,12 @@ assert 'if (consumedVolumePress) return true;' in main
 assert 'return super.dispatchKeyEvent(e);' in main
 assert 'stopVolumeObservation();' in main
 assert 'getDrawableForDensity(' in main and 'DisplayMetrics.DENSITY_XXXHIGH' in main
-assert 'final int size = 192' in main
+assert 'final int size = 384' in main
 assert 'Bitmap.CompressFormat.PNG' in main and 'Bitmap.CompressFormat.WEBP, 78' not in main
 assert 'data:image/png;base64,' in main
 assert 'new WebResourceResponse("image/png"' in main
-assert '-hq192-v2.png' in main
-assert '?quality=hq192-v2' in js
+assert '-hq384-v3.png' in main
+assert '?quality=hq384-v3' in js
 assert 'volumeSettings' in js and 'Home-only overlay' in js
 assert 'SYSTEM_ALERT_WINDOW' not in ET.tostring(m,encoding='unicode')
 print('PASS Home-only volume input handling, native streaming fallback, high-density lossless TV icons')
@@ -201,18 +202,28 @@ assert 'markNextViewingSession();' not in onresume.split('if (!screenIsInteracti
 assert 'Intent.ACTION_SCREEN_OFF' in main
 
 # Samsung uses the same UI with a separate Tizen adapter, not Android APK APIs.
-for f in ['app.js','style.css','index.html','tizen-bridge.js']:
+for f in ['app.js','style.css','index.html','tizen-bridge.js','tizen-calendar.js','tizen-private-calendar.js']:
     assert (asset/f).read_bytes()==(r/'preview'/f).read_bytes(),f
 tizen=(asset/'tizen-bridge.js').read_text()
 assert "window.VelaPlatform = {kind:'tizen'}" in tizen
 assert 'tizen.application.getAppsInfo' in tizen and 'tizen.application.launch' in tizen
 assert '10009' in tizen and 'window.QH.remote(key)' in tizen
-assert 'tizenMode' in js and 'Calendar, private pairing and automatic updates are not yet supported' in js
+assert 'tizenMode' in js and 'tizenCalendarEntry' in js and 'saveTizenCalendar' in js
+assert 'appLabels' in js and 'data-app-labels' in css
+for stem in ['mist-lake','blue-coast','amber-dunes','lavender-bay']:
+    for base in [asset/'wallpapers',r/'preview'/'wallpapers']:
+        assert (base/(stem+'-4k.webp')).stat().st_size>100000
+        assert (base/('thumb-'+stem+'.webp')).stat().st_size>10000
+assert (r/'design'/'vela-icon.svg').exists() and (r/'design'/'vela-banner.svg').exists()
+assert (r/'app/src/main/res/drawable/icon.png').stat().st_size>5000
+assert (r/'app/src/main/res/drawable/banner.png').stat().st_size>5000
 config=ET.parse(r/'samsung/config.xml').getroot()
 t='{http://tizen.org/ns/widgets}'
 assert config.find(t+'application') is not None
 assert config.find(t+'profile').get('name')=='tv'
 assert any(p.get('name')=='http://tizen.org/privilege/appmanager.launch' for p in config.findall(t+'privilege'))
+assert any(p.get('name')=='http://tizen.org/privilege/internet' for p in config.findall(t+'privilege'))
+assert not any(p.get('name')=='http://tizen.org/privilege/keymanager' for p in config.findall(t+'privilege'))
 subprocess.run(['bash','-n',str(r/'scripts/build-tizen.sh')],check=True)
 subprocess.run(['bash','-n',str(r/'scripts/device.sh')],check=True)
 print('PASS cold-process profile fallback, calm two-column screensaver and Samsung Tizen staging')
