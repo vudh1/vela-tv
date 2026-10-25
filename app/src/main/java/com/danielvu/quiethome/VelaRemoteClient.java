@@ -108,10 +108,10 @@ final class VelaRemoteClient {
             return;
         }
         new Thread(() -> {
+            boolean rotating = enabled();
             try {
                 String pin = freshPin();
                 String deviceToken = token();
-                boolean rotating = enabled();
                 if (deviceToken.length() != 64) {
                     byte[] seed = new byte[32]; new SecureRandom().nextBytes(seed);
                     StringBuilder sb = new StringBuilder();
