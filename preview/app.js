@@ -7,7 +7,7 @@ var profiles=[],profileId='duong',fontStyle='classic',clockFormat='auto',rotatio
 var monitorEnabled=false; // profile-scoped, hidden by default; no background streaming
 // Volume settings are device-wide, not profile-specific: the TV audio output is shared.
 var volumeMode='glass',volumePercent=false,volumePosition='center',volumeDelay=1200,volumeTimer=null,lastVolume={percent:45,muted:false};
-var calEvents=[],calConnected=false,calVerified=false,calStatus='',calLabel='',calName='',calAccount='',calLastSuccess=0,calLastAttempt=0,calTimer=null,calendarProfile='',calendarChecked=0,pairingUrl='';
+var calEvents=[],calConnected=false,calVerified=false,calStatus='',calLabel='',calName='',calAccount='',calLastSuccess=0,calLastAttempt=0,calTimer=null,calendarProfile='',calendarChecked=0,pairingUrl='',pairingExpiresAt=0,pairTimer=null;
 var avatars={orbit:'<circle cx="12" cy="12" r="3.5"/><ellipse cx="12" cy="12" rx="10" ry="5" transform="rotate(-30 12 12)"/><path d="M20 4l-1 3"/>',flower:'<circle cx="12" cy="12" r="2.5"/><path d="M12 3c2 0 3 3 0 6-3-3-2-6 0-6Zm0 18c-2 0-3-3 0-6 3 3 2 6 0 6ZM3 12c0-2 3-3 6 0-3 3-6 2-6 0Zm18 0c0 2-3 3-6 0 3-3 6-2 6 0Z"/>',guest:'<circle cx="12" cy="8" r="3.6"/><path d="M5 21v-1c0-7 14-7 14 0v1"/>',mountain:'<path d="m2 20 7.5-13 4 7 2.5-4L22 20Z"/><path d="m7 11 2.5 2.5 2.2-2"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/>',moon:'<path d="M20 14.5A8.8 8.8 0 0 1 9.5 4 8.7 8.7 0 1 0 20 14.5Z"/><path d="m17 4 .6 1.6L19 6l-1.4.5L17 8l-.5-1.5L15 6l1.5-.4Z"/>',wave:'<path d="M2 15c3-4 6 4 10 0s7-4 10 0M2 20c3-4 6 4 10 0s7-4 10 0M4 9c2-4 4-5 8-5"/>',star:'<path d="m12 2 2.9 6.9 7.4.6-5.7 4.9 1.8 7.2L12 17.7l-6.4 3.9 1.8-7.2-5.7-4.9 7.4-.6Z"/>',leaf:'<path d="M20 3C7 3 3 9 4 17c7 5 17-2 16-14Z"/><path d="M4 21c3-8 7-10 12-13"/>',cat:'<path d="m4 11 1-7 5 4c1-.4 3-.4 4 0l5-4 1 7c2 8-2 11-8 11S2 19 4 11Z"/><path d="M8 15h.1M16 15h.1m-5 3h2m-1 0-2 1m2-1 2 1"/>'};
 var avatarList=['initial','orbit','flower','guest','mountain','sun','moon','wave','star','leaf','cat'];
 function profileInitials(name){var words=String(name||'').trim().split(/\s+/).filter(Boolean);return (words.length>1?words[0].charAt(0)+words[words.length-1].charAt(0):(words[0]||'G').charAt(0)).toUpperCase();}
@@ -149,7 +149,7 @@ function labelSelected(el){var label=$('#focusLabel');if(screen||!el||!el.classL
  label.textContent=a.name;label.style.left=g.x+'px';label.style.top=(g.top-39)+'px';label.classList.add('visible');}
 function select(i){activeList();if(!controls.length)return;var old=controls[cursor];cursor=Math.max(0,Math.min(controls.length-1,i));if(old){old.classList.remove('selected');old.setAttribute('tabindex','-1');}
  var el=controls[cursor];el.classList.add('selected');el.setAttribute('tabindex','0');if(document.activeElement!==el)el.focus({preventScroll:true});
- if(screen){var host=$('#panelContent'),r=el.getBoundingClientRect(),box=host.getBoundingClientRect();if(r.top<box.top+10||r.bottom>box.bottom-12){el.scrollIntoView({block:'nearest',inline:'nearest',behavior:'auto'});listDirty=true;}}
+ if(screen){var host=$('#panelContent'),r=el.getBoundingClientRect(),box=host.getBoundingClientRect();if(host.contains(el)&&(r.top<box.top+10||r.bottom>box.bottom-12)){el.scrollIntoView({block:'nearest',inline:'nearest',behavior:'auto'});listDirty=true;}}
  labelSelected(el);}
 function row(act,title,right,sub){return '<button class="panel-row focusable" data-act="'+act+'"><span><span class="row-title">'+esc(title)+'</span><span class="row-sub">'+esc(sub||'')+'</span></span><span class="row-right">'+esc(right||'')+' <span class="chevron">›</span></span></button>';}
 function appRow(act,title,right,sub,id){return row(act,title,right,sub).replace('data-act="'+act+'"','data-act="'+act+'" data-id="'+esc(id)+'"');}
@@ -169,7 +169,7 @@ function favoritesEditor(){var b='<div class="editor-heading"><span>HOME APPS</s
  apps.forEach(function(a){if(fav.indexOf(a.id)<0)b+='<button class="add-app focusable" data-act="add" data-id="'+esc(a.id)+'" aria-label="Add '+esc(a.name)+'"><span class="add-sign">+</span>'+esc(a.name)+'</button>';});
  b+='</div>';return b;}
 function renderPanel(type,focusKey,retainScroll){var host=$('#panelContent'),scrollTop=retainScroll?host.scrollTop:0;
- screen=type;if(rotationTimer){clearTimeout(rotationTimer);rotationTimer=null;}$('#overlay').classList.remove('hidden');$('#overlay').classList.toggle('catalog',type==='all');$('#overlay').classList.toggle('profile-panel',type==='profiles');$('#overlay').classList.toggle('wallpaper-panel',type==='wallpapers');$('#focusLabel').classList.remove('visible');
+ screen=type;if(rotationTimer){clearTimeout(rotationTimer);rotationTimer=null;}$('#overlay').classList.remove('hidden');$('#overlay').classList.toggle('catalog',type==='all');$('#overlay').classList.toggle('profile-panel',type==='profiles');$('#overlay').classList.toggle('wallpaper-panel',type==='wallpapers');$('#overlay').classList.toggle('pairing-panel',type==='pairing');$('#focusLabel').classList.remove('visible');
  var title='',subtitle='',body='';
  if(type==='settings'){title='Settings';subtitle='A quieter TV, exactly how you like it.';
  body=row('customize','Personalize','Edit','Apps, wallpaper and screensaver')+row('monitorSettings','Baby monitor',monitorEnabled?'Visible':'Hidden','Optional camera button near Calendar')+row('profiles','Profiles',currentProfile().name,'Switch between layouts')+row('calendarSettings','Calendar',calVerified?'Verified':calConnected?'Saved':'Connect','Read-only calendar for this profile')+row('all','All apps',apps.length+' apps','Open installed applications')+(recentApps().length?row('recent','Recently opened',recentApps().length+' apps','Quickly relaunch an app'):'')+row('updates','Updates','Check','Production version')+row('recovery','About & recovery','Open','Original Sony Home and redirect controls');}
@@ -221,7 +221,12 @@ function renderPanel(type,focusKey,retainScroll){var host=$('#panelContent'),scr
  '<p class="library-footnote">Verified means Google returned a valid calendar feed. Zero events is still a successful connection. Account name is your own label; iCal does not authenticate a Google identity. Use private iCal addresses only on a trusted device.</p>';
  }
  else if(type==='pairing'){title='Connect using phone';subtitle='Scan QR on the same home Wi-Fi.';
- body='<div class="pair-qr" id="pairQr">'+(pairingUrl?qrSvg(pairingUrl):'<span class="pair-loading">Starting private pairing…</span>')+'</div><p class="pair-url">'+esc(pairingUrl||'')+'</p><p class="calendar-help">The QR carries a temporary Vela setup link, not your calendar address. The pairing page closes after three minutes. Because your phone uses local HTTP, use only trusted home Wi-Fi, not a public network.</p>'+row('cancelPair','Cancel pairing','Cancel','Close the temporary phone setup page');
+ body='<div class="pair-stage"><div class="pair-qr" id="pairQr">'+(pairingUrl?qrSvg(pairingUrl):'<span class="pair-loading">'+(pairingExpiresAt?'Pairing expired — generate a new code':'Starting local pairing…')+'</span>')+'</div>'+
+  '<p class="pair-countdown" id="pairCountdown" aria-live="off"></p>'+
+  '<p class="pair-url">'+esc(pairingUrl||'')+'</p>'+
+  '<p class="pair-help">Scan with your phone on the same private home Wi-Fi. This single-use QR expires after 10 minutes. Enter the private iCal address only on your phone.</p></div>'+
+  row('renewPair','Generate new QR','↻','Refresh an expired or unscannable code')+
+  row('cancelPair','Cancel pairing','Close','Close the phone connection immediately');
  }
  else if(type==='recovery'){title='About & recovery';subtitle='The original launcher stays installed and available.';var redirected=false;try{redirected=bridge?bridge.redirectEnabled():false;}catch(e){}
  body='<p class="library-footnote">Try pressing Home twice quickly to show original Sony Home. This shortcut depends on Sony firmware and may not work. You can always use Open Sony Home below.</p>'+row('sony','Open Sony Home','Open','Temporarily pauses redirect')+row('redirect','Home redirect',redirected?'On':'Off','Accessibility override')+row('accessibility','Accessibility service','Open','Recovery if Home shortcut fails');}
@@ -233,9 +238,9 @@ function renderPanel(type,focusKey,retainScroll){var host=$('#panelContent'),scr
  row('autoUpdates','Automatic daily checks',s&&s.auto===false?'Off':'On','Checks in the background; installs are never silent');}
  $('#panelTitle').textContent=title;$('#panelDescription').textContent=subtitle;host.innerHTML=body;host.scrollTop=scrollTop;
  listDirty=true;activeList();var focusIndex=0;if(focusKey){for(var i=0;i<controls.length;i++){var b=controls[i];if(b.getAttribute('data-act')===focusKey.act&&(focusKey.id===undefined||b.getAttribute('data-id')===focusKey.id)&&(!focusKey.dir||b.getAttribute('data-dir')===focusKey.dir)){focusIndex=i;break;}}}
- if(!focusKey){focusIndex=controls.findIndex(function(b){return b.getAttribute('data-act')!=='close';});if(focusIndex<0)focusIndex=0;}select(focusIndex);
+ if(!focusKey){focusIndex=type==='pairing'?0:controls.findIndex(function(b){return b.getAttribute('data-act')!=='close';});if(focusIndex<0)focusIndex=0;}select(focusIndex);if(type==='pairing')pairingTick();
  if(type==='customize'||type==='all')visibleIcons();}
-function close(){if(screen==='pairing'&&bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();screen='';scheduleRotation();$('#overlay').classList.add('hidden');listDirty=true;activeList();select(Math.max(0,controls.findIndex(function(el){return el.classList.contains('app-card');})));}
+function close(){if(screen==='pairing'){stopPairClock();pairingUrl='';pairingExpiresAt=0;if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();}screen='';scheduleRotation();$('#overlay').classList.add('hidden');listDirty=true;activeList();select(Math.max(0,controls.findIndex(function(el){return el.classList.contains('app-card');})));}
 function rerenderWithFocus(act,id,dir){renderPanel(screen,{act:act,id:id,dir:dir},true);}
 function requestProfileEdit(kind,id){var p=null;for(var i=0;i<profiles.length;i++)if(profiles[i].id===id)p=profiles[i];
  var old=p?p.name:'';if(bridge&&bridge.editProfile){bridge.editProfile(kind,id,old);}else{
@@ -252,8 +257,9 @@ function action(name,id,dir){
  if(name==='switchProfile'){if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();if(id==='guest'){profiles=profiles.filter(function(p){return p.id!=='guest';});profiles.push(makeProfile('guest','Guest',null));}profileId=id;persistProfiles();applyProfile(true);close();return;}
  if(name==='avatarPicker'){editingAvatar=id;renderPanel('avatars');return;}
  if(name==='chooseAvatar'){var p=profiles.filter(function(x){return x.id===editingAvatar;})[0];if(p){p.avatar=id;if(p.id!=='guest')persistProfiles();applyProfile(true);}renderPanel('profiles',{act:'avatarPicker',id:editingAvatar});return;}
- if(name==='pairCalendar'){if(profileId==='guest'){toast('Guest has no saved calendar');return;}pairingUrl='';if(bridge&&bridge.pairCalendar){bridge.pairCalendar(profileId);renderPanel('pairing');}else toast('Phone pairing is only available on your TV');return;}
- if(name==='cancelPair'){if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();renderPanel('calendarSettings');return;}
+ if(name==='pairCalendar'){if(profileId==='guest'){toast('Guest has no saved calendar');return;}startPairing();return;}
+  if(name==='renewPair'){startPairing();return;}
+ if(name==='cancelPair'){stopPairClock();pairingUrl='';pairingExpiresAt=0;if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();renderPanel('calendarSettings');return;}
  if(name==='connectCalendar'){if(profileId==='guest'){toast('Guest has no saved calendar');return;}if(bridge&&bridge.editCalendar)bridge.editCalendar(profileId);else toast('Connect a calendar on your TV');return;}
  if(name==='disconnectCalendar'){if(bridge&&bridge.removeCalendar){bridge.removeCalendar(profileId);requestCalendar(false);}return;}
  if(name==='refreshCalendar'){requestCalendar(true);toast('Refreshing calendar…');return;}
@@ -294,7 +300,7 @@ function action(name,id,dir){
 }
 function trigger(){activeList();var b=controls[cursor];if(b)action(b.getAttribute('data-act'),b.getAttribute('data-id')||'',b.getAttribute('data-dir')||'');}
 function remote(key){if(key==='longselect'){activeList();var selected=controls[cursor];if(selected&&selected.classList.contains('app-card'))openAppMenu(selected.getAttribute('data-id'));return;}
- if(key==='back'){if(!screen)return;if(screen==='appMenu'){if(contextFrom==='all'||contextFrom==='recent')renderPanel(contextFrom,{act:'launch',id:contextAppId});else close();return;}if(screen==='settings'||screen==='profiles')close();else if(screen==='monitor')close();else if(screen==='monitorSettings')renderPanel('settings');else if(screen==='volumeSettings')renderPanel('customize');else if(screen==='avatars')renderPanel('profiles');else if(screen==='calendarSettings')renderPanel('calendar');else if(screen==='pairing'){if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();renderPanel('calendarSettings');}else if(screen==='calendar')close();else if(screen==='wallpapers')renderPanel('customize');else renderPanel('settings');return;}
+ if(key==='back'){if(!screen)return;if(screen==='appMenu'){if(contextFrom==='all'||contextFrom==='recent')renderPanel(contextFrom,{act:'launch',id:contextAppId});else close();return;}if(screen==='settings'||screen==='profiles')close();else if(screen==='monitor')close();else if(screen==='monitorSettings')renderPanel('settings');else if(screen==='volumeSettings')renderPanel('customize');else if(screen==='avatars')renderPanel('profiles');else if(screen==='calendarSettings')renderPanel('calendar');else if(screen==='pairing'){stopPairClock();pairingUrl='';pairingExpiresAt=0;if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();renderPanel('calendarSettings');}else if(screen==='calendar')close();else if(screen==='wallpapers')renderPanel('customize');else renderPanel('settings');return;}
  if(key==='select'){trigger();return;}activeList();if(!controls.length)return;
  var c=geometry[cursor],best=-1,score=Infinity;if(!c)return;
  for(var i=0;i<geometry.length;i++){if(i===cursor)continue;var r=geometry[i],dx=r.x-c.x,dy=r.y-c.y;
@@ -313,12 +319,34 @@ function updateCalendarView(){var n=Date.now(),day=new Date(n),start=new Date(da
  var peek=$('#calendarPeek');var next=today.filter(function(e){return e.end>n&&(!e.allDay||e.start>n);}).slice(0,2);peek.innerHTML=calConnected&&next.length?'<div class="peek-heading">TODAY</div>'+next.map(function(e){return eventHTML(e,true);}).join(''):'';
  if(screen==='calendar')renderCalendarBody();}
 function receiveCalendar(json){try{var obj=typeof json==='string'?JSON.parse(json):json;if(!obj||obj.profile!==profileId)return;
- calendarProfile=obj.profile;calConnected=!!obj.connected;calVerified=!!obj.verified;calName=obj.calendarName||'';calLabel=obj.label||'';calAccount=obj.calendarId||'';calLastSuccess=Number(obj.lastSuccess)||0;calLastAttempt=Number(obj.lastAttempt)||0;calEvents=Array.isArray(obj.events)?obj.events.filter(function(e){return Number.isFinite(e.start)&&Number.isFinite(e.end);}).slice(0,60):[];calStatus=obj.status||'';calendarChecked=Date.now();updateCalendarView();if(screen==='calendarSettings')renderPanel('calendarSettings');if(screen==='pairing'&&calConnected){if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();renderPanel('calendarSettings');}}catch(e){toast('Could not read calendar data');}}
+ calendarProfile=obj.profile;calConnected=!!obj.connected;calVerified=!!obj.verified;calName=obj.calendarName||'';calLabel=obj.label||'';calAccount=obj.calendarId||'';calLastSuccess=Number(obj.lastSuccess)||0;calLastAttempt=Number(obj.lastAttempt)||0;calEvents=Array.isArray(obj.events)?obj.events.filter(function(e){return Number.isFinite(e.start)&&Number.isFinite(e.end);}).slice(0,60):[];calStatus=obj.status||'';calendarChecked=Date.now();updateCalendarView();if(screen==='calendarSettings')renderPanel('calendarSettings');/* Cached calendar status must never close a live phone pairing. */}catch(e){toast('Could not read calendar data');}}
 function qrSvg(url){if(!window.VelaQRCode)return '<span class="pair-url">'+esc(url)+'</span>';
  try {var q=new window.VelaQRCode(0,0);q.addData(url);q.make();var n=q.getModuleCount(),out='<svg class="pair-svg" viewBox="0 0 '+(n+8)+' '+(n+8)+'" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#fff"/>';
  for(var y=0;y<n;y++)for(var x=0;x<n;x++)if(q.isDark(y,x))out+='<rect x="'+(x+4)+'" y="'+(y+4)+'" width="1" height="1" fill="#101b1c"/>';return out+'</svg>';}
  catch(e){return '<span class="pair-url">'+esc(url)+'</span>';}}
-function pairingReady(url){pairingUrl=String(url||'');if(screen==='pairing')renderPanel('pairing');}
+function stopPairClock(){if(pairTimer){clearInterval(pairTimer);pairTimer=null;}}
+function pairingTick(){
+ if(screen!=='pairing'){stopPairClock();return;}
+ var node=$('#pairCountdown');if(!node)return;
+ if(!pairingUrl){node.textContent=pairingExpiresAt?'Code expired — choose Generate new QR.':'Waiting for TV pairing server…';return;}
+ var seconds=Math.ceil((pairingExpiresAt-Date.now())/1000);
+ if(seconds<=0){pairingUrl='';stopPairClock();renderPanel('pairing');return;}
+ node.textContent='Ready to scan · expires in '+Math.floor(seconds/60)+':'+('0'+seconds%60).slice(-2);
+}
+function startPairing(){
+ stopPairClock();pairingUrl='';pairingExpiresAt=0;renderPanel('pairing');
+ if(bridge&&bridge.pairCalendar)bridge.pairCalendar(profileId);else toast('Phone pairing is only available on your TV');
+}
+function pairingReady(url,expires){
+ if(screen!=='pairing')return;
+ stopPairClock();pairingUrl=String(url||'');pairingExpiresAt=pairingUrl?(Number(expires)||Date.now()+600000):0;
+ renderPanel('pairing');if(pairingUrl)pairTimer=setInterval(pairingTick,1000);
+}
+function pairingCompleted(profile){
+ if(profile!==profileId)return;
+ stopPairClock();pairingUrl='';pairingExpiresAt=0;
+ if(screen==='pairing'){renderPanel('calendarSettings');toast('Calendar link received · verifying with Google…');}
+}
 function requestCalendar(force){if(profileId==='guest'){calConnected=false;calVerified=false;calEvents=[];updateCalendarView();return;}if(!bridge||!bridge.loadCalendar){if(preview&&calendarProfile!==profileId){calendarProfile=profileId;calConnected=false;calEvents=[];updateCalendarView();}return;}
  bridge.loadCalendar(profileId,!!force);}
 function renderCalendarBody(){if(screen!=='calendar')return;var host=$('#panelContent'),old=host.scrollTop;
@@ -340,6 +368,6 @@ document.addEventListener('keydown',function(e){if(!preview)return;
  if(e.key==='Enter'){e.preventDefault();if(!e.repeat){previewEnterAt=Date.now();previewLong=false;}else if(!previewLong&&Date.now()-previewEnterAt>=500){previewLong=true;remote('longselect');}return;}
  var k={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',Escape:'back',Backspace:'back'}[e.key];if(k){e.preventDefault();remote(k);}});
 document.addEventListener('keyup',function(e){if(preview&&e.key==='Enter'){e.preventDefault();if(!previewLong)remote('select');previewEnterAt=0;previewLong=false;}});
-window.QH={pause:pause,profileNameReady:profileNameReady,profileDeleteConfirmed:profileDeleteConfirmed,remote:remote,refreshApps:refreshApps,receiveApps:receiveApps,catalogRefreshed:catalogRefreshed,iconReady:iconReady,refreshWallpaper:refreshWallpaper,wallpaperReady:wallpaperReady,resume:resume,tick:clock,updateStatusReady:receiveUpdateStatus,receiveCalendar:receiveCalendar,pairingReady:pairingReady,volumeChanged:volumeChanged};
+window.QH={pause:pause,profileNameReady:profileNameReady,profileDeleteConfirmed:profileDeleteConfirmed,remote:remote,refreshApps:refreshApps,receiveApps:receiveApps,catalogRefreshed:catalogRefreshed,iconReady:iconReady,refreshWallpaper:refreshWallpaper,wallpaperReady:wallpaperReady,resume:resume,tick:clock,updateStatusReady:receiveUpdateStatus,receiveCalendar:receiveCalendar,pairingReady:pairingReady,pairingCompleted:pairingCompleted,volumeChanged:volumeChanged};
 init();
 })();
