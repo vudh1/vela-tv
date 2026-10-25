@@ -87,7 +87,7 @@ public final class MainActivity extends Activity {
     private long lastKeyDown = 0L;
     private AudioManager audioManager;
     // When disabled in Personalize, always defer to the regular TV volume handler.
-    private volatile boolean customVolumeEnabled = true;
+    private volatile boolean customVolumeEnabled = false;
     private boolean consumedVolumePress = false;
     private ContentObserver volumeObserver;
     private int lastObservedVolume = -1;
@@ -102,6 +102,13 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        // Sony's system volume HUD cannot reliably be hidden by a regular TV app.
+        // One-time migration prevents the new observer from drawing a second HUD over Sony's.
+        // Do not reapply: an explicit later user selection of Glass/Minimal is respected.
+        if (prefersNativeVolumeHud() && !prefs.getBoolean("sony_native_volume_hud_v1", false)) {
+            prefs.edit().putString("ui_volume_ui", "off")
+                .putBoolean("sony_native_volume_hud_v1", true).apply();
+        }
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         updater = new VelaUpdateController(this, prefs);
         calendar = new VelaCalendarController(this);
@@ -254,15 +261,24 @@ public final class MainActivity extends Activity {
         } catch (RuntimeException ignored) { /* system audio always remains authoritative */ }
     }
 
+    private boolean prefersNativeVolumeHud() {
+        String info = (String.valueOf(Build.MANUFACTURER) + " " + String.valueOf(Build.BRAND)
+            + " " + String.valueOf(Build.MODEL)).toLowerCase(java.util.Locale.US);
+        return info.contains("sony") || info.contains("bravia");
+    }
+
     private String volumeSupportMessage() {
+        if (prefersNativeVolumeHud()) {
+            return "Sony displays its own volume indicator. Native only is recommended to prevent two popups. Preview the Vela styles here without changing your volume. Enabling Glass or Minimal for live volume changes can display both indicators.";
+        }
         if (audioManager == null) return "TV audio information is unavailable.";
         try {
             if (audioManager.isVolumeFixed()) {
-                return "Android reports a fixed-volume output, often HDMI-CEC or a soundbar. Sony owns the physical volume keys and native overlay; use Preview overlay to see Vela's style.";
+                return "Android reports a fixed-volume output (often HDMI-CEC or soundbar). Native-only volume is recommended; Vela cannot hide the system popup.";
             }
-            return "Vela listens for Android volume changes while Home is visible. Sony can intercept some remote keys; the TV's system overlay may still appear.";
+            return "If Android already shows a volume popup, use Native only to prevent duplication. Glass/Minimal can still be previewed here.";
         } catch (RuntimeException ignored) {
-            return "Sony controls the volume display on this device. Use Preview overlay to see Vela's design.";
+            return "The TV may control volume overlays. Native only prevents a second Vela popup.";
         }
     }
 
