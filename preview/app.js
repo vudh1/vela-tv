@@ -207,7 +207,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  row('profiles','Profiles',currentProfile().name,'Manage profiles')+
  row('wakeProfileToggle','Ask for profile on TV wake',bridge&&bridge.wakeProfilePromptEnabled&&!bridge.wakeProfilePromptEnabled()?'Off':'On','After standby; not when returning from a streaming app');}
  else if(type==='lifeSettings'){title='Daily life';subtitle='Small conveniences, no Home clutter.';
- body=row('calendarSettings','Calendar',calVerified?'Verified':calConnected?'Saved':'Connect','Today's events and subscriptions')+
+ body=row('calendarSettings','Calendar',calVerified?'Verified':calConnected?'Saved':'Connect','Today events and subscriptions')+
  row('screensaverSettingsPanel','Screensaver','Open','Moving clock and current events')+
  row('monitorSettings','Baby monitor',monitorEnabled?'Visible':'Hidden','Optional camera shortcut');}
  else if(type==='screensaverSettingsPanel'){title='Screensaver';subtitle='Vela Clock moves gently and shows up to three cached events.';
