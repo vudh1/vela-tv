@@ -89,3 +89,21 @@ assert '.overlay.pairing-panel .panel' in css and 'max-height:32vh' in css
 assert 'QH.pairingReady(' in main and 'pairing.expiresAt()' in main
 assert 'renewPair' in js and 'pair-countdown' in css
 print('PASS QR pairing lifecycle, expiry countdown, renewal, and unclipped panel')
+
+# Volume and scenic DreamService checks: no polling, no display blackout, TV fallback retained.
+dream=(r/'app/src/main/java/com/danielvu/quiethome/VelaDreamService.java').read_text()
+assert 'setScreenBright(true)' in dream and 'setScreenBright(false)' not in dream
+assert 'getAssets().open(chooseWallpaper())' in dream
+assert 'root.addView(scenery' in dream and 'clockGroup.addView(time' in dream
+assert 'onDreamingStarted()' in dream and 'onDreamingStopped()' in dream
+assert 'handler.postDelayed(this, 60000L' in dream
+assert 'ContentObserver volumeObserver' in main
+assert 'registerContentObserver(Settings.System.CONTENT_URI' in main
+assert 'unregisterContentObserver(volumeObserver)' in main
+assert 'sampleVolume(true)' in main
+assert 'volumeSupportMessage()' in main
+assert 'bridge.volumeSupportMessage' in js
+assert "if(name==='volumeDemo')" in js
+assert 'adjustStreamVolume(stream, direction, 0)' in main
+assert 'TYPE_APPLICATION_OVERLAY' not in main
+print('PASS native screensaver artwork + visible clock, event-driven audio observation, Sony fallback')

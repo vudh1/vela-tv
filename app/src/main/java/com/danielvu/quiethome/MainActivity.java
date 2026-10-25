@@ -5,6 +5,7 @@ import android.media.AudioManager;
 import android.app.AlertDialog;
 import android.app.role.RoleManager;
 import android.content.ActivityNotFoundException;
+import android.database.ContentObserver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.BroadcastReceiver;
@@ -88,6 +89,9 @@ public final class MainActivity extends Activity {
     // When disabled in Personalize, always defer to the regular TV volume handler.
     private volatile boolean customVolumeEnabled = true;
     private boolean consumedVolumePress = false;
+    private ContentObserver volumeObserver;
+    private int lastObservedVolume = -1;
+    private boolean lastObservedMute = false;
     // Select fires on key-up so a long press cannot accidentally launch the app.
     private long selectDownAt = 0L;
     private boolean selectLongHandled = false;
@@ -170,6 +174,7 @@ public final class MainActivity extends Activity {
 
     @Override public void onResume() {
         super.onResume();
+        startVolumeObservation();
         if (web != null && javascriptReady) {
             // Clock and stale app catalog refresh when Android resumes a throttled WebView.
             web.evaluateJavascript("window.QH && QH.resume()", null);
@@ -178,6 +183,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onPause() {
+        stopVolumeObservation();
         if (pendingLongSelect != null) longSelectHandler.removeCallbacks(pendingLongSelect);
         pendingLongSelect = null;
         selectDownAt = 0L;
@@ -187,6 +193,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onDestroy() {
+        stopVolumeObservation();
         javascriptReady = false;
         if (web != null) {
             web.removeJavascriptInterface("QuietTV"); web.destroy(); web = null;
@@ -197,6 +204,66 @@ public final class MainActivity extends Activity {
         if (calendar != null) calendar.shutdown();
         io.shutdownNow();
         super.onDestroy();
+    }
+
+    /**
+     * Sony may consume remote volume keys before Activity.dispatchKeyEvent receives them.
+     * Observe Android's reported stream changes while Vela is visible, WITHOUT polling,
+     * accessibility capture, hidden APIs, or an always-on overlay.
+     * HDMI-CEC/fixed-volume output may not generate observable Android stream changes.
+     */
+    private void startVolumeObservation() {
+        if (volumeObserver != null || audioManager == null) return;
+        sampleVolume(false); // baseline; never flash a volume HUD on launch
+        volumeObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
+            @Override public void onChange(boolean selfChange) {
+                super.onChange(selfChange);
+                sampleVolume(false);
+            }
+        };
+        try {
+            getContentResolver().registerContentObserver(Settings.System.CONTENT_URI, true, volumeObserver);
+        } catch (RuntimeException e) {
+            android.util.Log.w("VelaVolume", "Volume observation unavailable", e);
+            volumeObserver = null;
+        }
+    }
+
+    private void stopVolumeObservation() {
+        if (volumeObserver == null) return;
+        try { getContentResolver().unregisterContentObserver(volumeObserver); }
+        catch (RuntimeException ignored) { }
+        volumeObserver = null;
+    }
+
+    private void sampleVolume(boolean force) {
+        AudioManager a = audioManager;
+        if (a == null || a.isVolumeFixed()) return;
+        try {
+            int max = a.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            if (max <= 0) return;
+            int current = a.getStreamVolume(AudioManager.STREAM_MUSIC);
+            boolean muted = a.isStreamMute(AudioManager.STREAM_MUSIC) || current <= 0;
+            int percent = Math.max(0, Math.min(100, Math.round(100f * current / max)));
+            boolean changed = lastObservedVolume >= 0 && (lastObservedVolume != percent || lastObservedMute != muted);
+            lastObservedVolume = percent;
+            lastObservedMute = muted;
+            if ((force || changed) && customVolumeEnabled && javascriptReady && web != null) {
+                sendToJs("QH.volumeChanged({\"percent\":" + percent + ",\"muted\":" + muted + "})");
+            }
+        } catch (RuntimeException ignored) { /* system audio always remains authoritative */ }
+    }
+
+    private String volumeSupportMessage() {
+        if (audioManager == null) return "TV audio information is unavailable.";
+        try {
+            if (audioManager.isVolumeFixed()) {
+                return "Android reports a fixed-volume output, often HDMI-CEC or a soundbar. Sony owns the physical volume keys and native overlay; use Preview overlay to see Vela's style.";
+            }
+            return "Vela listens for Android volume changes while Home is visible. Sony can intercept some remote keys; the TV's system overlay may still appear.";
+        } catch (RuntimeException ignored) {
+            return "Sony controls the volume display on this device. Use Preview overlay to see Vela's design.";
+        }
     }
 
     /** A best-effort foreground-only volume handler. HDMI-CEC/fixed-volume devices retain OEM handling.
@@ -213,10 +280,7 @@ public final class MainActivity extends Activity {
                 : key == KeyEvent.KEYCODE_VOLUME_DOWN ? AudioManager.ADJUST_LOWER
                 : AudioManager.ADJUST_TOGGLE_MUTE;
             a.adjustStreamVolume(stream, direction, 0);
-            int current = a.getStreamVolume(stream);
-            boolean muted = a.isStreamMute(stream) || current <= 0;
-            int percent = Math.max(0, Math.min(100, Math.round(100f * current / max)));
-            sendToJs("QH.volumeChanged(" + "{\"percent\":" + percent + ",\"muted\":" + muted + "}" + ")");
+            sampleVolume(true);
             return true;
         } catch (RuntimeException error) {
             android.util.Log.w("VelaVolume", "Sony will handle volume normally", error);
@@ -587,6 +651,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void setCustomVolumeEnabled(boolean enabled) {
             customVolumeEnabled = enabled;
         }
+        @JavascriptInterface public String volumeSupportMessage() { return MainActivity.this.volumeSupportMessage(); }
         @JavascriptInterface public void requestApps() { requestAppsAsync(); }
         @JavascriptInterface public void requestAppIcon(String id) { requestIconAsync(id); }
         @JavascriptInterface public void requestWallpaper() { requestWallpaperAsync(); }

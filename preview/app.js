@@ -187,7 +187,7 @@ function renderPanel(type,focusKey,retainScroll){var host=$('#panelContent'),scr
  row('volumePosition','Position',volumePosition==='center'?'Bottom center':'Bottom right','Keep it away from the clock')+
  row('volumeDelay','Hide delay',volumeDelay===800?'Short · 0.8 s':'Normal · 1.2 s','Automatically disappears after input')+
  row('volumeDemo','Preview overlay','Play','Preview without changing the TV audio')+
- '<p class="library-footnote">Some Sony remotes and HDMI-CEC soundbars handle volume before Vela receives the key. In those cases the native volume UI stays in control.</p>';
+ '<p class="library-footnote">'+esc(bridge&&bridge.volumeSupportMessage?bridge.volumeSupportMessage():'On some TVs, the OEM intercepts remote volume keys before Vela. The Preview overlay is always available; it does not change system audio.')+'</p>';
  }
  else if(type==='wallpapers'){title='Wallpapers';subtitle='Select to preview immediately on Home.';body=wallpaperGallery();}
  else if(type==='profiles'){title='Profiles';subtitle='Separate favorite apps, layouts and wallpapers.';body=profileChooser();}
