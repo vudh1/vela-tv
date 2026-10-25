@@ -4,7 +4,7 @@ This is a Cloudflare Worker + SQLite-backed Durable Object relay for one Sony Ve
 
 ## 1. GitHub Pages
 
-In repository **Settings → Pages**, set **Deploy from a branch → main → /(root)** if not already configured. The resulting URL is `https://vudh1.github.io/velatv/remote/`. If the Pages deployment uses GitHub Actions, configure it to publish the `remote/` folder at that path instead. An HTML preview working on your laptop does **not** mean remote commands are enabled.
+In repository **Settings → Pages**, set **Build and deployment → Source → GitHub Actions**. Run the **Publish Vela web remote** workflow once if it has not yet run. On every later change to `remote/` or `pages/` merged into `main`, it publishes only the public remote files at `https://vudh1.github.io/velatv/remote/`. The repository homepage also redirects there. The separate **Deploy Vela remote Worker** action only deploys the API; it does not publish GitHub Pages. An HTML preview working on your laptop does **not** mean remote commands are enabled.
 
 ## 2. Cloudflare Worker (one-time)
 
