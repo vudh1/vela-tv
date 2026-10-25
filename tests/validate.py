@@ -27,7 +27,7 @@ main=(r/'app/src/main/java/com/danielvu/quiethome/MainActivity.java').read_text(
 assert 'getCachedApps()' in main and 'getCachedCatalogAt()' in main
 assert 'profile_data_v2' in main and 'active_profile_v2' in main
 assert 'cached_catalog' in main and 'getCacheDir(), "app-icons"' in main
-assert 'Bitmap.CompressFormat.WEBP' in main
+assert 'Bitmap.CompressFormat.PNG' in main
 assert 'shouldInterceptRequest' in main
 assert 'VelaCalendarController' in main
 assert 'now - lastKeyDown >= 24' in main
@@ -136,6 +136,25 @@ assert 'if (prefersNativeVolumeHud() && !prefs.getBoolean' in main
 assert "if(volumeMode==='off'&&!previewOnly)return;" in js
 assert "if(name==='volumeDemo'){volumeChanged(lastVolume,true);return;}" in js
 assert "volumeMode==='off'?'Native only'" in js
-assert 'Enabling Glass or Minimal for live volume changes can display both indicators.' in main
+assert 'Sony can still display its own indicator; Vela cannot hide system UI.' in main
 assert 'setCustomVolumeEnabled(volumeMode!==\'off\')' in js
 print('PASS Sony native volume HUD migration and opt-in Vela HUD preview')
+
+# HQ icon rendering and Home-only key handling.
+assert 'if (force && customVolumeEnabled && javascriptReady && web != null)' in main
+assert 'if ((force || changed)' not in main
+assert 'sampleVolume(false);' in main # still samples baseline, never draws system-triggered double popup
+assert 'a.adjustStreamVolume(stream, direction, 0)' in main
+assert 'if (consumedVolumePress) return true;' in main
+assert 'return super.dispatchKeyEvent(e);' in main
+assert 'stopVolumeObservation();' in main
+assert 'getDrawableForDensity(' in main and 'DisplayMetrics.DENSITY_XXXHIGH' in main
+assert 'final int size = 192' in main
+assert 'Bitmap.CompressFormat.PNG' in main and 'Bitmap.CompressFormat.WEBP, 78' not in main
+assert 'data:image/png;base64,' in main
+assert 'new WebResourceResponse("image/png"' in main
+assert '-hq192-v2.png' in main
+assert '?quality=hq192-v2' in js
+assert 'volumeSettings' in js and 'Home-only overlay' in js
+assert 'SYSTEM_ALERT_WINDOW' not in ET.tostring(m,encoding='unicode')
+print('PASS Home-only volume input handling, native streaming fallback, high-density lossless TV icons')

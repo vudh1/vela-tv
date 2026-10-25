@@ -27,6 +27,8 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.text.format.DateFormat;
 import android.util.Base64;
+import android.util.DisplayMetrics;
+import android.content.res.Resources;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -159,10 +161,10 @@ public final class MainActivity extends Activity {
                         // Respond to the WebView image request with binary, locally cached artwork.
                         // This runs on a resource thread and never waits for JS callback round trips.
                         String data=getAppIcon(id);
-                        String prefix="data:image/webp;base64,";
+                        String prefix="data:image/png;base64,";
                         if (data.startsWith(prefix)) {
                             byte[] bytes=Base64.decode(data.substring(prefix.length()),Base64.DEFAULT);
-                            return new WebResourceResponse("image/webp",null,new ByteArrayInputStream(bytes));
+                            return new WebResourceResponse("image/png",null,new ByteArrayInputStream(bytes));
                         }
                     }
                     String svg="<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'><rect width='80' height='80' rx='18' fill='#233b43'/><rect x='18' y='18' width='44' height='44' rx='10' fill='none' stroke='#e2edea' stroke-width='3'/><path d='M32 32h16v16H32z' fill='none' stroke='#e2edea' stroke-width='3'/></svg>";
@@ -252,10 +254,12 @@ public final class MainActivity extends Activity {
             int current = a.getStreamVolume(AudioManager.STREAM_MUSIC);
             boolean muted = a.isStreamMute(AudioManager.STREAM_MUSIC) || current <= 0;
             int percent = Math.max(0, Math.min(100, Math.round(100f * current / max)));
-            boolean changed = lastObservedVolume >= 0 && (lastObservedVolume != percent || lastObservedMute != muted);
             lastObservedVolume = percent;
             lastObservedMute = muted;
-            if ((force || changed) && customVolumeEnabled && javascriptReady && web != null) {
+            // Home-only volume mode: ONLY show Vela HUD for keys delivered directly
+            // to this Activity. Sony's SystemUI may handle other volume presses
+            // before they reach Vela; observing those changes causes double HUDs.
+            if (force && customVolumeEnabled && javascriptReady && web != null) {
                 sendToJs("QH.volumeChanged({\"percent\":" + percent + ",\"muted\":" + muted + "})");
             }
         } catch (RuntimeException ignored) { /* system audio always remains authoritative */ }
@@ -269,22 +273,23 @@ public final class MainActivity extends Activity {
 
     private String volumeSupportMessage() {
         if (prefersNativeVolumeHud()) {
-            return "Sony displays its own volume indicator. Native only is recommended to prevent two popups. Preview the Vela styles here without changing your volume. Enabling Glass or Minimal for live volume changes can display both indicators.";
+            return "Experimental Home-only volume: Glass/Minimal appear only if Vela receives and handles the volume key. Sony can still display its own indicator; Vela cannot hide system UI. Native only prevents duplicate overlays. Streaming apps retain Sony controls.";
         }
         if (audioManager == null) return "TV audio information is unavailable.";
         try {
             if (audioManager.isVolumeFixed()) {
-                return "Android reports a fixed-volume output (often HDMI-CEC or soundbar). Native-only volume is recommended; Vela cannot hide the system popup.";
+                return "Fixed-volume output (often HDMI-CEC or soundbar). Sony handles the volume keys. Vela cannot replace or hide its native popup.";
             }
-            return "If Android already shows a volume popup, use Native only to prevent duplication. Glass/Minimal can still be previewed here.";
+            return "Experimental Home-only Glass/Minimal only respond to volume keys delivered to Vela. If you still see two popups, switch to Native only.";
         } catch (RuntimeException ignored) {
             return "The TV may control volume overlays. Native only prevents a second Vela popup.";
         }
     }
 
-    /** A best-effort foreground-only volume handler. HDMI-CEC/fixed-volume devices retain OEM handling.
-     *  No FLAG_SHOW_UI: when supported, Vela draws its own small non-interactive indicator.
-     *  Never use a global Accessibility listener or system overlay to capture volume keys. */
+    /** Home-only, best-effort interception. Volume adjustments set flags=0 (no
+     *  FLAG_SHOW_UI), and the Activity consumes successfully delivered keys.
+     *  Sony may show its native SystemUI volume OSD independently.
+     *  Never use global accessibility or system overlays to capture keys. */
     private boolean adjustVelaVolume(int key) {
         AudioManager a = audioManager;
         if (a == null || a.isVolumeFixed()) return false;
@@ -404,13 +409,14 @@ public final class MainActivity extends Activity {
         long updateTime = 0;
         try { updateTime = getPackageManager().getPackageInfo(pkg, 0).lastUpdateTime; }
         catch (Exception ignored) { return ""; }
-        File cached = new File(dir, Integer.toHexString(id.hashCode()) + "-" + updateTime + ".webp");
+        // Versioned cache identity discards the old 80px lossy images across upgrades.
+        File cached = new File(dir, Integer.toHexString(id.hashCode()) + "-" + updateTime + "-hq192-v2.png");
         String encoded = "";
-        if (cached.isFile() && cached.length() > 0 && cached.length() < 80000) {
+        if (cached.isFile() && cached.length() > 0 && cached.length() < 512000) {
             try (FileInputStream in = new FileInputStream(cached)) {
                 byte[] bytes = new byte[(int) cached.length()];
                 int off=0,n;while(off<bytes.length && (n=in.read(bytes,off,bytes.length-off))>0)off+=n;
-                if(off==bytes.length)encoded="data:image/webp;base64,"+Base64.encodeToString(bytes,Base64.NO_WRAP);
+                if(off==bytes.length)encoded="data:image/png;base64,"+Base64.encodeToString(bytes,Base64.NO_WRAP);
             } catch (Exception ignored) { }
         }
         if (encoded.isEmpty()) encoded = iconData(r, pkg, cached);
@@ -419,24 +425,37 @@ public final class MainActivity extends Activity {
         return encoded;
     }
 
-    /** Persist scaled WebP icons across launches to avoid repeated draw/compression work. */
+    /** Persist high-resolution lossless PNG icons across launches. Kept local. */
     private String iconData(ResolveInfo r, String pkg, File cached) {
         PackageManager pm = getPackageManager();
         Drawable drawable = null;
-        try { drawable = pm.getApplicationIcon(pkg); } catch (Exception ignored) { }
+        // Prefer the highest-density packaged source resource, not the TV's
+        // possibly small default-density application icon.
+        if (r != null && r.activityInfo != null) {
+            try {
+                int iconRes = r.activityInfo.getIconResource();
+                if (iconRes == 0) iconRes = r.activityInfo.applicationInfo.icon;
+                if (iconRes != 0) {
+                    Resources resources = pm.getResourcesForApplication(pkg);
+                    drawable = resources.getDrawableForDensity(
+                        iconRes, DisplayMetrics.DENSITY_XXXHIGH, null);
+                }
+            } catch (Exception ignored) { }
+        }
         if (drawable == null && r != null) try { drawable = r.loadIcon(pm); } catch (Exception ignored) { }
+        if (drawable == null) try { drawable = pm.getApplicationIcon(pkg); } catch (Exception ignored) { }
         if (drawable == null) return "";
         try {
-            final int size = 80;
+            final int size = 192;
             Bitmap bitmap = Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888);
             Canvas canvas = new Canvas(bitmap);
             drawable.setBounds(0,0,size,size);drawable.draw(canvas);
             ByteArrayOutputStream output = new ByteArrayOutputStream();
-            bitmap.compress(Bitmap.CompressFormat.WEBP, 78, output);
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, output);
             bitmap.recycle();
             byte[] bytes=output.toByteArray();
-            if (bytes.length < 80000) try (FileOutputStream out = new FileOutputStream(cached)) { out.write(bytes); }
-            return "data:image/webp;base64,"+Base64.encodeToString(bytes,Base64.NO_WRAP);
+            if (bytes.length < 512000) try (FileOutputStream out = new FileOutputStream(cached)) { out.write(bytes); }
+            return "data:image/png;base64,"+Base64.encodeToString(bytes,Base64.NO_WRAP);
         } catch (Exception e) {
             android.util.Log.w("VelaApps", "Failed icon for " + pkg, e);return "";
         }
