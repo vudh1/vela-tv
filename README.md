@@ -60,10 +60,13 @@ app cannot guarantee detecting every physical Sony power wake.
 On consumer Samsung TVs, Vela cannot replace the system Home or automatically
 appear at power-on. It can ask for a profile when the user opens the Vela app.
 
-The startup chooser uses a full-screen neutral graphite backdrop regardless of
-the previously selected wallpaper, with large profile icons and names below.
-It blocks Home until a profile is chosen; normal profile management remains
-in the compact settings drawer.
+The startup chooser uses an opaque near-black cinematic backdrop regardless of
+the previously selected wallpaper, with a restrained glass-like profile shelf,
+monochrome icon tiles and names below. It blocks Home until a profile is
+chosen; normal profile management remains in the compact settings drawer.
+The glass effect uses layered translucency without runtime blur on TV hardware.
+Settings headings and action labels use consistent Title Case. This visual-only
+change has **No FRIDAY impact** and adds no network or billing dependency.
 
 ### Changing your home Wi-Fi
 

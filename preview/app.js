@@ -160,7 +160,10 @@ function select(i){activeList();if(!controls.length)return;var old=focusedContro
  var el=controls[cursor];focusedControl=el;el.classList.add('selected');el.setAttribute('tabindex','0');if(document.activeElement!==el)el.focus({preventScroll:true});
  if(screen){var host=$('#panelContent'),r=el.getBoundingClientRect(),box=host.getBoundingClientRect();if(host.contains(el)&&(r.top<box.top+10||r.bottom>box.bottom-12)){el.scrollIntoView({block:'nearest',inline:'nearest',behavior:'auto'});listDirty=true;}}
  labelSelected(el);}
-function row(act,title,right,sub,id){return '<button class="panel-row focusable" data-act="'+act+'"'+(id?' data-id="'+esc(id)+'"':'')+'><span><span class="row-title">'+esc(title)+'</span><span class="row-sub">'+esc(sub||'')+'</span></span><span class="row-right">'+esc(right||'')+' <span class="chevron">›</span></span></button>';}
+// Settings labels use consistent Title Case without changing profile names,
+// acronyms (TV/IP/PIN), or the established iCal spelling.
+function uiTitle(text){return String(text).replace(/(^|[\s/&\u00b7\u2013\u2014-])([a-z][A-Za-z]*)/g,function(_,sep,word){return sep+(word==='iCal'?word:word.charAt(0).toUpperCase()+word.slice(1));});}
+function row(act,title,right,sub,id){return '<button class="panel-row focusable" data-act="'+act+'"'+(id?' data-id="'+esc(id)+'"':'')+'><span><span class="row-title">'+esc(uiTitle(title))+'</span><span class="row-sub">'+esc(sub||'')+'</span></span><span class="row-right">'+esc(right||'')+' <span class="chevron">›</span></span></button>';}
 function appRow(act,title,right,sub,id){return row(act,title,right,sub).replace('data-act="'+act+'"','data-act="'+act+'" data-id="'+esc(id)+'"');}
 function eventKey(e){return e?String(e.uid||e.title).slice(0,180)+'/'+e.start:'';}
 function savedChannel(e){var p=currentProfile();return e&&p&&p.channels&&p.channels[eventKey(e)]||e&&e.channel||'';}
@@ -230,7 +233,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  var title='',subtitle='',body='';
  if(type==='settings'){title='Settings';subtitle='Four simple sections.';
  body=row('homeSettings','Home & Profiles','Open','Appearance, favorites and profile selection')+
- row('lifeSettings','Daily life','Open',tizenMode?'Private calendar':'Calendar, screensaver and baby monitor')+
+ row('lifeSettings','Daily Life','Open',tizenMode?'Private calendar':'Calendar, screensaver and baby monitor')+
  row('appsSettings','Apps & Activity','Open','Browse and sort installed apps')+
  row('deviceSettings','Device & Support','Open','Updates, recovery and about');}
  else if(type==='homeSettings'){title='Home & Profiles';subtitle='Personalize the Vela Home experience.';
@@ -238,7 +241,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  row('homeApps','Home favorites','Edit','Add and arrange pinned apps')+
  row('profiles','Profiles',currentProfile().name,'Manage profiles')+
  row('wakeProfileToggle',tizenMode?'Ask for profile on Vela launch':'Ask for profile on TV wake',bridge&&bridge.wakeProfilePromptEnabled&&!bridge.wakeProfilePromptEnabled()?'Off':'On',tizenMode?'When you open Vela; Samsung controls TV startup':'After standby; not when returning from a streaming app');}
- else if(type==='lifeSettings'){title='Daily life';subtitle='Small conveniences, no Home clutter.';
+ else if(type==='lifeSettings'){title='Daily Life';subtitle='Small conveniences, no Home clutter.';
  body=row('calendarSettings','Calendar',calVerified?'Verified':calConnected?'Saved':'Connect','Today events and subscriptions')+
  (tizenMode?'':row('screensaverSettingsPanel','Screensaver','Open','Moving clock and current events')+
  row('monitorSettings','Baby monitor',monitorEnabled?'Visible':'Hidden','Optional camera shortcut'));}
@@ -283,10 +286,10 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  '<p class="library-footnote">Version: '+esc(updateStatus&&updateStatus.current?updateStatus.current:'See Updates')+'</p>'+
  '<p class="library-footnote">Profiles and app activity stay on this TV. Calendar links and events are stored locally with Android Keystore encryption. Returning to Sony Home remains available under Recovery. Weather: Open-Meteo (CC BY 4.0), approximate location by IP Info.</p>';}
  else if(type==='homeApps'){title='Home favorites';subtitle='Pin up to eight apps and reorder with arrows.';body=favoritesEditor();}
- else if(type==='startupProfiles'){title="Who's watching?";subtitle='Choose your space.';
+ else if(type==='startupProfiles'){title="Who's Watching?";subtitle='Choose your space.';
  body='<div class="startup-avatar-grid" role="group" aria-label="Choose your profile">'+profiles.map(function(p){
  return '<button class="startup-avatar-card focusable" data-act="switchProfile" data-id="'+esc(p.id)+'" aria-label="Continue as '+esc(p.name)+'"><span class="startup-avatar">'+avatarSvg(p.avatar,p.name)+'</span><span class="startup-profile-name">'+esc(p.name)+'</span></button>';
- }).join('')+'</div><p class="startup-footer">YOUR SPACE · YOUR APPS</p>';}
+ }).join('')+'</div><p class="startup-footer">SELECT A PROFILE TO CONTINUE</p>';}
  else if(type==='all'){title='All apps';subtitle='Hold OK on an icon for quick actions.';
  body='<div class="app-grid">'+orderedApps().map(function(a){return tile(a,'launch');}).join('')+'</div>'+(apps.length?'<p class="library-footnote">Sorted by '+esc(sortLabel())+' · Change under Gear → Apps</p>':'<p>Loading installed apps…</p>');}
  else if(type==='recent'){title='Recently opened';subtitle='Just your last five Vela launches, on this profile.';body=recentPanel();}
@@ -372,7 +375,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  (s&&s.available?row('installUpdate',s.downloaded?'Install downloaded update':'Download & install',s.downloaded?'Install':'Download','Android must approve the installation'):'')+
  row('autoUpdates','Automatic daily checks',s&&s.auto===false?'Off':'On','Check when Vela is open, once per day')+
  row('autoDownload','Download updates automatically',s&&s.autoDownload===false?'Off':'On','Save and SHA-256 verify new APKs in the background; installation requires approval');}
- $('#panelTitle').textContent=title;$('#panelDescription').textContent=subtitle;host.innerHTML=body;host.scrollTop=scrollTop;
+ $('#panelTitle').textContent=(type==='appMenu'||type==='calendarSettings')?title:uiTitle(title);$('#panelDescription').textContent=subtitle;host.innerHTML=body;host.scrollTop=scrollTop;
  listDirty=true;activeList();var focusIndex=0;if(focusKey){for(var i=0;i<controls.length;i++){var b=controls[i];if(b.getAttribute('data-act')===focusKey.act&&(focusKey.id===undefined||b.getAttribute('data-id')===focusKey.id)&&(!focusKey.dir||b.getAttribute('data-dir')===focusKey.dir)){focusIndex=i;break;}}}
  if(type==='calendar')lastCalendarMarkup=body;else lastCalendarMarkup='';
  if(!focusKey){focusIndex=type==='pairing'?0:controls.findIndex(function(b){return b.getAttribute('data-act')!=='close';});if(focusIndex<0)focusIndex=0;}select(focusIndex);if(type==='pairing')pairingTick();
