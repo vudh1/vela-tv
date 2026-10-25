@@ -2,7 +2,7 @@
 # One-time Mac setup; uploads no signing keys and never force-pushes.
 set -euo pipefail
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
-REPO='vudh1/vela-tv'
+REPO='vudh1/velatv'
 command -v gh >/dev/null || { echo 'Install GitHub CLI (brew install gh), then gh auth login.' >&2; exit 1; }
 command -v git >/dev/null || { echo 'Git is required.' >&2; exit 1; }
 command -v rsync >/dev/null || { echo 'rsync is required.' >&2; exit 1; }

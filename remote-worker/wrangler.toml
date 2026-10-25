@@ -1,0 +1,12 @@
+name = "velatv-remote"
+main = "src/index.js"
+compatibility_date = "2026-10-25"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "REMOTE_ROOM"
+class_name = "RemoteRoom"
+
+[exports.RemoteRoom]
+type = "durable-object"
+storage = "sqlite"

@@ -35,6 +35,10 @@ jobs:
           cmp app/src/main/assets/app.js build/tizen/app.js
       - name: Test LAN pairing form over local HTTP
         run: python3 tests/pairing_http_test.py
+      - name: Test Cloudflare remote lease and PIN isolation
+        run: node --test remote-worker/test/*.test.js
+      - name: Verify mobile web remote syntax
+        run: node --check remote/app.js
       - name: Compile native Java sources
         run: |
           mkdir -p build/ci-classes

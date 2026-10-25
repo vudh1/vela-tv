@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#101c21">
+  <meta name="description" content="A quiet, secure phone remote for Vela TV.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; manifest-src 'self'; connect-src https://velatv-remote.vudhone.workers.dev; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <title>Vela · Remote</title>
+</head>
+<body>
+  <main class="shell">
+    <header class="top">
+      <div class="identity"><span class="mark">V</span><div><div class="wordmark">VELA</div><small>REMOTE</small></div></div>
+      <div id="network" class="network" role="status" aria-live="polite"><i></i><span>Checking TV</span></div>
+    </header>
+
+    <section id="pair" class="pair">
+      <div class="pair-illustration" aria-hidden="true"><span class="screen"></span><span class="halo"></span></div>
+      <p class="eyebrow">YOUR LIVING ROOM, IN YOUR HAND</p>
+      <h1>Connect to Vela</h1>
+      <p class="support">Connect your phone to the TV's home network, then enter your private remote PIN.</p>
+      <form id="pinForm" autocomplete="off">
+        <label for="pin">Remote PIN</label>
+        <input id="pin" name="pin" type="password" inputmode="numeric" pattern="[0-9]{8,12}" minlength="8" maxlength="12" autocomplete="off" placeholder="8–12 digits" required>
+        <button id="connect" type="submit" class="primary">Connect <span aria-hidden="true">→</span></button>
+      </form>
+      <p id="error" class="error" role="alert" aria-live="polite"></p>
+      <p class="trust"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4.5 5v6c0 4.8 3.2 8.7 7.5 11 4.3-2.3 7.5-6.2 7.5-11V5L12 2Zm0 4.6a2.4 2.4 0 0 1 2.4 2.4v1.3h.8V16H8.8v-5.7h.8V9A2.4 2.4 0 0 1 12 6.6Z"/></svg> Protected by Cloudflare · one controller at a time</p>
+    </section>
+
+    <section id="controller" class="controller hidden" aria-label="Vela TV remote">
+      <div class="controller-top"><span>Vela TV</span><button id="release" type="button" class="text-button">Disconnect</button></div>
+      <div class="utility-row">
+        <button data-key="home" class="round-action" aria-label="Vela home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3.7 11 8.3-7 8.3 7M6.5 9v10h11V9M10 19v-6h4v6"/></svg><span>Home</span></button>
+        <button data-key="back" class="round-action" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h12a6 6 0 0 1 6 6"/></svg><span>Back</span></button>
+      </div>
+      <div class="dpad" role="group" aria-label="Directional navigation">
+        <button data-key="up" class="direction up" aria-label="Up"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
+        <button data-key="left" class="direction left" aria-label="Left"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>
+        <button data-key="select" class="select" aria-label="Select">OK</button>
+        <button data-key="right" class="direction right" aria-label="Right"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
+        <button data-key="down" class="direction down" aria-label="Down"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+      </div>
+      <div class="media-row" role="group" aria-label="Volume and media controls">
+        <button data-key="volume_down" aria-label="Volume down">− <span>VOL</span></button>
+        <button data-key="mute" aria-label="Mute"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4m12 0 5 6m0-6-5 6"/></svg></button>
+        <button data-key="play_pause" aria-label="Play or pause"><svg viewBox="0 0 24 24"><path d="M6 5v14l10-7L6 5Zm11 1v12m4-12v12"/></svg></button>
+        <button data-key="volume_up" aria-label="Volume up">+ <span>VOL</span></button>
+      </div>
+      <p id="remoteInfo" class="hint" aria-live="polite">Vela navigation ready. Some system and streaming-app controls depend on Sony accessibility support.</p>
+    </section>
+
+    <footer><span>VELA / REMOTE</span><span>Private home access</span></footer>
+  </main>
+  <script src="app.js" defer></script>
+</body>
+</html>

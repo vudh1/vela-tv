@@ -8,3 +8,5 @@ app/build/
 *.apk
 *.idsig
 __pycache__/
+node_modules/
+.wrangler/

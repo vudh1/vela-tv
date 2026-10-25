@@ -243,3 +243,22 @@ assert 'https://ip-info.com' in origins and 'https://api.open-meteo.com' in orig
 subprocess.run(['bash','-n',str(r/'scripts/build-tizen.sh')],check=True)
 subprocess.run(['bash','-n',str(r/'scripts/device.sh')],check=True)
 print('PASS cold-process profile fallback, calm two-column screensaver and Samsung Tizen staging')
+
+# Web remote is opt-in; do not regress to a local unauthenticated command server.
+remote_native=(r/'app/src/main/java/com/danielvu/quiethome/VelaRemoteClient.java').read_text()
+remote_page=(r/'remote/index.html').read_text()
+remote_js=(r/'remote/app.js').read_text()
+remote_worker=(r/'remote-worker/src/index.js').read_text()
+assert "row('remoteSettings'" in js and "QH.remoteStatusReady(" in main
+assert 'VelaRemoteClient.get(this).start()' in main
+assert 'VelaRemoteAccessibilityService' in ET.tostring(m,encoding='unicode')
+assert 'AndroidKeyStore' in remote_native and 'AES/GCM/NoPadding' in remote_native
+assert 'https://velatv-remote.vudhone.workers.dev' in remote_native
+assert 'vudh1.github.io/velatv/remote' in js
+assert 'https://vudh1.github.io' in remote_worker and 'MAX_FAILED = 5' in remote_worker
+assert 'sameNetwork' in remote_worker and 'controllerHash' in remote_worker
+assert 'sessionStorage.setItem' not in remote_js and 'localStorage.setItem' not in remote_js
+assert 'content-security-policy' in remote_page.lower()
+subprocess.run(['node','--check',str(r/'remote/app.js')],check=True)
+subprocess.run(['node','--check',str(r/'remote-worker/src/index.js')],check=True)
+print('PASS encrypted TV remote credential, scoped web client, exclusive Cloudflare lease')

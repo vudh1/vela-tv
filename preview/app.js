@@ -258,9 +258,18 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  body=tizenMode?row('samsungHome','Samsung Home','Open','Return to the native Samsung interface')+
  row('samsungSettings','TV settings','Open','Open Samsung settings if supported')+
  row('about','About Vela on Samsung','Info','Tizen capabilities and privacy'):
+ row('remoteSettings','Web remote',bridge&&bridge.remoteEnabled&&bridge.remoteEnabled()?'Enabled':'Set up','Secure remote control from your phone')+
  row('updates','Software updates','Open','Download and approve Vela updates')+
  row('recovery','Recovery','Open','Return to Sony Home and restore controls')+
  row('about','About Vela','Info','Version and privacy');
+ }
+ else if(type==='remoteSettings'){title='Web remote';subtitle='Use your phone at vudh1.github.io/velatv/remote.';
+ body=(bridge&&bridge.remoteEnabled&&bridge.remoteEnabled()?row('remotePair','Reconnect this TV','Connected','Confirm your Cloudflare PIN again')+
+ row('remoteDisable','Disable remote','Revoke','Disconnect controllers and revoke this TV key'):
+ row('remotePair','Enable remote','Connect','Enter the private Cloudflare PIN on this TV'))+
+ (bridge&&bridge.remoteRevocationPending&&bridge.remoteRevocationPending()?row('remoteDisable','Retry Cloudflare revocation','Pending','The TV is paused until Cloudflare confirms removal'):'')+
+ row('remoteAccessibility','Control other apps','Sony settings','Optional accessibility service; app compatibility varies')+
+ '<p class="library-footnote">Requires the same home Internet connection and your private 8–12 digit PIN. Cloudflare allows one controller at a time. Your PIN is never saved by Vela. The physical Sony remote remains available.</p>';
  }
  else if(type==='about'){title='About Vela';subtitle='A calmer TV launcher.';
  body=tizenMode?
@@ -401,6 +410,9 @@ function action(name,id,dir){
   if(!valid||(selectedSource==='sport'?!/^https:\/\/ballerwatch-web\.vudhone\.workers\.dev\//i.test(url):!/^https:\/\/calendar\.google\.com\//i.test(url))){toast('Paste a valid link for this source');return;}
   if(bridge&&bridge.saveCalendar)bridge.saveCalendar(profileId,url,selectedSource==='sport'?'BallerWatch':'Google Calendar');return;}
  if(name==='samsungHome'||name==='samsungSettings'){if(bridge&&bridge[name])bridge[name]();return;}
+ if(name==='remotePair'){if(bridge&&bridge.pairWebRemote)bridge.pairWebRemote();else toast('Set up on your Sony TV');return;}
+ if(name==='remoteDisable'){if(bridge&&bridge.disableWebRemote)bridge.disableWebRemote();return;}
+ if(name==='remoteAccessibility'){if(bridge&&bridge.accessibilitySettings)bridge.accessibilitySettings();return;}
  if(name==='chooseSort'){var p=currentProfile();p.appSort=id;if(profileId!=='guest')persistProfiles();renderPanel('appSort',{act:'chooseSort',id:id},true);return;}
  if(name==='wakeProfileToggle'){if(bridge&&bridge.setWakeProfilePromptEnabled){bridge.setWakeProfilePromptEnabled(!bridge.wakeProfilePromptEnabled());}renderPanel('homeSettings',{act:'wakeProfileToggle'},true);return;}
  if(name==='filterCalendar'){calendarFilter=['all','play','watch','other'].indexOf(id)>=0?id:'all';renderPanel('calendar',{act:'filterCalendar',id:calendarFilter},true);return;}
@@ -423,7 +435,7 @@ function action(name,id,dir){
  if(name==='font'){fontStyle=fontStyle==='modern'?'classic':'modern';document.body.classList.toggle('modern-clock',fontStyle==='modern');persistAppearance();rerenderWithFocus('font');return;}
  if(name==='clockFormat'){clockFormat=clockFormat==='auto'?'12':clockFormat==='12'?'24':'auto';clockValue='';clock();persistAppearance();rerenderWithFocus('clockFormat');return;}
  if(name==='launch'){rememberApp(id);if(preview){toast('App launch is available on your TV.');return;}if(bridge)bridge.launchApp(id);return;}
- if(['settings','homeSettings','lifeSettings','appsSettings','deviceSettings','about','appSort','homeApps','screensaverSettingsPanel','all','customize','recovery','updates','profiles','wallpapers','calendar','calendarSettings','tizenCalendarEntry','monitor','monitorSettings','volumeSettings','recent'].indexOf(name)>=0){navigatePanel(name);if(name==='updates'&&bridge&&bridge.updateStatus)bridge.updateStatus();return;}
+ if(['settings','homeSettings','lifeSettings','appsSettings','deviceSettings','remoteSettings','about','appSort','homeApps','screensaverSettingsPanel','all','customize','recovery','updates','profiles','wallpapers','calendar','calendarSettings','tizenCalendarEntry','monitor','monitorSettings','volumeSettings','recent'].indexOf(name)>=0){navigatePanel(name);if(name==='updates'&&bridge&&bridge.updateStatus)bridge.updateStatus();return;}
  if(name==='monitorToggle'){monitorEnabled=!monitorEnabled;$('#monitorButton').classList.toggle('hidden',!monitorEnabled);persistAppearance();renderPanel('monitorSettings',{act:'monitorToggle'},true);return;}
  if(name==='nanitWeb'){if(bridge&&bridge.openNanitWeb)bridge.openNanitWeb();else toast('Open https://my.nanit.com in your TV browser');return;}
  if(name==='cameraApps'){navigatePanel('all');return;}
@@ -460,6 +472,7 @@ function goBack(){
  close();
 }
 function remote(key){
+ if(key==='home'){close();return;}
  if(key==='longselect'){activeList();var chosen=controls[cursor];if(chosen&&chosen.classList.contains('app-card'))openAppMenu(chosen.getAttribute('data-id'));return;}
  if(key==='back'){goBack();return;}
  if(key==='select'){trigger();return;}
@@ -591,6 +604,6 @@ document.addEventListener('keydown',function(e){if(!preview)return;
  if(e.key==='Enter'){e.preventDefault();if(!e.repeat){previewEnterAt=Date.now();previewLong=false;}else if(!previewLong&&Date.now()-previewEnterAt>=500){previewLong=true;remote('longselect');}return;}
  var k={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',Escape:'back',Backspace:'back'}[e.key];if(k){e.preventDefault();remote(k);}});
 document.addEventListener('keyup',function(e){if(preview&&e.key==='Enter'){e.preventDefault();if(!previewLong)remote('select');previewEnterAt=0;previewLong=false;}});
-window.QH={pause:pause,checkWakeProfilePrompt:checkWakeProfilePrompt,profileNameReady:profileNameReady,profileDeleteConfirmed:profileDeleteConfirmed,remote:remote,refreshApps:refreshApps,receiveApps:receiveApps,catalogRefreshed:catalogRefreshed,iconReady:iconReady,refreshWallpaper:refreshWallpaper,wallpaperReady:wallpaperReady,resume:resume,tick:clock,updateStatusReady:receiveUpdateStatus,receiveCalendar:receiveCalendar,calendarSaveReady:calendarSaveReady,pairingReady:pairingReady,pairingCompleted:pairingCompleted,volumeChanged:volumeChanged,watchChannelReady:watchChannelReady,weatherReady:function(data){if(window.VelaWeatherClient)window.VelaWeatherClient.receive(data);}};
+window.QH={pause:pause,checkWakeProfilePrompt:checkWakeProfilePrompt,profileNameReady:profileNameReady,profileDeleteConfirmed:profileDeleteConfirmed,remote:remote,remoteStatusReady:function(message){toast(message);if(screen==='remoteSettings')renderPanel('remoteSettings');},refreshApps:refreshApps,receiveApps:receiveApps,catalogRefreshed:catalogRefreshed,iconReady:iconReady,refreshWallpaper:refreshWallpaper,wallpaperReady:wallpaperReady,resume:resume,tick:clock,updateStatusReady:receiveUpdateStatus,receiveCalendar:receiveCalendar,calendarSaveReady:calendarSaveReady,pairingReady:pairingReady,pairingCompleted:pairingCompleted,volumeChanged:volumeChanged,watchChannelReady:watchChannelReady,weatherReady:function(data){if(window.VelaWeatherClient)window.VelaWeatherClient.receive(data);}};
 init();
 })();
