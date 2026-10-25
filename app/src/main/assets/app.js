@@ -194,7 +194,7 @@ function favoritesEditor(){var b='<div class="editor-heading"><span>HOME APPS</s
  apps.forEach(function(a){if(fav.indexOf(a.id)<0)b+='<button class="add-app focusable" data-act="add" data-id="'+esc(a.id)+'" aria-label="Add '+esc(a.name)+'"><span class="add-sign">+</span>'+esc(a.name)+'</button>';});
  b+='</div>';return b;}
 function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host=$('#panelContent'),scrollTop=retainScroll?host.scrollTop:0;
- screen=type;if(rotationTimer){clearTimeout(rotationTimer);rotationTimer=null;}$('#overlay').classList.remove('hidden');$('#overlay').classList.toggle('catalog',type==='all');$('#overlay').classList.toggle('profile-panel',type==='profiles');$('#overlay').classList.toggle('wallpaper-panel',type==='wallpapers');$('#overlay').classList.toggle('pairing-panel',type==='pairing');$('#focusLabel').classList.remove('visible');
+ screen=type;if(rotationTimer){clearTimeout(rotationTimer);rotationTimer=null;}$('#overlay').classList.remove('hidden');$('#overlay').classList.toggle('catalog',type==='all');$('#overlay').classList.toggle('profile-panel',type==='profiles');$('#overlay').classList.toggle('wallpaper-panel',type==='wallpapers');$('#overlay').classList.toggle('pairing-panel',type==='pairing');$('#overlay').classList.toggle('startup-panel',type==='startupProfiles');$('#focusLabel').classList.remove('visible');
  var title='',subtitle='',body='';
  if(type==='settings'){title='Settings';subtitle='Four simple sections.';
  body=row('homeSettings','Home & profiles','Open','Appearance, favorites and profile selection')+
