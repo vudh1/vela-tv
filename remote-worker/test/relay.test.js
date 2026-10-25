@@ -1,0 +1,167 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import relay, { RemoteRoom } from '../src/index.js';
+
+const TV_IP = '203.0.113.8';
+const OTHER_IP = '198.51.100.27';
+const SITE = 'https://vudh1.github.io';
+const PIN = '8472059136';
+const NEXT_PIN = '3901748265';
+const TV_TOKEN = 'ab'.repeat(32);
+class Storage {
+  constructor() { this.values = new Map(); }
+  async get(key) { return this.values.get(key); }
+  async put(key, value) { this.values.set(key, structuredClone(value)); }
+  async delete(key) { this.values.delete(key); }
+}
+function setup() {
+  const env = {};
+  const storage = new Storage();
+  const room = new RemoteRoom({ storage }, env);
+  env.REMOTE_ROOM = { idFromName: name => name, get: () => room };
+  return { env, storage };
+}
+async function call(env, route, { ip = TV_IP, origin = SITE, data, token, method } = {}) {
+  const req = new Request('https://velatv-remote.vudhone.workers.dev' + route, {
+    method: method || (data === undefined ? 'GET' : 'POST'),
+    headers: { 'cf-connecting-ip': ip,
+      ...(origin ? { origin } : {}),
+      ...(token ? { authorization: 'Bearer ' + token } : {}),
+      ...(data ? { 'content-type': 'application/json' } : {}) },
+    body: data === undefined ? undefined : JSON.stringify(data)
+  });
+  const res = await relay.fetch(req, env);
+  return { status: res.status, body: await res.json() };
+}
+async function enroll(env, pin = PIN, tvToken = TV_TOKEN, ip = TV_IP) {
+  return call(env, '/api/tv/enroll', { ip, origin: null, data: { pin, tvToken } });
+}
+async function rotate(env, pin = NEXT_PIN, token = TV_TOKEN) {
+  return call(env, '/api/tv/pin', { origin: null, data: { pin }, token });
+}
+async function poll(env, ip = TV_IP, token = TV_TOKEN) {
+  return call(env, '/api/tv/poll', { ip, origin: null, data: {}, token });
+}
+
+test('needs no GitHub or Cloudflare PIN secret; rejects browser-origin TV claims', async () => {
+  const { env } = setup();
+  assert.deepEqual((await call(env, '/api/status')).body,
+    { online: false, busy: false, sameNetwork: false });
+  assert.equal((await call(env, '/api/status', { origin: 'https://evil.example' })).status, 403);
+  assert.equal((await call(env, '/api/tv/enroll', {
+    data: { pin: PIN, tvToken: TV_TOKEN } })).status, 403);
+  assert.equal((await call(env, '/api/connect', { data: { pin: PIN } })).status, 503);
+});
+
+test('TV-generated PIN is salted and hashed; one TV cannot replace another', async () => {
+  const { env, storage } = setup();
+  assert.equal((await enroll(env, '123', TV_TOKEN)).status, 400);
+  assert.equal((await enroll(env, PIN, 'not-a-token')).status, 400);
+  assert.equal((await enroll(env)).status, 200);
+  const stored = await storage.get('room');
+  assert.equal(stored.pinSalt.length, 64);
+  assert.equal(stored.pinHash.length, 64);
+  assert.equal(JSON.stringify(stored).includes(PIN), false);
+  assert.equal(JSON.stringify(stored).includes(TV_TOKEN), false);
+  assert.equal((await enroll(env, NEXT_PIN, 'cd'.repeat(32))).status, 409);
+  assert.equal((await rotate(env, NEXT_PIN, 'cd'.repeat(32))).status, 401);
+  assert.equal((await call(env, '/api/status')).body.online, true);
+});
+
+test('same public IP, exclusive controller lease and one-way key queue', async () => {
+  const { env } = setup(); await enroll(env);
+  assert.deepEqual((await call(env, '/api/status')).body,
+    { online: true, busy: false, sameNetwork: true });
+  assert.equal((await call(env, '/api/connect', { ip: OTHER_IP, data: { pin: PIN } })).status, 403);
+  const [first, second] = await Promise.all([
+    call(env, '/api/connect', { data: { pin: PIN } }),
+    call(env, '/api/connect', { data: { pin: PIN } })
+  ]);
+  assert.deepEqual([first.status, second.status].sort(), [200, 409]);
+  const session = first.status === 200 ? first.body.token : second.body.token;
+  assert.equal(session.length, 64);
+  assert.equal((await call(env, '/api/command', { data: { key: 'power_off' }, token: session })).status, 400);
+  assert.equal((await call(env, '/api/command', { data: { key: 'left' }, token: session })).status, 200);
+  const response = await poll(env);
+  assert.equal(response.body.commands.length, 1);
+  assert.equal(response.body.commands[0].key, 'left');
+  assert.equal((await poll(env)).body.commands.length, 0);
+  assert.equal((await call(env, '/api/heartbeat', { data: {}, token: session, ip: OTHER_IP })).status, 401);
+  assert.equal((await call(env, '/api/release', { data: {}, token: session })).status, 200);
+  assert.equal((await call(env, '/api/connect', { data: { pin: PIN } })).status, 200);
+});
+
+test('wrong PIN attempts lock out, without blocking TV-signed PIN regeneration', async () => {
+  const { env } = setup(); await enroll(env);
+  for (let i = 0; i < 5; i++)
+    assert.equal((await call(env, '/api/connect', { data: { pin: '0000000000' } })).status, 401);
+  assert.equal((await call(env, '/api/connect', { data: { pin: PIN } })).status, 429);
+  assert.equal((await rotate(env)).status, 200);
+});
+
+test('PIN regeneration instantly invalidates old code, lease and queued commands', async () => {
+  const { env, storage } = setup(); await enroll(env);
+  const connected = await call(env, '/api/connect', { data: { pin: PIN } });
+  const token = connected.body.token;
+  await call(env, '/api/command', { data: { key: 'up' }, token });
+  assert.equal((await rotate(env)).status, 200);
+  assert.equal((await call(env, '/api/heartbeat', { data: {}, token })).status, 401);
+  assert.equal((await poll(env)).body.commands.length, 0);
+  assert.equal((await call(env, '/api/connect', { data: { pin: PIN } })).status, 401);
+  assert.equal((await call(env, '/api/connect', { data: { pin: NEXT_PIN } })).status, 200);
+  assert.equal(JSON.stringify(await storage.get('room')).includes(NEXT_PIN), false);
+});
+
+test('unconfirmed first-time enrollment expires after 10 minutes to limit squatting', async () => {
+  const { env } = setup(); await enroll(env);
+  const originalClock = Date.now;
+  Date.now = () => originalClock() + 10 * 60_000 + 1;
+  try {
+    assert.equal((await poll(env)).status, 401);
+    assert.equal((await call(env, '/api/status')).body.online, false);
+    assert.equal((await enroll(env, NEXT_PIN, 'cd'.repeat(32))).status, 200);
+  } finally { Date.now = originalClock; }
+});
+
+test('a new TV network invalidates the old controller lease', async () => {
+  const { env } = setup(); await enroll(env);
+  const connected = await call(env, '/api/connect', { data: { pin: PIN } });
+  assert.equal((await poll(env, OTHER_IP)).status, 200);
+  assert.equal((await call(env, '/api/heartbeat', { data: {}, token: connected.body.token })).status, 401);
+  assert.equal((await call(env, '/api/status', { ip: OTHER_IP })).body.sameNetwork, true);
+});
+
+test('TV can revoke all sessions and no API routes permit arbitrary commands', async () => {
+  const { env } = setup(); await enroll(env);
+  const connected = await call(env, '/api/connect', { data: { pin: PIN } });
+  assert.equal((await call(env, '/api/tv/disable', { origin: null, data: {}, token: TV_TOKEN })).status, 200);
+  assert.equal((await call(env, '/api/command', { token: connected.body.token, data: { key: 'up' } })).status, 401);
+  assert.equal((await poll(env)).status, 401);
+  assert.equal((await call(env, '/api/anything', { data: {} })).status, 404);
+});
+
+test('lease expires without heartbeat; stale controller cannot be revived', async () => {
+  const { env } = setup(); await enroll(env);
+  const first = await call(env, '/api/connect', { data: { pin: PIN } });
+  const originalClock = Date.now;
+  Date.now = () => originalClock() + 30_000;
+  try {
+    assert.equal((await call(env, '/api/command', { token: first.body.token,
+      data: { key: 'select' } })).status, 401);
+    await poll(env);
+    const second = await call(env, '/api/connect', { data: { pin: PIN } });
+    assert.equal(second.status, 200);
+    assert.notEqual(second.body.token, first.body.token);
+  } finally { Date.now = originalClock; }
+});
+
+test('IPv6 /64 household prefix permits differing private interface addresses', async () => {
+  const { env } = setup();
+  const tvIp = '2001:db8:45:78::a501';
+  const phoneIp = '2001:0db8:0045:0078::b110';
+  const elsewhere = '2001:db8:45:79::b110';
+  assert.equal((await enroll(env, PIN, TV_TOKEN, tvIp)).status, 200);
+  assert.equal((await call(env, '/api/status', { ip: phoneIp })).body.sameNetwork, true);
+  assert.equal((await call(env, '/api/status', { ip: elsewhere })).body.sameNetwork, false);
+  assert.equal((await call(env, '/api/connect', { ip: phoneIp, data: { pin: PIN } })).status, 200);
+});

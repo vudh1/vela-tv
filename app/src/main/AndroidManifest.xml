@@ -42,6 +42,15 @@
             <meta-data android:name="android.accessibilityservice"
                 android:resource="@xml/home_redirect_config" />
         </service>
+        <service android:name=".VelaRemoteAccessibilityService"
+            android:label="Vela Remote navigation"
+            android:description="@string/remote_accessibility_description"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter><action android:name="android.accessibilityservice.AccessibilityService"/></intent-filter>
+            <meta-data android:name="android.accessibilityservice"
+                android:resource="@xml/vela_remote_accessibility" />
+        </service>
         <provider android:name=".VelaApkProvider"
             android:authorities="com.danielvu.quiethome.updates"
             android:exported="false"

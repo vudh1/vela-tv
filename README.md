@@ -3,6 +3,8 @@
 Minimalist TV Home experience. One shared interface with platform-specific
 integration and installation targets.
 
+**FRIDAY:** [Integration ownership and compatibility](FRIDAY.md) · [Agent instructions](AGENTS.md).
+
 ## Ambient weather
 
 Vela Home shows a small, non-interactive weather card with current
@@ -104,13 +106,24 @@ gh auth login
 bash scripts/setup-release-signing.sh "/path/to/quiet-home-dev.jks" "/path/to/your-existing-vela.apk"
 ```
 
-The script checks certificate fingerprints and uploads **four encrypted Actions secrets**: `VELA_SIGNING_KEY_B64`, `VELA_STOREPASS`, `VELA_KEYPASS`, and `VELA_KEYALIAS`. Signing passwords and keystore contents must never be committed. To verify only the names were created: `gh secret list -R vudh1/vela-tv`.
+The script checks certificate fingerprints and uploads **four encrypted Actions secrets**: `VELA_SIGNING_KEY_B64`, `VELA_STOREPASS`, `VELA_KEYPASS`, and `VELA_KEYALIAS`. Signing passwords and keystore contents must never be committed. To verify only the names were created: `gh secret list -R vudh1/velatv`.
 
 ## Updating the TV
 
 When `production` receives a new commit, Actions builds and signs `Vela-release.apk`, publishes a GitHub Release, and Vela's **Gear → Updates** can check for new versions, download, verify SHA-256, and request installation. Android will prompt for installation approval; the app cannot silently install itself.
 
-**Current limitation:** this source repository is private. Its GitHub Releases cannot be fetched anonymously from the TV. Complete public binary distribution configuration, or audit and change repository visibility, **before** relying on TV self-updates. Do not expose private credentials to the TV.
+This repository is public, so TV clients can fetch signed GitHub Release assets anonymously. Keep the same signing key and never embed private GitHub credentials in Vela.
+
+## Secure phone/web remote
+
+The Sony web remote lives at **https://vudh1.github.io/velatv/remote/**. GitHub Pages must use **GitHub Actions** as its publishing source; [Publish Vela web remote](.github/workflows/deploy-pages.yml) stages only the public remote assets on pushes to `main` or a manual workflow run. The repository homepage redirects to `/remote/`. This is a mobile web app (also installable to a phone's Home screen). The UI and Cloudflare relay are separate; opening the URL alone cannot control a TV until Cloudflare and the updated Sony APK have been configured.
+
+- **TV controls:** Vela Home, D-pad and OK/Back while Vela is foreground; volume and play/pause where Sony accepts Android media actions. An optional, explicitly enabled accessibility service attempts Back and focus navigation in other apps. Sony/Netflix/YouTube may block focus actions; power-on and guaranteed system-wide key injection are **not** supported by ordinary Android apps.
+- **Security:** the Sony TV generates a fresh 10-digit PIN within **Gear → Device & support → Web remote**. No PIN is configured in GitHub Secrets; Vela encrypts its local copy with Android Keystore, and Cloudflare verifies only a salted PIN hash. The TV also stores a random encrypted device credential. Cloudflare checks that TV and phone share the same **public IPv4 address or IPv6 /64 network prefix**, then grants at most one short-lived controller lease. PIN attempts are rate-limited. Regenerating the PIN revokes any active controller. A lease expires about 22 seconds after the controller disappears; another phone cannot take over while it is active.
+- **Network:** the TV polls Cloudflare outbound over HTTPS. No router port forwarding, ADB server, or fixed local TV IP is needed. A public-address/prefix match is a useful household gate but does not mathematically prove both clients are on the same private LAN (VPN, CGNAT and different IPv4/IPv6 egress paths matter).
+- **Privacy:** no PIN, calendar data, TV screen image, or streaming credentials are sent through the remote channel. Only narrowly allowlisted button names pass through the relay. No remote access works while the Worker is unconfigured or TV is offline.
+
+See [remote setup instructions](remote-worker/README.md) before enabling **Gear → Device & support → Web remote** on Sony. Samsung Tizen is not a remote-control target in this version.
 
 ## Security and compatibility
 

@@ -30,7 +30,7 @@ import java.util.concurrent.Executors;
  * A matching signing certificate is still REQUIRED by Android for upgrades.
  */
 final class VelaUpdateController {
-    static final String REPO = "vudh1/vela-tv";
+    static final String REPO = "vudh1/velatv";
     private static final String RELEASE_ENDPOINT = "https://api.github.com/repos/" + REPO + "/releases/latest";
     private static final String RELEASE_PREFIX = "https://github.com/" + REPO + "/releases/download/";
     private static final String APK_ASSET = "Vela-release.apk";

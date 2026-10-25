@@ -61,10 +61,12 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.lang.ref.WeakReference;
 
 
 /** Light WebView TV launcher. All pages/scripts/images are bundled assets: no network permission. */
 public final class MainActivity extends Activity {
+    private static volatile WeakReference<MainActivity> visibleActivity = new WeakReference<>(null);
     private static final String PREFS = "quiet-home";
     private static final String STOCK = "com.google.android.apps.tv.launcherx";
     private static final int PHOTO_REQUEST = 81;
@@ -140,6 +142,7 @@ public final class MainActivity extends Activity {
         updater = new VelaUpdateController(this, prefs);
         calendar = new VelaCalendarController(this);
         pairing = new VelaPairingServer(this, calendar);
+        VelaRemoteClient.get(this).start(); // optional, disabled by default
         IntentFilter packageFilter = new IntentFilter();
         packageFilter.addAction(Intent.ACTION_PACKAGE_ADDED);
         packageFilter.addAction(Intent.ACTION_PACKAGE_REMOVED);
@@ -213,6 +216,7 @@ public final class MainActivity extends Activity {
     @Override public void onResume() {
         super.onResume();
         homeResumed = true;
+        visibleActivity = new WeakReference<>(this);
         if (!screenIsInteractive()) markNextViewingSession();
         startVolumeObservation();
         if (web != null && javascriptReady) {
@@ -223,6 +227,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onPause() {
+        visibleActivity = new WeakReference<>(null);
         if (!screenIsInteractive()) markNextViewingSession();
         homeResumed = false;
         stopVolumeObservation();
@@ -235,6 +240,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onDestroy() {
+        visibleActivity = new WeakReference<>(null);
         stopVolumeObservation();
         javascriptReady = false;
         if (web != null) {
@@ -615,6 +621,15 @@ public final class MainActivity extends Activity {
         });
     }
 
+    /** Authenticated web-remote input uses Vela's existing D-pad navigation. */
+    static boolean acceptRemoteKey(String key) {
+        MainActivity activity = visibleActivity.get();
+        if (activity == null || !activity.homeResumed || !activity.javascriptReady || activity.web == null)
+            return false;
+        activity.sendToJs("QH.remote(" + JSONObject.quote(key) + ")");
+        return true;
+    }
+
     private void requestAppsAsync() {
         synchronized (this) {
             if (catalogLoading) return;
@@ -671,11 +686,73 @@ public final class MainActivity extends Activity {
         runOnUiThread(() -> toast(message));
     }
 
+    private void showRemotePin(String pin) {
+        android.widget.TextView code = new android.widget.TextView(this);
+        code.setText(pin);
+        code.setTextSize(36);
+        code.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
+        code.setGravity(android.view.Gravity.CENTER);
+        int pad = (int) (getResources().getDisplayMetrics().density * 24);
+        code.setPadding(pad, pad, pad, pad);
+        code.setContentDescription("Your Vela remote PIN: " + pin);
+        new AlertDialog.Builder(this)
+            .setTitle("Vela remote PIN")
+            .setMessage("Enter this 10-digit PIN on your phone at vudh1.github.io/velatv/remote/. Only one controller can connect at a time.\n\nRegenerate the PIN here whenever you need to revoke access.")
+            .setView(code)
+            .setPositiveButton("Done", (dialog, which) -> {})
+            .show();
+    }
+
+    private void generateRemotePin() {
+        toast("Generating your private remote PIN…");
+        VelaRemoteClient.get(this).generatePin((pin, error) -> runOnUiThread(() -> {
+            if (!pin.isEmpty()) showRemotePin(pin);
+            else toast(error);
+            sendToJs("QH.remoteStatusReady(" + JSONObject.quote(pin.isEmpty() ? error : "Remote PIN ready") + ")");
+        }));
+    }
+
     public void deliverUpdateStatus(String json) {
         sendToJs("QH.updateStatusReady(" + JSONObject.quote(json) + ")");
     }
 
     public final class Bridge {
+        @JavascriptInterface public boolean remoteEnabled() {
+            return VelaRemoteClient.get(MainActivity.this).enabled();
+        }
+        @JavascriptInterface public boolean remoteRevocationPending() {
+            return VelaRemoteClient.get(MainActivity.this).revocationPending();
+        }
+        @JavascriptInterface public boolean remoteHasPin() {
+            return VelaRemoteClient.get(MainActivity.this).currentPin().length() == 10;
+        }
+        @JavascriptInterface public void pairWebRemote() {
+            runOnUiThread(() -> generateRemotePin());
+        }
+        @JavascriptInterface public void showWebRemotePin() {
+            runOnUiThread(() -> {
+                String pin = VelaRemoteClient.get(MainActivity.this).currentPin();
+                if (pin.length() == 10) showRemotePin(pin);
+                else toast("Choose Regenerate PIN to create a TV-managed code.");
+            });
+        }
+        @JavascriptInterface public void rotateWebRemotePin() {
+            runOnUiThread(() -> new AlertDialog.Builder(MainActivity.this)
+                .setTitle("Regenerate remote PIN?")
+                .setMessage("The old PIN and any connected phone will stop working immediately. A new 10-digit PIN will appear on this TV.")
+                .setNegativeButton("Cancel", (d, w) -> {})
+                .setPositiveButton("Regenerate", (d, w) -> generateRemotePin())
+                .show());
+        }
+        @JavascriptInterface public void disableWebRemote() {
+            runOnUiThread(() -> new AlertDialog.Builder(MainActivity.this)
+                .setTitle("Disable Vela Remote?")
+                .setMessage("Disconnect the web remote and revoke this TV's current enrollment.")
+                .setNegativeButton("Cancel", (d, w) -> {})
+                .setPositiveButton("Disable", (d, w) -> VelaRemoteClient.get(MainActivity.this)
+                    .disable(message -> sendToJs("QH.remoteStatusReady(" + JSONObject.quote(message) + ")")))
+                .show());
+        }
         @JavascriptInterface public boolean wakeProfilePromptEnabled() {
             return prefs.getBoolean("profile_prompt_enabled", true);
         }
