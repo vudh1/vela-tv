@@ -158,3 +158,29 @@ assert '?quality=hq192-v2' in js
 assert 'volumeSettings' in js and 'Home-only overlay' in js
 assert 'SYSTEM_ALERT_WINDOW' not in ET.tostring(m,encoding='unicode')
 print('PASS Home-only volume input handling, native streaming fallback, high-density lossless TV icons')
+
+# 2026 usability update: standby-only profile picker, native screensaver events,
+# sorted app histories and minimal remote navigation. Privacy constraints remain.
+assert 'Intent.ACTION_SCREEN_OFF' in main and 'Intent.ACTION_SCREEN_ON' in main
+assert 'profile_choose_on_next_home' in main and 'consumeWakeProfilePrompt()' in main
+assert 'setWakeProfilePromptEnabled(boolean enabled)' in main
+assert 'QH && QH.checkWakeProfilePrompt' in main
+assert 'function checkWakeProfilePrompt()' in js
+assert 'checkWakeProfilePrompt:checkWakeProfilePrompt' in js
+assert "else if(type==='startupProfiles')" in js and "'Who is watching?'" in js
+assert 'function goBack()' in js and "else if(key==='left'&&screen)goBack()" in js
+for screen in ['homeSettings','lifeSettings','appsSettings','deviceSettings','appSort','homeApps','screensaverSettingsPanel']:
+    assert "type==='"+screen+"'" in js
+assert 'function orderedApps()' in js and 'p.usage.push({id:id,at:now})' in js
+assert 'week' in js and 'month' in js and 'quarter' in js and 'sortLabel()' in js
+assert 'Number(e.end)>Math.max(start,Date.now())' in js
+assert "e.start<=n+3600000?'soon'" in js and 'e.start<=n+2*3600000?' in js
+dream=(r/'app/src/main/java/com/danielvu/quiethome/VelaDreamService.java').read_text()
+calendar=(r/'app/src/main/java/com/danielvu/quiethome/VelaCalendarController.java').read_text()
+assert 'cachedEventsForDream(this,currentProfile())' in dream
+assert 'positionContent()' in dream and 'Math.min(3,events.size())' in dream
+assert 'static JSONArray cachedEventsForDream(Context ctx, String profile)' in calendar
+assert 'success_'+ '"+profile' in calendar and 'day_'+ '"+profile' in calendar
+assert 'url_'+ '"+profile' not in dream
+assert 'wakeProfilePromptEnabled' in js and 'profile_prompt_enabled' in main
+print('PASS grouped settings, wake profile choice, app sorting, ongoing events, screensaver privacy and remote left exit')
