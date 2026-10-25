@@ -148,10 +148,12 @@ public final class VelaDreamService extends DreamService {
             JSONObject e = events.get(i);
             boolean allDay = e.optBoolean("allDay");
             boolean ongoing = !allDay && e.optLong("start") <= now;
-            long until = e.optLong("start") - now;
-            String when = allDay ? "ALL DAY" : ongoing ? "NOW" : until <= 3600000L
-                ? "IN " + Math.max(1, (until + 59999) / 60000) + " MIN"
-                : DateFormat.getTimeFormat(this).format(new Date(e.optLong("start")));
+            Date begins = new Date(e.optLong("start"));
+            String day = new SimpleDateFormat("EEE M/d", Locale.US).format(begins);
+            String when = ("play".equals(e.optString("kind"))?"PLAY · ":
+                "watch".equals(e.optString("kind"))?"WATCH · ":"") +
+                (ongoing?"NOW · ":"") + day + " · " +
+                (allDay?"ALL DAY":DateFormat.getTimeFormat(this).format(begins));
             String title = e.optString("title", "Event").replace('\n', ' ').trim();
             if (title.isEmpty()) title = "Event";
             LinearLayout row = new LinearLayout(this);
@@ -159,10 +161,10 @@ public final class VelaDreamService extends DreamService {
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setPadding(0, dp(9), 0, dp(9));
             // Calm sage-white for both statuses, no bright gold or green boxes.
-            TextView status = label(when, 12, ongoing ? Color.rgb(220, 237, 224) : Color.rgb(182, 207, 195));
+            TextView status = label(when, 11, ongoing ? Color.rgb(220, 237, 224) : Color.rgb(182, 207, 195));
             status.setTypeface(null, android.graphics.Typeface.BOLD);
             status.setLetterSpacing(.025f);
-            row.addView(status, new LinearLayout.LayoutParams(dp(110), -2));
+            row.addView(status, new LinearLayout.LayoutParams(dp(214), -2));
             TextView summary = label(title, 16, ongoing ? Color.rgb(242, 249, 244) : Color.rgb(222, 232, 225));
             row.addView(summary, new LinearLayout.LayoutParams(0, -2, 1));
             eventBlock.addView(row, new LinearLayout.LayoutParams(-1, -2));

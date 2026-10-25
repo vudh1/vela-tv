@@ -697,7 +697,22 @@ public final class MainActivity extends Activity {
         }
         @JavascriptInterface public void cancelCalendarPair(){if(pairing!=null)pairing.stop();}
         @JavascriptInterface public void editCalendar(String profile) { calendar.edit(profile); }
+        @JavascriptInterface public void editCalendarSource(String profile,String source) { calendar.editSource(profile,source); }
+        @JavascriptInterface public void removeCalendarSource(String profile,String source) { calendar.removeSource(profile,source); }
         @JavascriptInterface public void removeCalendar(String profile) { calendar.remove(profile); }
+        @JavascriptInterface public void editWatchChannel(String eventId,String previous) {
+            if(eventId==null||eventId.length()>250)return;
+            runOnUiThread(()->{
+                EditText input=new EditText(MainActivity.this);input.setSingleLine(true);
+                input.setText(previous==null?"":previous.substring(0,Math.min(80,previous.length())));
+                new AlertDialog.Builder(MainActivity.this).setTitle("Drogon TV channel name")
+                    .setMessage("Enter the channel name as it appears in your Perfect Player playlist. Vela does not access the playlist or credentials.")
+                    .setView(input).setNegativeButton("Cancel",(d,w)->{})
+                    .setPositiveButton("Save",(d,w)->sendToJs("QH.watchChannelReady("+
+                        JSONObject.quote(eventId)+","+JSONObject.quote(input.getText().toString().trim())+")"))
+                    .show();
+            });
+        }
         @JavascriptInterface public void editProfile(String mode, String id, String currentName) {
             runOnUiThread(() -> {
                 if (!"add".equals(mode) && !"rename".equals(mode)) return;

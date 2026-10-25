@@ -52,10 +52,23 @@ function open(text){
  });
 }
 function key(profile,suffix){return 'vela_private_calendar_'+suffix+'_'+profile;}
-function cached(profile){return open(localStorage.getItem(key(profile,'cache')));}
+function sourceOf(url){try{return new URL(url).hostname.toLowerCase()==='ballerwatch-web.vudhone.workers.dev'?'sport':'google';}catch(e){return 'google';}}
+function records(profile){
+ return Promise.all(['google','sport','legacy'].map(function(type){
+  return open(localStorage.getItem(key(profile,type==='legacy'?'secret':'secret_'+type))).catch(function(){return null;});
+ })).then(function(list){
+  var found=[];
+  ['google','sport'].forEach(function(type,i){
+   var item=list[i]&&approved(list[i].url)?list[i]:null;
+   if(!item&&list[2]&&approved(list[2].url)&&sourceOf(list[2].url)===type)item=list[2];
+   if(item)found.push({kind:type,url:item.url,label:item.label||'',legacy:item===list[2]});
+  });return found;
+ });
+}
+function cached(profile,source){return open(localStorage.getItem(key(profile,'cache_'+source))).catch(function(){return null;});}
 function status(profile,connected,verified,events,detail,more){
  var data={profile:profile,connected:connected,verified:verified,events:events||[],status:detail||'',lastAttempt:Date.now()};
- if(more){data.label=more.label||'';data.lastSuccess=more.success||0;data.calendarName='Private calendar';}
+ if(more){data.label=more.label||'';data.lastSuccess=more.success||0;data.calendarName='Private calendar';data.sources=more.sources||[];}
  if(window.QH&&window.QH.receiveCalendar)window.QH.receiveCalendar(data);
 }
 function failure(profile,message){if(window.QH&&window.QH.calendarSaveReady)window.QH.calendarSaveReady(profile,false,message);}
@@ -83,30 +96,46 @@ function load(profile,force){
  if(!validProfile(profile))return;
  if(inflight[profile]&&!force)return;
  var version=revision[profile]||0;
- open(localStorage.getItem(key(profile,'secret'))).then(function(record){
+ function publish(sets,label){
   if(version!==(revision[profile]||0))return;
-  if(!record||!approved(record.url)){status(profile,false,false,[],'No calendar saved');return;}
-  return cached(profile).catch(function(){return null;}).then(function(cache){
+  var all=[],seen={},verified=0,last=0,sources=[];
+  sets.forEach(function(x){
+   sources.push({kind:x.kind,verified:!!x.verified});
+   if(x.verified){verified++;last=Math.max(last,x.success||0);}
+   (x.events||[]).forEach(function(e){var id=String(e.uid||e.title)+'/'+e.start;if(!seen[id]){seen[id]=true;all.push(e);}});
+  });
+  all.sort(function(a,b){return a.start-b.start;});all=all.slice(0,150);
+  status(profile,true,verified>0,all,label,{label:sets.map(function(x){return x.kind==='sport'?'BallerWatch':'Google';}).join(' + '),success:last,sources:sources});
+ }
+ records(profile).then(function(links){
+  if(version!==(revision[profile]||0))return;
+  if(!links.length){status(profile,false,false,[],'No calendar saved',{sources:[]});return;}
+  return Promise.all(links.map(function(link){
+   return cached(profile,link.kind).then(function(cache){
+    var valid=cache&&cache.day===new Date().toDateString()&&cache.success>0;
+    return {kind:link.kind,url:link.url,events:valid?cache.events:[],verified:!!valid,
+      checked:valid?cache.checked:0,success:valid?cache.success:0};
+   });
+  })).then(function(sets){
    if(version!==(revision[profile]||0))return;
-   var today=new Date().toDateString(),todayCache=cache&&cache.day===today&&cache.success>0;
-   status(profile,true,!!todayCache,todayCache?cache.events:[],todayCache?'Verified feed · locally encrypted cache':'Checking calendar…',
-    {label:record.label,success:todayCache?cache.success:0});
-   if(!force&&todayCache&&Date.now()-cache.checked<TTL)return;
+   publish(sets,'Reading saved calendar events…');
+   if(!force&&sets.every(function(x){return x.verified&&Date.now()-x.checked<TTL;}))return;
    if(inflight[profile])return;
    var job={version:version};inflight[profile]=job;
-   return download(record.url).then(function(body){
-    if(version!==(revision[profile]||0))return;
-    var events=window.VelaTizenCalendar.parseToday(body,Date.now()),stamp=Date.now();
-    return seal({day:today,checked:stamp,success:stamp,events:events}).then(function(encrypted){
-     if(version!==(revision[profile]||0))return;
-     localStorage.setItem(key(profile,'cache'),encrypted);
-     status(profile,true,true,events,events.length?'Verified · updated just now':'Verified · no events today',{label:record.label,success:stamp});
-    });
-   }).catch(function(){
-    if(version!==(revision[profile]||0))return;
-    status(profile,true,!!todayCache,todayCache?cache.events:[],
-      todayCache?'Refresh failed · showing verified cache':'Could not verify private feed · check link and connection',
-      {label:record.label,success:todayCache?cache.success:0});
+   return Promise.all(sets.map(function(x){
+    if(!force&&x.verified&&Date.now()-x.checked<TTL)return Promise.resolve(x);
+    return download(x.url).then(function(body){
+     if(version!==(revision[profile]||0))return x;
+     var events=window.VelaTizenCalendar.parseWindow(body,Date.now(),7),stamp=Date.now();
+     return seal({day:new Date().toDateString(),checked:stamp,success:stamp,events:events}).then(function(encrypted){
+      if(version!==(revision[profile]||0))return x;
+      localStorage.setItem(key(profile,'cache_'+x.kind),encrypted);
+      return {kind:x.kind,events:events,verified:true,success:stamp,checked:stamp};
+     });
+    }).catch(function(){return x;});
+   })).then(function(next){
+    publish(next,next.every(function(x){return x.verified;})?'Verified · updated just now':
+     next.some(function(x){return x.verified;})?'Some sources unavailable · verified cache':'Calendar sources unverified');
    }).then(function(){if(inflight[profile]===job)delete inflight[profile];});
   });
  }).catch(function(){if(version===(revision[profile]||0))status(profile,false,false,[],'Secure calendar storage unavailable');});
@@ -119,10 +148,25 @@ bridge.saveCalendar=function(profile,url,label){
  // Commit only after encryption succeeds. Old link is unchanged on any failure.
  seal({url:url.trim(),label:String(label||'Private calendar').slice(0,80)}).then(function(value){
   if(version!==revision[profile])return;
-  localStorage.setItem(key(profile,'secret'),value);
-  localStorage.removeItem(key(profile,'cache'));
-  success(profile);load(profile,true);
+  var source=sourceOf(url);
+  localStorage.setItem(key(profile,'secret_'+source),value);
+  localStorage.removeItem(key(profile,'cache_'+source));
+  return open(localStorage.getItem(key(profile,'secret'))).catch(function(){return null;}).then(function(old){
+   if(version!==revision[profile])return;
+   if(old&&sourceOf(old.url)===source){localStorage.removeItem(key(profile,'secret'));localStorage.removeItem(key(profile,'cache'));}
+   success(profile);load(profile,true);
+  });
  }).catch(function(){if(version===revision[profile])failure(profile,'Samsung KeyManager or encrypted storage unavailable');});
+};
+bridge.removeCalendarSource=function(profile,source){
+ if(!validProfile(profile)||['google','sport'].indexOf(source)<0)return;
+ var version=revision[profile]=(revision[profile]||0)+1;delete inflight[profile];
+ localStorage.removeItem(key(profile,'secret_'+source));localStorage.removeItem(key(profile,'cache_'+source));
+ open(localStorage.getItem(key(profile,'secret'))).catch(function(){return null;}).then(function(old){
+  if(version!==revision[profile])return;
+  if(old&&sourceOf(old.url)===source){localStorage.removeItem(key(profile,'secret'));localStorage.removeItem(key(profile,'cache'));}
+  load(profile,true);
+ });
 };
 bridge.removeCalendar=function(profile){
  if(!validProfile(profile))return;
@@ -130,6 +174,7 @@ bridge.removeCalendar=function(profile){
  delete inflight[profile];
  localStorage.removeItem(key(profile,'secret'));
  localStorage.removeItem(key(profile,'cache'));
+ ['google','sport'].forEach(function(source){localStorage.removeItem(key(profile,'secret_'+source));localStorage.removeItem(key(profile,'cache_'+source));});
  status(profile,false,false,[],'Disconnected');
 };
 window.VelaCalendarSecurity={approved:approved}; // Validation only; never exposes secrets.

@@ -330,3 +330,19 @@ body[data-app-labels="both"] .favorites.list{width:clamp(110px,13vw,177px)}
 body.light .weather-card{background:rgba(237,246,239,.15);color:#16373c;border-color:rgba(18,57,56,.13);text-shadow:none}
 body.light .weather-precip{color:rgba(13,50,51,.72)}
 @media(max-width:950px){.weather-card{top:20vh;right:4vw;width:min(260px,29vw);padding:12px 14px}.weather-symbol{width:36px;height:36px}.weather-main{gap:6px}.weather-temp{font-size:29px}.weather-condition{font-size:11px}}
+
+/* Calendar categories live inside the calendar screen; Home and Dream keep a
+   single concise date/time line with no location, channel, or long notes. */
+.calendar-filters{display:flex;gap:9px;flex-wrap:wrap;padding:3px 3px 16px}
+.calendar-filter{padding:9px 15px;border:1px solid rgba(237,249,239,.13);border-radius:22px;
+ background:rgba(243,251,245,.065);color:rgba(234,244,237,.77);font-size:12px;font-weight:600}
+.calendar-filter.is-current{background:rgba(228,245,234,.18);border-color:rgba(223,241,228,.53);color:#f3faf5}
+.calendar-filter.selected,.calendar-filter:focus{outline:1px solid rgba(237,249,239,.82);background:rgba(228,245,234,.19)}
+.event-details{display:flex;flex-direction:column;gap:6px;max-width:780px;padding:2px 3px 30px}
+.event-detail-row{display:grid;grid-template-columns:min(160px,24%) minmax(0,1fr);align-items:start;gap:16px;
+ padding:11px 15px;border-bottom:1px solid rgba(224,243,232,.105)}
+.event-detail-row>span,.event-details-copy>span{color:rgba(214,232,220,.59);font-size:11px;font-weight:700;letter-spacing:.1em}
+.event-detail-row>strong{color:rgba(249,252,249,.91);font-size:15px;font-weight:500;overflow-wrap:anywhere}
+.event-details-copy{padding:12px 15px 16px;border-bottom:1px solid rgba(224,243,232,.105)}
+.event-details-copy p{white-space:pre-line!important;overflow-wrap:anywhere;color:rgba(241,249,243,.86)!important;
+ font-size:14px!important;line-height:1.65!important;margin-top:10px!important;max-width:100%!important}

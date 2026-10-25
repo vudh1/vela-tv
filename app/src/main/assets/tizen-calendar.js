@@ -61,8 +61,28 @@ function eventItems(ics){
 }
 function first(item,key){return item[key]&&item[key][0]||null;}
 function value(item,key){var v=first(item,key);return v?v.value:'';}
-function parseToday(ics,now) {
- var time=Number(now)||Date.now(),day=new Date(time),start=new Date(day.getFullYear(),day.getMonth(),day.getDate()).getTime(),end=new Date(day.getFullYear(),day.getMonth(),day.getDate()+1).getTime();
+function unescapeText(v){return String(v||'').replace(/\\[nN]/g,'\n').replace(/\\([,;\\])/g,'$1').replace(/\r/g,'').trim();}
+function clip(v,max){return unescapeText(v).slice(0,max);}
+function eventKind(item,description){
+ var explicit=value(item,'X-VELA-KIND').toLowerCase(),cats=value(item,'CATEGORIES').toLowerCase();
+ if(explicit==='watch'||explicit==='watching'||cats.indexOf('watching')>=0||description.indexOf('Watching · professional sports')===0)return 'watch';
+ if(explicit==='play'||explicit==='playing'||cats.indexOf('playing')>=0||description.indexOf('Playing · BallerWatch')===0||/@ballerwatch$/.test(value(item,'UID')))return 'play';
+ return 'other';
+}
+function eventChannel(item,description){
+ var station=value(item,'X-VELA-CHANNEL')||value(item,'X-TV-CHANNEL');
+ if(!station)description.split('\n').some(function(line){var match=/^(?:TV|Channel|Broadcast|Network):\s*(.+)/i.exec(line);if(match){station=match[1];return true;}return false;});
+ return clip(station,80).replace(/\n/g,' ');
+}
+function eventLink(item,description){
+ var url=clip(value(item,'URL'),512);
+ if(!url)description.split('\n').some(function(line){if(/^https:\/\//.test(line)){url=line.trim();return true;}return false;});
+ return /^https:\/\//.test(url)&&url.length<=512?url:'';
+}
+function parseWindow(ics,now,days) {
+ var time=Number(now)||Date.now(),day=new Date(time),start=new Date(day.getFullYear(),day.getMonth(),day.getDate()).getTime();
+ days=Math.max(1,Math.min(14,Number(days)||1));
+ var end=new Date(day.getFullYear(),day.getMonth(),day.getDate()+days).getTime();
  var entries=eventItems(ics),overrides={},events=[];
  entries.forEach(function(item){var rid=icsDate(first(item,'RECURRENCE-ID'));if(rid)overrides[value(item,'UID')+'|'+rid.ms]=true;});
  entries.forEach(function(item){
@@ -72,7 +92,9 @@ function parseToday(ics,now) {
   var duration=final?final.ms-origin.ms:(origin.allDay?86400000:3600000);
   if(duration<=0||duration>7*86400000)duration=origin.allDay?86400000:3600000;
   var r=rule(value(item,'RRULE')),override=!!first(item,'RECURRENCE-ID');
-  var title=value(item,'SUMMARY').replace(/\\[nN]/g,' ').replace(/\\([,;\\])/g,'$1').replace(/[\r\n]/g,' ').trim().slice(0,120)||'Untitled event';
+  var title=clip(value(item,'SUMMARY'),120).replace(/\n/g,' ')||'Untitled event';
+  var description=clip(value(item,'DESCRIPTION'),1400),location=clip(value(item,'LOCATION'),180).replace(/\n/g,' ');
+  var uid=clip(value(item,'UID'),180),kind=eventKind(item,description),channel=eventChannel(item,description),url=eventLink(item,description);
   // Day candidates include overnight events beginning on the previous days.
   var candidateStart=new Date(start-duration-86400000);
   var candidateEnd=new Date(end+86400000);
@@ -104,11 +126,12 @@ function parseToday(ics,now) {
     });
    });
    if(excluded)continue;
-   events.push({title:title,start:st,end:en,allDay:origin.allDay});
+   events.push({title:title,start:st,end:en,allDay:origin.allDay,uid:uid||title+':'+st,kind:kind,location:location,description:description,channel:channel,url:url});
   }
  });
  events.sort(function(a,b){return a.start-b.start;});
- return events.slice(0,60);
+ return events.slice(0,150);
 }
-root.VelaTizenCalendar={parseToday:parseToday};
+function parseToday(ics,now){return parseWindow(ics,now,1).slice(0,60);}
+root.VelaTizenCalendar={parseToday:parseToday,parseWindow:parseWindow};
 })(window);

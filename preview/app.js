@@ -9,6 +9,7 @@ var monitorEnabled=false; // profile-scoped, hidden by default; no background st
 // Volume settings are device-wide, not profile-specific: the TV audio output is shared.
 var volumeMode='glass',volumePercent=false,volumePosition='center',volumeDelay=1200,volumeTimer=null,lastVolume={percent:45,muted:false};
 var calEvents=[],calConnected=false,calVerified=false,calStatus='',calLabel='',calName='',calAccount='',calLastSuccess=0,calLastAttempt=0,calTimer=null,calendarProfile='',calendarChecked=0,pairingUrl='',pairingExpiresAt=0,pairTimer=null;
+var calSources=[],calendarFilter='all',calendarViewEvents=[],selectedEvent=null,selectedSource='google';
 var reminderTimer=null,remindedEvents={},reminderWindowMs=15*60000,reminderVisibleMs=7000,lastCalendarMarkup='';
 var avatars={orbit:'<circle cx="12" cy="12" r="3.5"/><ellipse cx="12" cy="12" rx="10" ry="5" transform="rotate(-30 12 12)"/><path d="M20 4l-1 3"/>',flower:'<circle cx="12" cy="12" r="2.5"/><path d="M12 3c2 0 3 3 0 6-3-3-2-6 0-6Zm0 18c-2 0-3-3 0-6 3 3 2 6 0 6ZM3 12c0-2 3-3 6 0-3 3-6 2-6 0Zm18 0c0 2-3 3-6 0 3-3 6-2 6 0Z"/>',guest:'<circle cx="12" cy="8" r="3.6"/><path d="M5 21v-1c0-7 14-7 14 0v1"/>',mountain:'<path d="m2 20 7.5-13 4 7 2.5-4L22 20Z"/><path d="m7 11 2.5 2.5 2.2-2"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/>',moon:'<path d="M20 14.5A8.8 8.8 0 0 1 9.5 4 8.7 8.7 0 1 0 20 14.5Z"/><path d="m17 4 .6 1.6L19 6l-1.4.5L17 8l-.5-1.5L15 6l1.5-.4Z"/>',wave:'<path d="M2 15c3-4 6 4 10 0s7-4 10 0M2 20c3-4 6 4 10 0s7-4 10 0M4 9c2-4 4-5 8-5"/>',star:'<path d="m12 2 2.9 6.9 7.4.6-5.7 4.9 1.8 7.2L12 17.7l-6.4 3.9 1.8-7.2-5.7-4.9 7.4-.6Z"/>',leaf:'<path d="M20 3C7 3 3 9 4 17c7 5 17-2 16-14Z"/><path d="M4 21c3-8 7-10 12-13"/>',cat:'<path d="m4 11 1-7 5 4c1-.4 3-.4 4 0l5-4 1 7c2 8-2 11-8 11S2 19 4 11Z"/><path d="M8 15h.1M16 15h.1m-5 3h2m-1 0-2 1m2-1 2 1"/>'};
 var avatarList=['initial','orbit','flower','guest','mountain','sun','moon','wave','star','leaf','cat'];
@@ -80,14 +81,14 @@ function setScenery(){var n=parseInt(scenery,10)||0;if(n<0||n>=wallpapers.length
  var artwork=wallpapers[n].src4k&&effectiveWidth>=1280?wallpapers[n].src4k:wallpapers[n].src;
  $('#wallpaper').style.backgroundImage=customPhoto?'url("'+customPhoto+'")':'url("'+artwork+'")';}
 function makeProfile(id,name,legacy){return {id:id,name:name,avatar:id==='tram'?'flower':id==='guest'?'guest':'initial',favorites:legacy&&legacy.favorites?legacy.favorites:null,
- layout:legacy&&legacy.layout||'dock',theme:legacy&&legacy.theme||'dark',scenery:legacy&&legacy.scenery||'0',font:'classic',clockFormat:'auto',recent:[],usage:[],appSort:'name',labels:'focus',rotate:0,monitorEnabled:false};}
+ layout:legacy&&legacy.layout||'dock',theme:legacy&&legacy.theme||'dark',scenery:legacy&&legacy.scenery||'0',font:'classic',clockFormat:'auto',recent:[],usage:[],appSort:'name',labels:'focus',channels:{},rotate:0,monitorEnabled:false};}
 function currentProfile(){for(var i=0;i<profiles.length;i++)if(profiles[i].id===profileId)return profiles[i];return profiles[0];}
 function persistProfiles(){save('profile_data_v2',JSON.stringify({profiles:profiles.filter(function(p){return p.id!=='guest';})}));save('active_profile_v2',profileId==='guest'?'duong':profileId);}
 function persistAppearance(){var p=currentProfile();if(!p)return;p.favorites=fav.slice(0,8);p.layout=mode;p.theme=theme;p.scenery=scenery;p.font=fontStyle;p.rotate=rotationMinutes;p.monitorEnabled=monitorEnabled;p.clockFormat=clockFormat;p.labels=appLabelMode;persistProfiles();}
 function initProfiles(){var parsed=null;try{parsed=JSON.parse(get('profile_data_v2')||'null');}catch(e){}
  if(parsed&&Array.isArray(parsed.profiles)&&parsed.profiles.length){profiles=parsed.profiles.filter(function(p){return p&&p.id!=='guest'&&typeof p.id==='string'&&typeof p.name==='string';}).map(function(p){
    return {id:p.id,name:p.name.slice(0,24),avatar:p.avatar==='initial'?'initial':avatars[p.avatar]?p.avatar:(p.id==='tram'?'flower':'initial'),favorites:Array.isArray(p.favorites)?p.favorites.slice(0,8):null,
-    layout:p.layout==='list'?'list':'dock',theme:p.theme==='light'?'light':'dark',scenery:String(p.scenery||'0'),font:p.font==='modern'?'modern':'classic',clockFormat:['auto','12','24'].indexOf(p.clockFormat)>=0?p.clockFormat:'auto',recent:Array.isArray(p.recent)?p.recent.filter(function(v){return typeof v==='string';}).slice(0,5):[],usage:Array.isArray(p.usage)?p.usage.filter(function(v){return v&&typeof v.id==='string'&&Number.isFinite(v.at);}).slice(-750):[],appSort:['name','recent','week','month','quarter'].indexOf(p.appSort)>=0?p.appSort:'name',labels:['focus','both','names'].indexOf(p.labels)>=0?p.labels:'focus',rotate:p.rotate===30?30:0,monitorEnabled:p.monitorEnabled===true};
+    layout:p.layout==='list'?'list':'dock',theme:p.theme==='light'?'light':'dark',scenery:String(p.scenery||'0'),font:p.font==='modern'?'modern':'classic',clockFormat:['auto','12','24'].indexOf(p.clockFormat)>=0?p.clockFormat:'auto',recent:Array.isArray(p.recent)?p.recent.filter(function(v){return typeof v==='string';}).slice(0,5):[],usage:Array.isArray(p.usage)?p.usage.filter(function(v){return v&&typeof v.id==='string'&&Number.isFinite(v.at);}).slice(-750):[],appSort:['name','recent','week','month','quarter'].indexOf(p.appSort)>=0?p.appSort:'name',labels:['focus','both','names'].indexOf(p.labels)>=0?p.labels:'focus',channels:Object.fromEntries(Object.entries(p.channels&&typeof p.channels==='object'&&!Array.isArray(p.channels)?p.channels:{}).filter(function(e){return e[0].length<=240&&typeof e[1]==='string'&&e[1].length<=80;}).slice(-100)),rotate:p.rotate===30?30:0,monitorEnabled:p.monitorEnabled===true};
  });}
  if(!profiles.length){var oldFav=null;try{var f=JSON.parse(get('favorites')||'null');if(Array.isArray(f)&&f.length)oldFav=f;}catch(e){}
    var legacy={favorites:oldFav,layout:get('layout')||'dock',theme:get('theme')||'dark',scenery:get('scenery')||'0'};
@@ -103,7 +104,7 @@ function applyProfile(showHome){var p=currentProfile();if(!p)return;
  monitorEnabled=p.monitorEnabled===true;$('#monitorButton').classList.toggle('hidden',!monitorEnabled);
  document.body.classList.toggle('light',theme==='light');document.body.classList.toggle('modern-clock',fontStyle==='modern');
  var btn=$('#profileButton');btn.innerHTML=avatarSvg(p.avatar,p.name);btn.title=p.name+' — Switch profile';btn.setAttribute('aria-label','Profile: '+p.name+'. Switch profile');
- customPhoto='';setScenery();calendarProfile='';calEvents=[];calConnected=false;calVerified=false;calStatus='';calLabel='';calName='';calAccount='';calLastSuccess=0;calLastAttempt=0;updateCalendarView();if(profileId!=='guest')requestCalendar(false);if(showHome){home();scheduleRotation();}}
+ customPhoto='';setScenery();calendarProfile='';calEvents=[];calSources=[];selectedEvent=null;calendarFilter='all';calConnected=false;calVerified=false;calStatus='';calLabel='';calName='';calAccount='';calLastSuccess=0;calLastAttempt=0;updateCalendarView();if(profileId!=='guest')requestCalendar(false);if(showHome){home();scheduleRotation();}}
 function scheduleRotation(){if(rotationTimer)clearTimeout(rotationTimer);rotationTimer=null;
  if(!rotationMinutes||screen||document.hidden)return;
  rotationTimer=setTimeout(function(){if(!screen&&!document.hidden){scenery=String(((parseInt(scenery,10)||0)+1)%wallpapers.length);customPhoto='';setScenery();persistAppearance();}
@@ -160,6 +161,30 @@ function select(i){activeList();if(!controls.length)return;var old=focusedContro
  labelSelected(el);}
 function row(act,title,right,sub,id){return '<button class="panel-row focusable" data-act="'+act+'"'+(id?' data-id="'+esc(id)+'"':'')+'><span><span class="row-title">'+esc(title)+'</span><span class="row-sub">'+esc(sub||'')+'</span></span><span class="row-right">'+esc(right||'')+' <span class="chevron">›</span></span></button>';}
 function appRow(act,title,right,sub,id){return row(act,title,right,sub).replace('data-act="'+act+'"','data-act="'+act+'" data-id="'+esc(id)+'"');}
+function eventKey(e){return e?String(e.uid||e.title).slice(0,180)+'/'+e.start:'';}
+function savedChannel(e){var p=currentProfile();return e&&p&&p.channels&&p.channels[eventKey(e)]||e&&e.channel||'';}
+function watchChannelReady(key,value){if(!selectedEvent||eventKey(selectedEvent)!==key)return;
+ var p=currentProfile();if(!p)return;if(!p.channels)p.channels={};
+ var station=String(value||'').replace(/[\r\n<>]/g,' ').trim().slice(0,80);
+ if(station)p.channels[key]=station;else delete p.channels[key];
+ var keys=Object.keys(p.channels);if(keys.length>100)keys.slice(0,keys.length-100).forEach(function(id){delete p.channels[id];});
+ if(profileId!=='guest')persistProfiles();renderPanel('eventDetails');toast(station?'Channel saved':'Channel cleared');}
+function detailRow(label,value){return value?'<div class="event-detail-row"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong></div>':'';}
+function eventDetailsBody(){var e=selectedEvent;if(!e)return '<p class="calendar-empty">Event is no longer available.</p>';
+ var kind=e.kind==='play'?'Playing':e.kind==='watch'?'Watching':'Other';
+ var date=new Date(e.start).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+ var time=e.allDay?'All day':calendarTime(e.start,false)+' – '+calendarTime(e.end,false);
+ var body='<div class="event-details">'+detailRow('TYPE',kind)+detailRow('DATE',date)+detailRow('TIME',time);
+ if(e.location)body+=detailRow(e.kind==='play'?'FIELD':'LOCATION',e.location);
+ if(e.kind==='watch'){
+  var channel=savedChannel(e);
+  body+=detailRow('DROGON TV CHANNEL',channel||'Not assigned');
+  body+=row('editWatchChannel',channel?'Edit channel':'Assign Drogon TV channel','Edit','Use the exact name in your configured Perfect Player playlist');
+  body+=row('openPerfectPlayer','Open Perfect Player','Open','Choose '+(channel||'the match channel')+' in your playlist');
+ }
+ if(e.description)body+='<div class="event-details-copy"><span>NOTES</span><p>'+esc(e.description)+'</p></div>';
+ if(e.url)body+='<div class="event-details-copy"><span>EVENT LINK</span><p>'+esc(e.url)+'</p></div>';
+ return body+'</div>';}
 function recentApps(){var p=currentProfile();return p&&Array.isArray(p.recent)?p.recent.map(byId).filter(Boolean):[];}
 function rememberApp(id){if(!byId(id))return;var p=currentProfile();if(!p)return;
  p.recent=[id].concat((p.recent||[]).filter(function(x){return x!==id&&!!byId(x);})).slice(0,recentMax);
@@ -279,28 +304,42 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  row('cameraApps','Other camera apps','Browse','Choose a TV-installed camera or network monitor app')+
  row('monitorSettings','Monitor settings','Edit','Show/hide this button and read PiP compatibility');
  }
- else if(type==='calendar'){title='Today';subtitle=calConnected?'Events for '+currentProfile().name+' · Manage under Gear → Calendar':'Connect a private calendar in Gear → Calendar.';
+ else if(type==='calendar'){title='Calendar';subtitle=calConnected?'Upcoming events for '+currentProfile().name:'Connect Google and BallerWatch under Gear → Calendar.';
  body=calendarEventList();}
  else if(type==='calendarSettings'){title='Calendar · '+currentProfile().name;subtitle='Private read-only iCal subscription, not Google sign-in.';
  var stamp=calLastSuccess?new Date(calLastSuccess).toLocaleString():'Never';var badge=calVerified?'VERIFIED':calConnected?'NOT VERIFIED':'NOT CONNECTED';
  body='<div class="calendar-connection"><span class="connection-pill '+(calVerified?'verified':calConnected?'pending':'')+'">'+badge+'</span>'+
- '<div class="connection-name">'+esc(calLabel||calName||'No calendar selected')+'</div>'+(calName?'<div class="connection-detail">Calendar: '+esc(calName)+'</div>':'')+'<div class="connection-detail">Calendar ID: '+esc(calAccount||'Not provided by iCal')+'</div>'+
+ '<div class="connection-name">'+esc(calSources.length?calSources.map(function(s){return s.kind==='sport'?'BallerWatch':'Google';}).join(' + '):'No calendar selected')+'</div>'+
  '<div class="connection-detail">'+esc(calStatus||'No refresh attempted')+'</div><div class="connection-detail">Last successful sync: '+esc(stamp)+'</div></div>';
  if(profileId==='guest')body+='<p class="calendar-help">Guest is temporary: no calendar addresses or events are saved.</p>';
- else body+=(tizenMode?row('tizenCalendarEntry',calConnected?'Replace private calendar':'Connect private calendar','Open','Paste a Google or BallerWatch HTTPS iCal URL using your remote'):
- row('pairCalendar',calConnected?'Replace calendar via phone':'Connect with phone','QR','Scan on trusted home Wi-Fi and paste a Google or BallerWatch iCal link')+
- row('connectCalendar',calConnected?'Replace link on TV':'Enter on TV',calConnected?'Replace':'Enter','Paste a Google or BallerWatch iCal address'))+
+ else body+=row('calendarSource','Google Calendar',calSources.some(function(s){return s.kind==='google';})?'Connected':'Connect','Birthdays, appointments, tasks and other events','google')+
+ row('calendarSource','BallerWatch',calSources.some(function(s){return s.kind==='sport';})?'Connected':'Connect','Matches you play and professional sports you watch','sport')+
  row('refreshCalendar','Refresh now','↻','Normally auto-refreshes about every 15 minutes while Vela is open')+
- (calConnected?row('disconnectCalendar','Disconnect','Remove','Delete this profile’s saved link and cache'):'')+
- '<p class="library-footnote">Verified means the selected source returned a valid calendar feed. Zero events is still a successful connection. One encrypted feed per saved profile; connecting another replaces it. '+(tizenMode?'Samsung uses device-protected local encryption. Refresh requires TV internet access and permission for direct HTTPS requests; no proxy receives your private link.':'Use private iCal addresses only on a trusted device.')+'</p>';
+  (calConnected?row('disconnectCalendar','Disconnect both calendars','Remove','Delete both subscriptions and caches for this profile'):'')+
+ '<p class="library-footnote">Both feeds are read-only and encrypted separately. Each can be replaced without removing the other. '+(tizenMode?'Samsung requires direct HTTPS access from this TV; no proxy receives your private link.':'Only use private iCal addresses on a trusted device.')+'</p>';
  }
+ else if(type==='calendarSource'){var isSport=selectedSource==='sport',attached=calSources.some(function(s){return s.kind===selectedSource;});
+ title=isSport?'BallerWatch sports':'Google Calendar';subtitle=isSport?'Your playing and watched sports fixtures.':'Your birthdays, reminders, appointments and tasks.';
+ body=(tizenMode?row('tizenCalendarEntry',attached?'Replace subscription':'Connect subscription','Enter','Paste the private read-only iCal URL'):
+ row('pairCalendar','Connect using phone','QR','Scan on your trusted Wi-Fi and paste the subscription URL')+
+ row('connectCalendar',attached?'Replace on TV':'Enter on TV','Enter','Paste the iCal URL on your Sony TV'))+
+ (attached?row('removeCalendarSource','Remove this source','Remove','Keep the other calendar connected'):'')+
+ '<p class="library-footnote">'+(isSport?'Copy the feed under BallerWatch → Settings → Share my calendar. The ICS marks playing versus watching, but does not currently include Drogon TV channels.':'Get your secret iCal link from Google Calendar settings. You do not need to sign into Google on this TV.')+'</p>';}
  else if(type==='tizenCalendarEntry'){title='Private calendar';subtitle='Samsung · saved under this profile only';
- body='<p class="library-footnote">Paste your Google Calendar secret iCal address using the Samsung keyboard or SmartThings remote. Press Down after editing to reach Save. Vela encrypts the link before saving and does not send it to a third-party server.</p>'+
+ body='<p class="library-footnote">Paste your '+(selectedSource==='sport'?'BallerWatch sports':'Google Calendar secret')+' iCal address using the Samsung keyboard or SmartThings remote. Press Down after editing to reach Save. Vela encrypts the link before saving.</p>'+
  '<label class="calendar-input-label" for="tizenCalendarUrl">Secret HTTPS iCal URL</label>'+
- '<input class="calendar-url-input" id="tizenCalendarUrl" type="url" inputmode="url" maxlength="4096" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics">'+
+ '<input class="calendar-url-input" id="tizenCalendarUrl" type="url" inputmode="url" maxlength="4096" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="'+(selectedSource==='sport'?'https://ballerwatch-web.vudhone.workers.dev/web/calendar.ics':'https://calendar.google.com/calendar/ical/…/basic.ics')+'">'+
  row('focusCalendarInput','Enter or paste calendar address','Edit','Opens the Samsung keyboard')+
  row('saveTizenCalendar','Save and verify','Save','Encrypt locally and check today’s events')+
- '<p class="library-footnote">Only Google or BallerWatch direct HTTPS feeds are accepted. Vela cannot sign in to your Google account; use the private iCal link from Google Calendar settings.</p>';}
+ '<p class="library-footnote">Only approved direct HTTPS feeds are accepted. The TV stores no Google login or IPTV credentials.</p>';}
+ else if(type==='eventDetails'){title=selectedEvent?selectedEvent.title:'Event details';subtitle='Full context stays here, away from Home and screensaver.';
+ body=eventDetailsBody();}
+ else if(type==='watchChannelEditor'){title='Drogon TV channel';subtitle='Just a display name for this watched match.';
+ body='<p class="library-footnote">Enter the channel name exactly as it appears in your own Perfect Player playlist. This does not access IPTV credentials or the playlist.</p>'+
+ '<label class="calendar-input-label" for="eventChannelName">Channel name</label>'+
+ '<input class="calendar-url-input" id="eventChannelName" maxlength="80" autocomplete="off" placeholder="e.g. USA Network HD" value="'+esc(savedChannel(selectedEvent))+'">'+
+ row('focusChannelInput','Edit channel name','Edit','Open the Samsung keyboard')+
+ row('saveWatchChannel','Save channel','Save','Show this channel in the event details');}
  else if(type==='pairing'){title='Connect using phone';subtitle='Scan QR on the same home Wi-Fi.';
  body='<div class="pair-stage"><div class="pair-qr" id="pairQr">'+(pairingUrl?qrSvg(pairingUrl):'<span class="pair-loading">'+(pairingExpiresAt?'Pairing expired — generate a new code':'Starting local pairing…')+'</span>')+'</div>'+
   '<p class="pair-countdown" id="pairCountdown" aria-live="off"></p>'+
@@ -351,15 +390,30 @@ function action(name,id,dir){
  if(name==='pairCalendar'){if(profileId==='guest'){toast('Guest has no saved calendar');return;}startPairing();return;}
   if(name==='renewPair'){startPairing();return;}
  if(name==='cancelPair'){stopPairClock();pairingUrl='';pairingExpiresAt=0;if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();renderPanel('calendarSettings');return;}
- if(name==='connectCalendar'){if(profileId==='guest'){toast('Guest has no saved calendar');return;}if(bridge&&bridge.editCalendar)bridge.editCalendar(profileId);else toast('Connect a calendar on your TV');return;}
+ if(name==='calendarSource'){selectedSource=id==='sport'?'sport':'google';navigatePanel('calendarSource');return;}
+ if(name==='connectCalendar'){if(profileId==='guest'){toast('Guest has no saved calendar');return;}if(bridge&&bridge.editCalendarSource)bridge.editCalendarSource(profileId,selectedSource);else if(bridge&&bridge.editCalendar)bridge.editCalendar(profileId);else toast('Connect a calendar on your TV');return;}
+ if(name==='removeCalendarSource'){if(bridge&&bridge.removeCalendarSource){bridge.removeCalendarSource(profileId,selectedSource);renderPanel('calendarSettings');}return;}
  if(name==='disconnectCalendar'){if(bridge&&bridge.removeCalendar){bridge.removeCalendar(profileId);requestCalendar(false);}return;}
  if(name==='refreshCalendar'){requestCalendar(true);toast('Refreshing calendar…');return;}
  if(name==='focusCalendarInput'){var input=$('#tizenCalendarUrl');if(input)input.focus();return;}
- if(name==='saveTizenCalendar'){var field=$('#tizenCalendarUrl'),url=field?field.value.trim():'';if(bridge&&bridge.saveCalendar)bridge.saveCalendar(profileId,url,'Private Google Calendar');return;}
+ if(name==='saveTizenCalendar'){var field=$('#tizenCalendarUrl'),url=field?field.value.trim():'';
+  var valid=window.VelaCalendarSecurity&&window.VelaCalendarSecurity.approved(url);
+  if(!valid||(selectedSource==='sport'?!/^https:\/\/ballerwatch-web\.vudhone\.workers\.dev\//i.test(url):!/^https:\/\/calendar\.google\.com\//i.test(url))){toast('Paste a valid link for this source');return;}
+  if(bridge&&bridge.saveCalendar)bridge.saveCalendar(profileId,url,selectedSource==='sport'?'BallerWatch':'Google Calendar');return;}
  if(name==='samsungHome'||name==='samsungSettings'){if(bridge&&bridge[name])bridge[name]();return;}
  if(name==='chooseSort'){var p=currentProfile();p.appSort=id;if(profileId!=='guest')persistProfiles();renderPanel('appSort',{act:'chooseSort',id:id},true);return;}
  if(name==='wakeProfileToggle'){if(bridge&&bridge.setWakeProfilePromptEnabled){bridge.setWakeProfilePromptEnabled(!bridge.wakeProfilePromptEnabled());}renderPanel('homeSettings',{act:'wakeProfileToggle'},true);return;}
- if(name==='eventInfo'){var chosen=calendarToday()[Number(id)];if(chosen){toast(chosen.allDay?'All-day event':calendarTime(chosen.start,false)+' – '+calendarTime(chosen.end,false));}return;}
+ if(name==='filterCalendar'){calendarFilter=['all','play','watch','other'].indexOf(id)>=0?id:'all';renderPanel('calendar',{act:'filterCalendar',id:calendarFilter},true);return;}
+ if(name==='eventInfo'){var chosen=calendarViewEvents[Number(id)];if(chosen){selectedEvent=chosen;navigatePanel('eventDetails');}return;}
+ if(name==='editWatchChannel'){if(!selectedEvent||selectedEvent.kind!=='watch')return;
+  if(bridge&&bridge.editWatchChannel)bridge.editWatchChannel(eventKey(selectedEvent),savedChannel(selectedEvent));
+  else navigatePanel('watchChannelEditor');return;}
+ if(name==='focusChannelInput'){var input=$('#eventChannelName');if(input)input.focus();return;}
+ if(name==='saveWatchChannel'){var entry=$('#eventChannelName');if(entry&&selectedEvent)watchChannelReady(eventKey(selectedEvent),entry.value);return;}
+ if(name==='openPerfectPlayer'){if(!selectedEvent||selectedEvent.kind!=='watch')return;
+  var pp=apps.filter(function(a){return a.package==='com.niklabs.pp'||/perfect player/i.test(a.name);})[0];
+  if(!pp){toast('Install or open Perfect Player from your TV apps');return;}
+  rememberApp(pp.id);if(bridge&&bridge.launchApp)bridge.launchApp(pp.id);else toast('Open Perfect Player on your TV');return;}
  if(name==='addProfile'){requestProfileEdit('add','');return;}
  if(name==='renameProfile'){requestProfileEdit('rename',id);return;}
  if(name==='deleteProfile'){requestProfileDeletion(id);return;}
@@ -420,21 +474,28 @@ function remote(key){
  else if(key==='left'&&screen)goBack();
 }
 function calendarTime(ms,allDay){if(allDay)return 'All day';var d=new Date(ms);return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}
+function calendarDate(ms){return new Date(ms).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});}
 function calendarState(e){if(e.allDay)return '';var n=Date.now();return e.start<=n&&e.end>n?'ongoing':e.start>n&&e.start<=n+3600000?'soon':e.start>n&&e.start<=n+2*3600000?'later':'';}
 function calendarToday(){var now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
  var end=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1).getTime();
  return calEvents.filter(function(e){return Number(e.start)<end&&Number(e.end)>Math.max(start,Date.now());}).sort(function(a,b){return a.start-b.start;});}
-function eventHTML(e,compact,index){var state=calendarState(e),meta=e.allDay?'All day':state==='ongoing'?'NOW · '+calendarTime(e.start,false):state==='soon'?'NEXT HOUR · '+calendarTime(e.start,false):state==='later'?'WITHIN 2H · '+calendarTime(e.start,false):calendarTime(e.start,false);
+function calendarUpcoming(){var now=Date.now(),until=now+7*86400000;
+ return calEvents.filter(function(e){return e.end>now&&e.start<until&&(calendarFilter==='all'||(e.kind||'other')===calendarFilter);}).sort(function(a,b){return a.start-b.start;});}
+function eventHTML(e,compact,index){var state=calendarState(e),when=calendarDate(e.start)+' · '+calendarTime(e.start,e.allDay);
+ var type=e.kind==='play'?'PLAY · ':e.kind==='watch'?'WATCH · ':'';
+ var meta=type+(state==='ongoing'?'NOW · ':state==='soon'?'NEXT HOUR · ':'')+when;
  var content='<span class="event-meta">'+esc(meta)+'</span><span class="event-summary">'+esc(e.title||'Untitled event')+'</span>'+(compact?'':'<span class="event-when">'+esc(e.allDay?'':calendarTime(e.start,false)+' – '+calendarTime(e.end,false))+'</span>');
  return compact?'<div class="event-item '+(state||'')+' event-peek">'+content+'</div>':
  '<button type="button" class="event-item focusable '+(state||'')+'" data-act="eventInfo" data-id="'+index+'" aria-label="'+esc((e.title||'Untitled event')+', '+meta)+'">'+content+'</button>';}
 function calendarEventList(){
- if(!calConnected)return '<p class="calendar-empty">No calendar linked for this profile. Set one up in Gear → Calendar.</p>'+
- '<div class="calendar-tools">'+row('calendarSettings','Calendar settings','Open','Connect a read-only Google Calendar')+'</div>';
- var events=calendarToday();
- return events.length?events.map(function(e,i){return eventHTML(e,false,i);}).join('')+
- (events.length>4?'<p class="calendar-scroll-hint">↑ ↓ Browse events · OK shows time</p>':''):
- '<p class="calendar-empty">Nothing scheduled today. Enjoy the space.</p>';
+ if(!calConnected)return '<p class="calendar-empty">No calendar linked for this profile. Set one up in Gear → Daily life → Calendar.</p>'+
+ '<div class="calendar-tools">'+row('calendarSettings','Calendar settings','Open','Connect Google Calendar or BallerWatch')+'</div>';
+ var filters=[['all','All'],['play','Playing'],['watch','Watching'],['other','Other']];
+ var tabs='<div class="calendar-filters">'+filters.map(function(f){return '<button class="calendar-filter focusable'+(calendarFilter===f[0]?' is-current':'')+'" data-act="filterCalendar" data-id="'+f[0]+'">'+f[1]+'</button>';}).join('')+'</div>';
+ var events=calendarUpcoming();calendarViewEvents=events;
+ return tabs+(events.length?events.map(function(e,i){return eventHTML(e,false,i);}).join('')+
+ (events.length>4?'<p class="calendar-scroll-hint">↑ ↓ Browse · OK for details</p>':''):
+ '<p class="calendar-empty">No '+(calendarFilter==='all'?'upcoming':calendarFilter==='play'?'playing':calendarFilter==='watch'?'watching':'other')+' events in the next seven days.</p>');
 }
 function hideUpcomingReminder(){if(reminderTimer)clearTimeout(reminderTimer);reminderTimer=null;var el=$('#eventReminder');
  if(el){el.classList.remove('visible');el.setAttribute('aria-hidden','true');}}
@@ -463,7 +524,15 @@ function updateCalendarView(){var n=Date.now(),today=calendarToday();
  var peek=$('#calendarPeek');var next=today.filter(function(e){return e.end>n&&(!e.allDay||e.start>n);}).slice(0,2);peek.innerHTML=calConnected&&next.length?'<div class="peek-heading">TODAY</div>'+next.map(function(e){return eventHTML(e,true);}).join(''):'';
  if(screen==='calendar')renderCalendarBody();else maybeShowUpcomingReminder();}
 function receiveCalendar(json){try{var obj=typeof json==='string'?JSON.parse(json):json;if(!obj||obj.profile!==profileId)return;
- calendarProfile=obj.profile;calConnected=!!obj.connected;calVerified=!!obj.verified;calName=obj.calendarName||'';calLabel=obj.label||'';calAccount=obj.calendarId||'';calLastSuccess=Number(obj.lastSuccess)||0;calLastAttempt=Number(obj.lastAttempt)||0;calEvents=Array.isArray(obj.events)?obj.events.filter(function(e){return Number.isFinite(e.start)&&Number.isFinite(e.end);}).slice(0,60):[];calStatus=obj.status||'';calendarChecked=Date.now();updateCalendarView();if(screen==='calendarSettings')renderPanel('calendarSettings');/* Cached calendar status must never close a live phone pairing. */}catch(e){toast('Could not read calendar data');}}
+ calendarProfile=obj.profile;calConnected=!!obj.connected;calVerified=!!obj.verified;calName=obj.calendarName||'';calLabel=obj.label||'';calAccount=obj.calendarId||'';calLastSuccess=Number(obj.lastSuccess)||0;calLastAttempt=Number(obj.lastAttempt)||0;
+ calSources=Array.isArray(obj.sources)?obj.sources.filter(function(s){return s&&['google','sport'].indexOf(s.kind)>=0;}).slice(0,2):[];
+ calEvents=Array.isArray(obj.events)?obj.events.filter(function(e){return e&&Number.isFinite(e.start)&&Number.isFinite(e.end);}).slice(0,150).map(function(e){
+  return {title:String(e.title||'Untitled event').slice(0,120),start:e.start,end:e.end,allDay:!!e.allDay,
+   uid:String(e.uid||'').slice(0,180),kind:['play','watch'].indexOf(e.kind)>=0?e.kind:'other',
+   location:String(e.location||'').slice(0,180),description:String(e.description||'').slice(0,1400),
+   channel:String(e.channel||'').slice(0,80),url:String(e.url||'').slice(0,512)};
+ }):[];
+ calStatus=obj.status||'';calendarChecked=Date.now();updateCalendarView();if(screen==='calendarSettings'||screen==='calendarSource')renderPanel(screen);/* Cached calendar status must never close a live phone pairing. */}catch(e){toast('Could not read calendar data');}}
 function calendarSaveReady(profile,okay,message){if(profile!==profileId)return;
  if(okay){renderPanel('calendarSettings');toast('Private calendar saved');}else toast(message||'Could not save calendar');}
 function qrSvg(url){if(!window.VelaQRCode)return '<span class="pair-url">'+esc(url)+'</span>';
@@ -491,7 +560,7 @@ function pairingReady(url,expires){
 function pairingCompleted(profile){
  if(profile!==profileId)return;
  stopPairClock();pairingUrl='';pairingExpiresAt=0;
- if(screen==='pairing'){if(panelHistory.length&&panelHistory[panelHistory.length-1]==='calendarSettings')panelHistory.pop();renderPanel('calendarSettings');toast('Calendar link received · verifying with Google…');}
+ if(screen==='pairing'){if(panelHistory.length&&panelHistory[panelHistory.length-1]==='calendarSettings')panelHistory.pop();renderPanel('calendarSettings');toast('Calendar link received · verifying feed…');}
 }
 function requestCalendar(force){if(profileId==='guest'){calConnected=false;calVerified=false;calEvents=[];updateCalendarView();return;}if(!bridge||!bridge.loadCalendar){if(preview&&calendarProfile!==profileId){calendarProfile=profileId;calConnected=false;calEvents=[];updateCalendarView();}return;}
  bridge.loadCalendar(profileId,!!force);}
@@ -522,6 +591,6 @@ document.addEventListener('keydown',function(e){if(!preview)return;
  if(e.key==='Enter'){e.preventDefault();if(!e.repeat){previewEnterAt=Date.now();previewLong=false;}else if(!previewLong&&Date.now()-previewEnterAt>=500){previewLong=true;remote('longselect');}return;}
  var k={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',Escape:'back',Backspace:'back'}[e.key];if(k){e.preventDefault();remote(k);}});
 document.addEventListener('keyup',function(e){if(preview&&e.key==='Enter'){e.preventDefault();if(!previewLong)remote('select');previewEnterAt=0;previewLong=false;}});
-window.QH={pause:pause,checkWakeProfilePrompt:checkWakeProfilePrompt,profileNameReady:profileNameReady,profileDeleteConfirmed:profileDeleteConfirmed,remote:remote,refreshApps:refreshApps,receiveApps:receiveApps,catalogRefreshed:catalogRefreshed,iconReady:iconReady,refreshWallpaper:refreshWallpaper,wallpaperReady:wallpaperReady,resume:resume,tick:clock,updateStatusReady:receiveUpdateStatus,receiveCalendar:receiveCalendar,calendarSaveReady:calendarSaveReady,pairingReady:pairingReady,pairingCompleted:pairingCompleted,volumeChanged:volumeChanged,weatherReady:function(data){if(window.VelaWeatherClient)window.VelaWeatherClient.receive(data);}};
+window.QH={pause:pause,checkWakeProfilePrompt:checkWakeProfilePrompt,profileNameReady:profileNameReady,profileDeleteConfirmed:profileDeleteConfirmed,remote:remote,refreshApps:refreshApps,receiveApps:receiveApps,catalogRefreshed:catalogRefreshed,iconReady:iconReady,refreshWallpaper:refreshWallpaper,wallpaperReady:wallpaperReady,resume:resume,tick:clock,updateStatusReady:receiveUpdateStatus,receiveCalendar:receiveCalendar,calendarSaveReady:calendarSaveReady,pairingReady:pairingReady,pairingCompleted:pairingCompleted,volumeChanged:volumeChanged,watchChannelReady:watchChannelReady,weatherReady:function(data){if(window.VelaWeatherClient)window.VelaWeatherClient.receive(data);}};
 init();
 })();

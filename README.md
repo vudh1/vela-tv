@@ -118,24 +118,40 @@ Never commit signing keystores (`*.jks`), APKs, calendar iCal URLs, access token
 
 ## BallerWatch calendar subscription
 
-Vela accepts a read-only iCalendar (`.ics`) URL from the existing Google Calendar
-secret-feed format **or** from the BallerWatch Worker at
+Vela can subscribe to **both** a read-only Google Calendar secret iCalendar
+(`.ics`) URL **and** the BallerWatch Worker feed at
 `https://ballerwatch-web.vudhone.workers.dev/web/calendar.ics`. In BallerWatch,
 open Settings → Share my calendar and copy the generated URL with your RATS,
 pickup and watched professional-sports selections.
 
-On Sony, choose **Gear → Daily life → Calendar → Connect with phone** (or
-Enter on TV) and paste the URL. Vela verifies the feed over HTTPS, keeps the
-address in encrypted per-profile native preferences, and refreshes about every
-15 minutes. On Samsung, use **Gear → Daily life → Calendar → Connect private
-calendar** to paste the secret URL with the Samsung keyboard; it is encrypted
-under Tizen KeyManager, and refreshes directly over HTTPS. Cross-origin
-requests may be blocked by Samsung/Google and require a test on the actual TV.
-There is no Google login or paid provider.
+Go to **Gear → Daily life → Calendar**, then connect **Google Calendar** and
+**BallerWatch** separately. You can replace or remove either source while
+keeping the other. On Sony, scan the **Connect using phone** QR code or use
+**Enter on TV** inside each source. On Samsung, paste each source's URL using
+the remote keyboard. Each URL and cached feed is AES-GCM encrypted locally per
+profile; there is no Google login, Cloudflare proxy or IPTV credential sharing.
+Feeds refresh about every 15 minutes while Vela is active. Cross-origin HTTPS
+may be blocked by Samsung/Google and must be verified on the actual television.
 
-Current limitation: Vela stores one calendar subscription per profile;
-adding BallerWatch replaces that profile's prior Google iCal subscription.
-To change the teams published by BallerWatch, copy and paste the updated feed
-URL again. Match feeds are public fixtures only; do not put private details in
-a calendar URL. Vela accepts only the approved Google and BallerWatch hosts,
-with no redirects to arbitrary external services.
+The **Calendar** page shows the next seven days, with **All**, **Playing**,
+**Watching**, and **Other** filters. Every event displays its date and time.
+BallerWatch `Playing · BallerWatch` events appear under Playing; `Watching ·
+professional sports` events under Watching. Google birthdays, tasks and other
+events appear under Other unless the iCal category explicitly says Playing or
+Watching. The Home preview shows at most two events today; the Sony native
+screensaver shows at most three ongoing or next-two-hour events. Both surfaces
+hide full notes, fields and channel names to keep the design uncluttered.
+
+Select an event in Calendar to see details. Playing events show their
+**field/location**; watched events show a **TV channel** (when provided) and
+can store the exact Drogon TV channel name **per profile and event**. Choose
+**Open Perfect Player** to launch the installed app and then select the named
+channel yourself. The current BallerWatch feed does **not** supply Drogon
+channel mappings; Perfect Player has no verified public per-channel launch
+interface, so Vela does not claim automatic tuning. Other events display the
+normal iCal description, location and available link in their details.
+
+To update your sports/team selection, copy the new BallerWatch URL and replace
+just that source. Treat secret Google URLs as passwords; match-feed URLs can
+encode your viewing preferences. Only the approved Google and BallerWatch
+hosts can be used (including redirects).
