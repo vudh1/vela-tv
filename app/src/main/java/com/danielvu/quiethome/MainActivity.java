@@ -24,6 +24,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.text.format.DateFormat;
 import android.util.Base64;
@@ -79,14 +80,22 @@ public final class MainActivity extends Activity {
     private VelaUpdateController updater;
     private VelaCalendarController calendar;
     private VelaPairingServer pairing;
-    // TV standby is not the same as leaving Vela to use a streaming app.
-    // Receiver lives for the launcher process; an Android kill during standby
-    // may prevent wake detection, so a guaranteed wake prompt is not possible.
+    // Streaming-app returns reuse this Activity; a new launcher process is a
+    // fresh viewing session. Some Sony standby paths never emit SCREEN_OFF.
+    // A cold launch fallback covers those paths (at the cost of a prompt if
+    // Android killed the launcher while an app was in the foreground).
     private boolean homeResumed = false;
+    private void markNextViewingSession() {
+        prefs.edit().putBoolean("profile_choose_on_next_home", true).apply();
+    }
+    private boolean screenIsInteractive() {
+        PowerManager power = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        return power == null || power.isInteractive();
+    }
     private final BroadcastReceiver tvPower = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
             if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
-                prefs.edit().putBoolean("profile_choose_on_next_home", true).apply();
+                markNextViewingSession();
             } else if (Intent.ACTION_SCREEN_ON.equals(intent.getAction()) && homeResumed) {
                 sendToJs("QH && QH.checkWakeProfilePrompt && QH.checkWakeProfilePrompt()");
             }
@@ -117,6 +126,9 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        // Crucially, don't depend on Sony broadcasting SCREEN_OFF: after a TV
+        // restart the launcher may be created only *after* the wake occurred.
+        if (b == null) markNextViewingSession();
         // Sony's system volume HUD cannot reliably be hidden by a regular TV app.
         // One-time migration prevents the new observer from drawing a second HUD over Sony's.
         // Do not reapply: an explicit later user selection of Glass/Minimal is respected.
@@ -201,6 +213,7 @@ public final class MainActivity extends Activity {
     @Override public void onResume() {
         super.onResume();
         homeResumed = true;
+        if (!screenIsInteractive()) markNextViewingSession();
         startVolumeObservation();
         if (web != null && javascriptReady) {
             // Clock and stale app catalog refresh when Android resumes a throttled WebView.
@@ -210,6 +223,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onPause() {
+        if (!screenIsInteractive()) markNextViewingSession();
         homeResumed = false;
         stopVolumeObservation();
         if (pendingLongSelect != null) longSelectHandler.removeCallbacks(pendingLongSelect);
@@ -430,7 +444,7 @@ public final class MainActivity extends Activity {
         try { updateTime = getPackageManager().getPackageInfo(pkg, 0).lastUpdateTime; }
         catch (Exception ignored) { return ""; }
         // Versioned cache identity discards the old 80px lossy images across upgrades.
-        File cached = new File(dir, Integer.toHexString(id.hashCode()) + "-" + updateTime + "-hq192-v2.png");
+        File cached = new File(dir, Integer.toHexString(id.hashCode()) + "-" + updateTime + "-hq384-v3.png");
         String encoded = "";
         if (cached.isFile() && cached.length() > 0 && cached.length() < 512000) {
             try (FileInputStream in = new FileInputStream(cached)) {
@@ -466,7 +480,7 @@ public final class MainActivity extends Activity {
         if (drawable == null) try { drawable = pm.getApplicationIcon(pkg); } catch (Exception ignored) { }
         if (drawable == null) return "";
         try {
-            final int size = 192;
+            final int size = 384;
             Bitmap bitmap = Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888);
             Canvas canvas = new Canvas(bitmap);
             drawable.setBounds(0,0,size,size);drawable.draw(canvas);
@@ -557,22 +571,26 @@ public final class MainActivity extends Activity {
     @Override protected void onActivityResult(int code, int result, Intent data) {
         super.onActivityResult(code, result, data);
         if (code != PHOTO_REQUEST || result != RESULT_OK || data == null || data.getData() == null) return;
-        // Decode downsampled, never retain the source photo's original high resolution in memory.
+        // Keep enough photo detail for a 4K panel, but cap unusually large inputs.
         try (InputStream in = getContentResolver().openInputStream(data.getData())) {
             android.graphics.BitmapFactory.Options probe = new android.graphics.BitmapFactory.Options();
             probe.inJustDecodeBounds = true;
             android.graphics.BitmapFactory.decodeStream(in, null, probe);
             if (probe.outWidth <= 0 || probe.outHeight <= 0) throw new IllegalStateException("Invalid image dimensions");
             int sample = 1;
-            while (probe.outWidth / sample > 1920 || probe.outHeight / sample > 1080) sample *= 2;
+            while (probe.outWidth / sample > 3840 || probe.outHeight / sample > 2160) sample *= 2;
             android.graphics.BitmapFactory.Options opts = new android.graphics.BitmapFactory.Options();
             opts.inSampleSize = sample;
             try (InputStream in2 = getContentResolver().openInputStream(data.getData())) {
                 Bitmap bitmap = android.graphics.BitmapFactory.decodeStream(in2, null, opts);
                 if (bitmap == null) throw new IllegalStateException("Not an image");
                 File dest = new File(getFilesDir(), "custom-wallpaper.jpg");
-                try (FileOutputStream out = new FileOutputStream(dest)) { bitmap.compress(Bitmap.CompressFormat.JPEG, 77, out); }
+                try (FileOutputStream out = new FileOutputStream(dest)) { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out); }
+                if (dest.length() > 12_000_000)
+                    try (FileOutputStream out = new FileOutputStream(dest)) { bitmap.compress(Bitmap.CompressFormat.JPEG, 76, out); }
+                boolean exceedsLimit = dest.length() > 12_000_000;
                 bitmap.recycle();
+                if (exceedsLimit) throw new IllegalStateException("Photo is too large");
                 prefs.edit().putBoolean("custom_wallpaper", true).apply();
                 if (web != null) web.evaluateJavascript("window.QH && QH.refreshWallpaper()", null);
             }
@@ -582,7 +600,7 @@ public final class MainActivity extends Activity {
     private String customWallpaper() {
         if (!prefs.getBoolean("custom_wallpaper", false)) return "";
         File f = new File(getFilesDir(), "custom-wallpaper.jpg");
-        if (!f.exists() || f.length() > 4_000_000) return "";
+        if (!f.exists() || f.length() > 12_000_000) return "";
         try (InputStream in = new java.io.FileInputStream(f)) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buf = new byte[8192]; int n;
@@ -679,7 +697,22 @@ public final class MainActivity extends Activity {
         }
         @JavascriptInterface public void cancelCalendarPair(){if(pairing!=null)pairing.stop();}
         @JavascriptInterface public void editCalendar(String profile) { calendar.edit(profile); }
+        @JavascriptInterface public void editCalendarSource(String profile,String source) { calendar.editSource(profile,source); }
+        @JavascriptInterface public void removeCalendarSource(String profile,String source) { calendar.removeSource(profile,source); }
         @JavascriptInterface public void removeCalendar(String profile) { calendar.remove(profile); }
+        @JavascriptInterface public void editWatchChannel(String eventId,String previous) {
+            if(eventId==null||eventId.length()>250)return;
+            runOnUiThread(()->{
+                EditText input=new EditText(MainActivity.this);input.setSingleLine(true);
+                input.setText(previous==null?"":previous.substring(0,Math.min(80,previous.length())));
+                new AlertDialog.Builder(MainActivity.this).setTitle("Drogon TV channel name")
+                    .setMessage("Enter the channel name as it appears in your Perfect Player playlist. Vela does not access the playlist or credentials.")
+                    .setView(input).setNegativeButton("Cancel",(d,w)->{})
+                    .setPositiveButton("Save",(d,w)->sendToJs("QH.watchChannelReady("+
+                        JSONObject.quote(eventId)+","+JSONObject.quote(input.getText().toString().trim())+")"))
+                    .show();
+            });
+        }
         @JavascriptInterface public void editProfile(String mode, String id, String currentName) {
             runOnUiThread(() -> {
                 if (!"add".equals(mode) && !"rename".equals(mode)) return;
@@ -722,6 +755,10 @@ public final class MainActivity extends Activity {
         }
         @JavascriptInterface public String volumeSupportMessage() { return MainActivity.this.volumeSupportMessage(); }
         @JavascriptInterface public void requestApps() { requestAppsAsync(); }
+        @JavascriptInterface public void requestWeather(boolean ignoredForce) {
+            VelaWeatherRepository.refresh(MainActivity.this, json ->
+                sendToJs("QH.weatherReady(" + JSONObject.quote(json) + ")"));
+        }
         @JavascriptInterface public void requestAppIcon(String id) { requestIconAsync(id); }
         @JavascriptInterface public void requestWallpaper() { requestWallpaperAsync(); }
         private boolean isAllowedUiSetting(String key) {

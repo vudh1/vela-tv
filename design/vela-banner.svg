@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#0c1f24"/>
+  <circle cx="300" cy="354" r="219" fill="none" stroke="#a9c4be" stroke-width="4" opacity=".75"/>
+  <path d="M160 303 A154 154 0 0 1 425 252" fill="none" stroke="#edf4ed" stroke-width="9" stroke-linecap="round"/>
+  <path d="M225 240 300 462 375 240" fill="none" stroke="#f4faf4" stroke-width="14"/>
+  <text x="562" y="390" fill="#edf7f1" font-family="DejaVu Sans,sans-serif" font-size="129" font-weight="300">Vela</text>
+  <text x="571" y="442" fill="#b6d0c7" font-family="DejaVu Sans,sans-serif" font-size="22" letter-spacing="4">LESS, BUT BETTER.</text>
+</svg>

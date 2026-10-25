@@ -100,8 +100,9 @@ stubs = {
     ),
     "com/danielvu/quiethome/VelaCalendarController.java": (
         "package com.danielvu.quiethome; public class VelaCalendarController { "
-        "String url,label; static boolean isValidGoogleCalendarLink(String s){ "
-        'return s.startsWith("https://calendar.google.com/calendar/ical/") && s.endsWith(".ics"); } '
+        "String url,label; static boolean isValidCalendarLink(String s){ "
+        'return s.startsWith("https://calendar.google.com/calendar/ical/") && s.endsWith(".ics") || '
+        's.startsWith("https://ballerwatch-web.vudhone.workers.dev/web/calendar.ics"); } '
         "void saveLink(String p,String u,String l){url=u;label=l;} }\n"
     ),
     "com/danielvu/quiethome/PairingHttpTest.java": harness,

@@ -71,8 +71,8 @@ final class VelaPairingServer {
         "<h1>Connect calendar to Vela</h1><p>Profile: "+clean(profile)+" · this pairing expires in 10 minutes.</p><form method='post' action='/pair/"+token+"'>"+
         "<input type='hidden' name='nonce' value='"+formNonce+"'>"+
         "<label>Calendar address or label (optional)</label><input name='label' maxlength='80' placeholder='e.g. Duong · personal'>"+
-        "<label>Google Calendar secret iCal address</label><input name='url' type='url' maxlength='4096' required autocomplete='off' placeholder='https://calendar.google.com/calendar/ical/…/basic.ics'>"+
-        "<button type='submit'>Connect to Vela</button></form><small>On Google Calendar (desktop view): Settings → your calendar → Integrate calendar → Secret address in iCal format.</small>"+
+        "<label>Google Calendar secret or BallerWatch iCal URL</label><input name='url' type='url' maxlength='4096' required autocomplete='off' placeholder='https://ballerwatch-web.vudhone.workers.dev/web/calendar.ics'>"+
+        "<button type='submit'>Connect to Vela</button></form><small>For BallerWatch: Settings → Share my calendar → Copy calendar subscription link. Google Calendar secret iCal links also work.</small>"+
         "<p><small>Only use this on your trusted home Wi-Fi. This local setup page uses HTTP, not HTTPS; your private calendar link travels on the local network. Avoid guest/public Wi-Fi.</small></p></html>";
     }
     private static void respond(OutputStream out,int code,String html){
@@ -146,8 +146,8 @@ final class VelaPairingServer {
             respond(out,403,"<h3>Pairing form expired</h3><p>Generate a new QR on Vela and reopen the form. The old page cannot be submitted.</p>");return;
         }
         String url=values.getOrDefault("url","").trim(),label=values.getOrDefault("label","").trim();
-        if(!VelaCalendarController.isValidGoogleCalendarLink(url)){
-            respond(out,400,"<h3>Invalid Google Calendar address</h3><p>Copy the Secret address in iCal format from Google Calendar and retry.</p>");return;
+        if(!VelaCalendarController.isValidCalendarLink(url)){
+            respond(out,400,"<h3>Invalid calendar address</h3><p>Copy the iCal subscription URL from Google Calendar or BallerWatch and retry.</p>");return;
         }
         saved=true;calendar.saveLink(profile,url,label);
         respond(out,200,"<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{font:18px system-ui;background:#10272b;color:white;padding:50px 30px;line-height:1.6}</style><h2>Link transferred to Vela ✓</h2><p>Look at your TV for verification. A saved link is not yet a verified calendar. You may close this tab.</p>");
