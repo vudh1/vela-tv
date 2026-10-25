@@ -227,6 +227,7 @@ public final class MainActivity extends Activity {
         super.onResume();
         homeResumed = true;
         visibleActivity = new WeakReference<>(this);
+        updater.onResume();
         if (!screenIsInteractive()) markNextViewingSession();
         startVolumeObservation();
         if (web != null && javascriptReady) {

@@ -3,12 +3,13 @@ package com.danielvu.quiethome;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
+import android.content.pm.PackageInstaller;
 import android.net.Uri;
 import android.os.Build;
 import android.os.StatFs;
 import android.provider.Settings;
-import android.widget.Toast;
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -17,6 +18,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
@@ -38,8 +40,10 @@ final class VelaUpdateController {
     private static final long CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L;
     private final MainActivity activity;
     private final SharedPreferences prefs;
+    private final VelaInstallPermissionFlow permissionFlow = new VelaInstallPermissionFlow();
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private volatile boolean busy = false;
+    private volatile boolean installSubmitted = false;
     private volatile boolean available = false;
     private volatile boolean downloaded = false;
     private volatile String status = "Not checked";
@@ -89,6 +93,35 @@ final class VelaUpdateController {
             j.put("status", status);
             activity.deliverUpdateStatus(j.toString());
         } catch (Exception ignored) { }
+    }
+    /** Called when Vela returns from Android's install-source screen or installer. */
+    void onResume() {
+        String result = prefs.getString(VelaInstallResultActivity.RESULT_KEY, "");
+        if (!result.isEmpty()) {
+            prefs.edit().remove(VelaInstallResultActivity.RESULT_KEY).apply();
+            status = result;
+            if (!result.startsWith("Waiting for your approval")) installSubmitted = false;
+            send();
+        }
+        VelaInstallPermissionFlow.Action action = permissionFlow.onResume(canInstallPackages());
+        if (action == VelaInstallPermissionFlow.Action.INSTALL) {
+            status = "Install permission granted · preparing Android confirmation…";
+            send();
+            install();
+        } else if (action == VelaInstallPermissionFlow.Action.BLOCKED) {
+            showPermissionBlocked();
+        }
+    }
+
+    private boolean canInstallPackages() {
+        return Build.VERSION.SDK_INT < 26 || activity.getPackageManager().canRequestPackageInstalls();
+    }
+
+    private void showPermissionBlocked() {
+        status = "Sony Android still reports that Vela cannot install apps, even if the switch looks enabled. "
+            + "Check Sony Settings → Apps → Special app access → Install unknown apps → Vela. "
+            + "If already enabled, install the signed GitHub APK manually once. Vela will not reopen Settings in a loop.";
+        send();
     }
     void maybeCheck() {
         if (!autoEnabled() || busy) return;
@@ -235,6 +268,9 @@ final class VelaUpdateController {
 
     /** Deliberate TV interaction is required before Android installer is launched. */
     void install() {
+        if (installSubmitted) {
+            status = "Android installation is already awaiting confirmation"; send(); return;
+        }
         if (busy || !available || url.isEmpty() || sha.isEmpty()) {
             status = "Check for an available update first"; send(); return;
         }
@@ -259,24 +295,70 @@ final class VelaUpdateController {
     }
     private void promptInstaller(File apk) {
         try {
-            if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) {
-                status = "Allow Vela to install unknown apps, then select Download & install again";
+            VelaInstallPermissionFlow.Action action = permissionFlow.onInstallRequest(canInstallPackages());
+            if (action == VelaInstallPermissionFlow.Action.BLOCKED) {
+                showPermissionBlocked();
+            } else if (action == VelaInstallPermissionFlow.Action.OPEN_SETTINGS) {
+                status = "Enable Allow from this source for Vela, then press Back. Installation will resume automatically.";
                 send();
                 Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse("package:" + activity.getPackageName()));
+                    Uri.parse("package:" + activity.getPackageName()));
                 activity.startActivity(settings);
-                return;
+            } else {
+                installSubmitted = true;
+                status = "Preparing Android installation confirmation…";
+                send();
+                // Staging a verified APK in the package manager must not block WebView/TV keys.
+                worker.execute(() -> {
+                    try {
+                        commitInstallerSession(apk);
+                        status = "Android installer requested · approve the update on TV";
+                        send();
+                    } catch (Exception error) {
+                        installSubmitted = false;
+                        Log.w("VelaUpdate", "Android install session failed", error);
+                        status = "Android could not start the installer: " + error.getClass().getSimpleName()
+                            + ". Use the signed GitHub APK for a manual update.";
+                        send();
+                    }
+                });
             }
-            Uri fileUri = Uri.parse("content://" + activity.getPackageName() + ".updates/updates/vela-update.apk");
-            Intent intent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
-            intent.setDataAndType(fileUri, "application/vnd.android.package-archive");
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            intent.putExtra(Intent.EXTRA_RETURN_RESULT, false);
-            activity.startActivity(intent);
         } catch (Exception error) {
-            status = "Cannot open Android installer: " + error.getMessage();
+            status = "Cannot open Sony install permissions: " + error.getClass().getSimpleName()
+                + ". Install the signed APK manually if Android settings are unavailable.";
             send();
-            Toast.makeText(activity, "Unable to open installer. Check TV install permissions.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /** Use Android's own install-session approval instead of an OEM-dependent APK VIEW intent. */
+    private void commitInstallerSession(File apk) throws Exception {
+        PackageInstaller installer = activity.getPackageManager().getPackageInstaller();
+        PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
+            PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+        params.setAppPackageName(activity.getPackageName());
+        params.setSize(apk.length());
+        if (Build.VERSION.SDK_INT >= 31)
+            params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED);
+        int id = installer.createSession(params);
+        boolean committed = false;
+        try {
+            try (PackageInstaller.Session session = installer.openSession(id)) {
+                try (InputStream in = new FileInputStream(apk);
+                     OutputStream out = session.openWrite("base.apk", 0, apk.length())) {
+                    byte[] buffer = new byte[16384]; int count;
+                    while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+                    session.fsync(out);
+                }
+                Intent callback = new Intent(activity, VelaInstallResultActivity.class);
+                callback.setAction(VelaInstallResultActivity.ACTION_STATUS);
+                int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+                if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE;
+                PendingIntent pending = PendingIntent.getActivity(activity, id, callback, flags);
+                session.commit(pending.getIntentSender());
+                committed = true;
+            }
+        } finally {
+            if (!committed) installer.abandonSession(id);
         }
     }
     private String loadPublishedChecksum(String address) throws Exception {

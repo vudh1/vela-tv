@@ -117,6 +117,8 @@ The script checks certificate fingerprints and uploads **four encrypted Actions 
 
 When `production` receives a new commit, Actions builds and signs `Vela-release.apk`, publishes a GitHub Release, and Vela's **Gear → Updates** can check for new versions, download, verify SHA-256, and request installation. Android will prompt for installation approval; the app cannot silently install itself.
 
+**Sony updater recovery:** Vela now opens Android's "Install unknown apps" setting at most once per install attempt. After enabling **Allow from this source** for Vela, press **Back** and the pending installation resumes automatically. The verified APK is staged with Android's `PackageInstaller.Session` and requires a visible Android confirmation; Android may block an install because of TV policy, insufficient storage, or a mismatched signing certificate. Vela surfaces the result rather than reopening settings indefinitely. The existing broken updater cannot repair itself on all Sony firmware: install the first fixed, signed GitHub APK manually **over** Vela (do not uninstall, since that can erase your on-TV data), then use Vela updates for later releases. This is local Sony update behavior only (**No FRIDAY impact, no new service or billing**). Physical TV confirmation remains required.
+
 This repository is public, so TV clients can fetch signed GitHub Release assets anonymously. Keep the same signing key and never embed private GitHub credentials in Vela.
 
 ## Secure phone/web remote

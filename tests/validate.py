@@ -132,6 +132,14 @@ prefetch=updater.split('private void prefetch()')[1].split('private File cachedA
 assert 'promptInstaller(' not in prefetch and 'cacheApk(address, digest, length)' in prefetch
 assert 'activity.runOnUiThread(() -> promptInstaller(apk))' in updater.split('void install()')[1]
 assert 's&&s.autoDownload===false' in js and 's.downloaded?' in js
+assert 'VelaInstallPermissionFlow.Action action = permissionFlow.onResume(canInstallPackages())' in updater
+assert 'PackageInstaller.SessionParams.MODE_FULL_INSTALL' in updater
+assert 'session.commit(pending.getIntentSender())' in updater
+assert 'FLAG_MUTABLE' in updater and 'VelaInstallResultActivity.class' in updater
+assert 'updater.onResume();' in main
+result=(r/'app/src/main/java/com/danielvu/quiethome/VelaInstallResultActivity.java').read_text()
+assert 'STATUS_PENDING_USER_ACTION' in result and 'STATUS_FAILURE_BLOCKED' in result
+assert any(s.get(a+'name')=='.VelaInstallResultActivity' and s.get(a+'exported')=='false' for s in app.findall('activity'))
 print('PASS focus selection scope and opt-in Android installation after cached APK download')
 
 # Sony volume indicator is owned by the OS. Avoid duplicate native + Vela popups.
