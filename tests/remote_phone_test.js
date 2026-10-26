@@ -91,16 +91,38 @@ async function run() {
     return { ok: !response.error, status: response.error ? 401 : 200,
       async json() { return response; } };
   }
+  const documentListeners = new Map();
+  const windowListeners = new Map();
+  const longPressTimers = new Map();
+  const repeatTimers = new Map();
+  let nextTimer = 100;
   const document = {
     hidden: false, getElementById: element,
     createElement: () => new Element(),
     querySelectorAll: () => buttons,
-    addEventListener() {}
+    addEventListener(name, fn) { documentListeners.set(name, fn); }
+  };
+  const triggerDocument = name => documentListeners.get(name)?.();
+  const triggerWindow = name => windowListeners.get(name)?.();
+  const hold = button => {
+    button.fire('pointerdown', { pointerId: 1 });
+    button.fire('pointerup', { pointerId: 1 });
+    button.fire('click', { detail: 1 });
   };
   const context = { document, indexedDB, crypto: webcrypto, TextEncoder, URL,
     Uint8Array, AbortController, fetch: fetchFake, navigator: {},
-    window: { indexedDB, crypto: webcrypto, TextEncoder, addEventListener() {}, confirm: () => true },
-    setTimeout, clearTimeout, setInterval: () => 1, clearInterval() {},
+    window: { indexedDB, crypto: webcrypto, TextEncoder,
+      addEventListener(name, fn) { windowListeners.set(name, fn); }, confirm: () => true },
+    setTimeout(fn, delay) {
+      if (delay === 470) { const id = ++nextTimer; longPressTimers.set(id, fn); return id; }
+      return setTimeout(fn, delay);
+    },
+    clearTimeout(id) { longPressTimers.delete(id); clearTimeout(id); },
+    setInterval(fn, delay) {
+      if (delay === 220) { const id = ++nextTimer; repeatTimers.set(id, fn); return id; }
+      return ++nextTimer;
+    },
+    clearInterval(id) { repeatTimers.delete(id); },
     console, Date, btoa, atob };
   const code = fs.readFileSync(path.join(__dirname, '../remote/app.js'), 'utf8');
   vm.runInNewContext(code, context);
@@ -124,19 +146,51 @@ async function run() {
   assert.equal(element('tvPill').querySelector('span').textContent, 'Bedroom');
   assert.equal(records.get('trustedTvs').length, 2);
 
-  buttons.find(button => button.dataset.key === 'select').fire('click');
+  hold(buttons.find(button => button.dataset.key === 'select'));
   await flush();
   element('tvPill').fire('click');
   assert.equal(element('tvMenu').children.length, 2, 'third TV option must be absent');
   element('tvMenu').children[0].fire('click');
-  buttons.find(button => button.dataset.key === 'power_toggle').fire('click');
+  hold(buttons.find(button => button.dataset.key === 'power_toggle'));
   await flush();
   assert.deepEqual(commands.map(c => ({ ...c })), [
     { token: 'second-token', key: 'select' },
     { token: 'first-token', key: 'power_toggle' }
   ], 'commands must target the selected TV only');
   assert.equal(element('tvPill').querySelector('span').textContent, 'Living Room');
+  const volume = buttons.find(button => button.dataset.key === 'volume_up');
+  volume.fire('pointerdown', { pointerId: 7 });
+  await flush();
+  assert.equal(commands.filter(c => c.key === 'volume_up').length, 1);
+  // Switching apps hides Safari mid-press. Its pending long-press timer and
+  // eventual synthetic click must not send a second command on return.
+  const pending = [...longPressTimers.values()];
+  document.hidden = true; triggerDocument('visibilitychange');
+  pending.forEach(fn => fn());
+  for (const fn of repeatTimers.values()) fn();
+  document.hidden = false; triggerDocument('visibilitychange');
+  volume.fire('pointerup', { pointerId: 7 });
+  volume.fire('click', { detail: 1 }); volume.fire('click', { detail: 0 });
+  await flush();
+  assert.equal(commands.filter(c => c.key === 'volume_up').length, 1,
+    'an app switch cannot replay or repeat a held key');
+  assert.equal(volume.classList.contains('pressed'), false);
+  // If auto-repeat has already started, blur must stop subsequent repeats.
+  const down = buttons.find(button => button.dataset.key === 'down');
+  down.fire('pointerdown', { pointerId: 8 });
+  const startRepeating = [...longPressTimers.values()][0];
+  startRepeating();
+  const repeatOnce = [...repeatTimers.values()][0];
+  repeatOnce();
+  const sentBeforeBlur = commands.filter(c => c.key === 'down').length;
+  triggerWindow('blur'); repeatOnce();
+  down.fire('pointerup', { pointerId: 8 });
+  down.fire('click', { detail: 1 }); down.fire('click', { detail: 0 });
+  await flush();
+  assert.equal(commands.filter(c => c.key === 'down').length, sentBeforeBlur,
+    'a blurred tab must stop an already-running repeat interval');
   console.log('PASS phone remembers two Sony TVs and routes every command to the selected pill');
+  console.log('PASS app switching and tab blur never create duplicate remote key presses');
 }
 
 run().catch(error => { console.error(error); process.exitCode = 1; });

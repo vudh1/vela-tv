@@ -61,9 +61,10 @@ On consumer Samsung TVs, Vela cannot replace the system Home or automatically
 appear at power-on. It can ask for a profile when the user opens the Vela app.
 
 The startup chooser uses an opaque near-black cinematic backdrop regardless of
-the previously selected wallpaper, with floating glass-like profile tiles,
-no enclosing shelf or selection outlines, and names below. Focus gently brightens
-the chosen tile with a soft glow. It blocks Home until a profile is
+the previously selected wallpaper, with circular translucent profile medallions,
+original two-tone 64-unit vector illustrations, no enclosing shelf or selection
+outlines, and names below. Focus gently brightens only the chosen medallion with
+a soft colored glow. Saved avatar selections remain compatible. It blocks Home until a profile is
 chosen; normal profile management remains in the compact settings drawer.
 The glass effect uses layered translucency without runtime blur on TV hardware.
 Settings headings and action labels use consistent Title Case. This visual-only
@@ -147,6 +148,7 @@ The Sony web remote lives at **https://vudh1.github.io/velatv/remote/**. GitHub 
 - **Phone remote Power:** The one-tap Power button uses an authenticated, owner-configured Sony IRCC toggle. A relay queue acknowledgment does not prove the TV changed state. The Settings/Input menu UI buttons are removed, but older commands remain allowlisted for backward compatibility. **No FRIDAY impact**.
 - **Sony ARC volume feedback:** With Sony IP control configured, Vela sends Sony's official native Volume Up/Down/Mute IRCC codes before falling back to Android audio control. This gives the Sony/Vizio HDMI ARC path an opportunity to display its own indicator, but Sony's on-screen volume display is still firmware-dependent; never apply both volume steps. **No FRIDAY impact**.
 - **Latency and cost:** The selected TV briefly arms fast (~180 ms) polling when the remote opens or keys are pressed. Idle Sony TV polling is ~2.5 seconds; only the selected TV on each phone gets a ~40-second heartbeat. A phone left open all night does not continuously fast-poll Cloudflare. A first press after a long idle can still be slower. **No FRIDAY impact**.
+- **Phone app-switch behavior:** Each pointer gesture sends one immediate key action; the browser's follow-on click cannot send a duplicate. For supported directional and volume buttons, deliberate long presses still repeat, but losing tab focus, switching iPhone apps, suspending Safari or switching the selected TV immediately cancels repetition. Delayed synthetic clicks after returning to Safari are ignored. **No FRIDAY impact or billing change.**
 
 **Two TVs per phone, four phones per TV:** The existing `primary-tv` Durable Object isolates up to **two Sony TVs on the same home Internet network**. One phone can pair with both, open the **TV 1 / TV 2** pill and switch the active target; buttons never broadcast to both TVs. Each TV independently supports four signed phone remotes at once, with its own command queue and disconnect/revocation. The entire iPhone remote fits one locked viewport without page scrolling; TV options and encrypted typing open as overlays. A fifth phone on either TV must free that TV's registration slot. Cloudflare Free usage remains metered: two always-connected TVs may approach the daily free request limit, so monitor usage and stop or reduce polling if necessary; do not upgrade to paid Workers automatically.
 
