@@ -206,7 +206,7 @@
   }
   const errors = {
     incorrect_pin: 'Incorrect PIN. Check the 10-digit code shown in Vela TV settings.',
-    different_network: 'Vela sees different Internet addresses. Check both devices use home Wi-Fi; on iPhone, temporarily turn off Wi-Fi → Limit IP Address Tracking and any VPN. IPv4/IPv6 differences can also trigger this check.',
+    different_network: 'Vela sees mismatched public IPs. Check home Wi-Fi, VPN and iPhone Wi-Fi → Limit IP Address Tracking; IPv4/IPv6 may still differ.',
     tv_offline: 'Vela TV is offline. Open Vela and check Remote settings.',
     max_tvs: 'Two Sony TVs are already registered. Disable remote on a TV before adding another.',
     max_controllers: 'Four remotes are already paired. Disconnect one or reset remote access on the TV.',
