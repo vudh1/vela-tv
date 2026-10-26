@@ -70,6 +70,12 @@ The glass effect uses layered translucency without runtime blur on TV hardware.
 Settings headings and action labels use consistent Title Case. This visual-only
 change has **No FRIDAY impact** and adds no network or billing dependency.
 
+The profile icon in the upper-left corner of Home opens this same full-screen
+selector, with equally spaced profile circles, names beneath them, and the same
+remote-focus glow. Back closes this manual selector without changing profiles;
+the power-on selector continues to require a selection. Profile names, icons,
+and the profile list are edited in Settings → Home & Profiles → Profiles.
+
 ### Changing your home Wi-Fi
 
 Vela keeps its profiles, favorites, artwork and history on the TV. Its Sony
