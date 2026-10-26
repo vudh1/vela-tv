@@ -328,7 +328,9 @@ assert "row('lifeSettings','Daily Life'" in js and "title='Daily Life'" in js
 assert 'width:100vw;min-width:0;height:100vh' in css
 assert 'startup-avatar-grid' in js and 'startup-profile-name' in js
 assert 'startup-footer' in css and 'background:transparent;border:0;border-radius:0' in css
-assert "if(screen==='startupProfiles')return;" in js
+assert "if(screen==='startupProfiles'&&startupChooserOpen)return;" in js
+assert 'id="profileButton" class="brand profile-button focusable" data-act="selectProfile"' in (asset/'index.html').read_text()
+assert "function openProfileSelector(){if(startupChooserOpen)return;panelHistory=[];renderPanel('startupProfiles');}" in js
 assert "document.body.classList.remove('booting')" in js
 assert "document.body.classList.remove('booting');listDirty=true;activeList()" in js
 
