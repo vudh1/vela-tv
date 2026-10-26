@@ -52,6 +52,12 @@ jobs:
           mkdir -p build/ci-classes
           javac -source 8 -target 8 -classpath "$ANDROID_HOME/platforms/android-35/android.jar" \
             -d build/ci-classes app/src/main/java/com/danielvu/quiethome/*.java
+      - name: Test Sony Dream wake return policy
+        run: |
+          javac -source 8 -target 8 -d build/ci-classes \
+            app/src/main/java/com/danielvu/quiethome/VelaDreamReturnPolicy.java \
+            tests/java/com/danielvu/quiethome/VelaDreamReturnPolicyTest.java
+          java -cp build/ci-classes com.danielvu.quiethome.VelaDreamReturnPolicyTest
       - name: Test Android iCal parser, recurrence and sports metadata
         run: |
           javac -source 8 -target 8 -classpath build/ci-classes \
