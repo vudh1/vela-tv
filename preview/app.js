@@ -288,14 +288,16 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  body=(bridge&&bridge.remoteRevocationPending&&bridge.remoteRevocationPending()?row('remoteDisable','Retry revocation','Pending','The TV is paused until Cloudflare confirms removal'):
  bridge&&bridge.remoteEnabled&&bridge.remoteEnabled()?
  row('remoteRotate','Add Another Remote','Generate PIN','Pair another phone without disconnecting existing remotes (up to 4)')+
- row('remoteDisable','Disable remote','Revoke','Disconnect all phones and revoke this TV key'):
+ (bridge.remotePairedCount&&bridge.remotePairedCount()>0?
+ row('remoteDevices','Paired Phones',String(bridge.remotePairedCount()),'Review and revoke an individual phone'):'')+
+ row('remoteDisable','Disable remote',bridge.remotePairedCount&&bridge.remotePairedCount()>=0?String(bridge.remotePairedCount())+' paired':'Revoke','Revoke all paired phones and this TV key'):
  row('remotePair','Enable remote','Generate PIN','Generate a new private 10-digit PIN on this TV'))+
  row('remoteAccessibility','Control other apps','Sony settings','Optional accessibility service; app compatibility varies')+
  row('sonyIpSetup','Sony native-app controls',bridge&&bridge.sonyIpControlEnabled&&bridge.sonyIpControlEnabled()?'Connected':'Set up','Optional IP control for Netflix/YouTube navigation; key stays on the TV')+
  (bridge&&bridge.sonyIpControlEnabled&&bridge.sonyIpControlEnabled()?
  row('sonyIpTest','Test Sony controls','Test','Send one Up command to check Sony IP control')+
  row('sonyIpRemove','Remove Sony key','Remove','Delete the encrypted Sony control key from this TV'):'')+
- '<p class="library-footnote">Generate a separate one-time PIN for each phone (up to four). Existing paired remotes remain connected; each reconnects privately after idle. All devices must share the home Internet connection. Disconnect on a phone removes only that phone; Disable remote resets all phones.</p>';
+ '<p class="library-footnote">Generate a separate one-time PIN for each phone (up to four). A different public network, such as iCloud Private Relay, requires approval on this TV; approved phones can also control Vela away from home until revoked. Disconnect removes one phone; Disable remote resets all.</p>';
  }
  else if(type==='about'){title='About Vela';subtitle='A calmer TV launcher.';
  body=tizenMode?
@@ -445,6 +447,7 @@ function action(name,id,dir){
  if(name==='samsungHome'||name==='samsungSettings'){if(bridge&&bridge[name])bridge[name]();return;}
  if(name==='remotePair'){if(bridge&&bridge.pairWebRemote)bridge.pairWebRemote();else toast('Set up on your Sony TV');return;}
  if(name==='remoteRotate'){if(bridge&&bridge.rotateWebRemotePin)bridge.rotateWebRemotePin();return;}
+ if(name==='remoteDevices'){if(bridge&&bridge.manageWebRemotePhones)bridge.manageWebRemotePhones();return;}
  if(name==='remoteDisable'){if(bridge&&bridge.disableWebRemote)bridge.disableWebRemote();return;}
  if(name==='remoteAccessibility'){if(bridge&&bridge.accessibilitySettings)bridge.accessibilitySettings();return;}
  if(name==='sonyIpSetup'){if(bridge&&bridge.configureSonyIpControl)bridge.configureSonyIpControl();return;}
@@ -675,6 +678,6 @@ document.addEventListener('keydown',function(e){if(!preview)return;
  if(e.key==='Enter'){e.preventDefault();if(!e.repeat){previewEnterAt=Date.now();previewLong=false;}else if(!previewLong&&Date.now()-previewEnterAt>=500){previewLong=true;remote('longselect');}return;}
  var k={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',Escape:'back',Backspace:'back'}[e.key];if(k){e.preventDefault();remote(k);}});
 document.addEventListener('keyup',function(e){if(preview&&e.key==='Enter'){e.preventDefault();if(!previewLong)remote('select');previewEnterAt=0;previewLong=false;}});
-window.QH={pause:pause,checkWakeProfilePrompt:checkWakeProfilePrompt,profileNameReady:profileNameReady,profileDeleteConfirmed:profileDeleteConfirmed,remote:remote,remoteStatusReady:function(message){toast(message);if(screen==='remoteSettings')renderPanel('remoteSettings');},refreshApps:refreshApps,receiveApps:receiveApps,catalogRefreshed:catalogRefreshed,iconReady:iconReady,refreshWallpaper:refreshWallpaper,wallpaperReady:wallpaperReady,resume:resume,tick:clock,updateStatusReady:receiveUpdateStatus,receiveCalendar:receiveCalendar,calendarSaveReady:calendarSaveReady,pairingReady:pairingReady,pairingCompleted:pairingCompleted,volumeChanged:volumeChanged,watchChannelReady:watchChannelReady,weatherReady:function(data){if(window.VelaWeatherClient)window.VelaWeatherClient.receive(data);}};
+window.QH={pause:pause,checkWakeProfilePrompt:checkWakeProfilePrompt,profileNameReady:profileNameReady,profileDeleteConfirmed:profileDeleteConfirmed,remote:remote,remoteStatusReady:function(message){toast(message);if(screen==='remoteSettings')renderPanel('remoteSettings');},remotePairingStatusChanged:function(){if(screen==='remoteSettings')renderPanel('remoteSettings');},refreshApps:refreshApps,receiveApps:receiveApps,catalogRefreshed:catalogRefreshed,iconReady:iconReady,refreshWallpaper:refreshWallpaper,wallpaperReady:wallpaperReady,resume:resume,tick:clock,updateStatusReady:receiveUpdateStatus,receiveCalendar:receiveCalendar,calendarSaveReady:calendarSaveReady,pairingReady:pairingReady,pairingCompleted:pairingCompleted,volumeChanged:volumeChanged,watchChannelReady:watchChannelReady,weatherReady:function(data){if(window.VelaWeatherClient)window.VelaWeatherClient.receive(data);}};
 init();
 })();

@@ -9,6 +9,7 @@ const TV_ONLINE_MS = 25_000;
 const UNCLAIMED_MS = 10 * 60_000;
 const PAIRING_PIN_MS = 10 * 60_000;
 const RESUME_CHALLENGE_MS = 45_000;
+const TV_APPROVAL_MS = 90_000;
 const MAX_FAILED = 5;
 const RATE_WINDOW_MS = 15 * 60_000;
 const MAX_CONTROLLERS = 4;
@@ -128,7 +129,7 @@ export default {
     if (request.method === 'OPTIONS')
       return origin === SITE ? new Response(null, { status: 204, headers: cors })
         : json({ error: 'origin' }, 403);
-    if (!/^\/api\/(?:status|connect|challenge|resume|heartbeat|command|release|tv\/(?:enroll|pin|poll|disable))$/.test(path))
+    if (!/^\/api\/(?:status|connect|approval-status|challenge|resume|heartbeat|command|release|tv\/(?:enroll|pin|approve|revoke|poll|disable))$/.test(path))
       return json({ error: 'not_found' }, 404, cors);
     const ip = request.headers.get('cf-connecting-ip');
     if (!ip) return json({ error: 'network_unavailable' }, 403, cors);
@@ -192,8 +193,10 @@ export class RemoteRoom {
         pinSalt: tv.pinSalt || '', pinHash: tv.pinHash || '',
         pinExpiresAt: tv.pinExpiresAt || tv.pendingUntil || 0,
         pendingUntil: tv.pendingUntil || 0,
+        pendingApproval: tv.pendingApproval || null,
         controllers: (Array.isArray(tv.controllers) ? tv.controllers : legacyControllers)
-          .filter(c => c && (c.pairedKey || c.controllerHash)).slice(0, MAX_CONTROLLERS),
+          .filter(c => c && (c.pairedKey || c.controllerHash)).slice(0, MAX_CONTROLLERS)
+          .map(c => ({ ...c, id: c.id || randomToken().slice(0, 24) })),
         commands: tv.commands || [], lastCommandAt: tv.lastCommandAt || 0,
         readyUntil: tv.readyUntil || 0, textPublicKey: tv.textPublicKey || '',
         challenges: tv.challenges || [], failures: tv.failures || {},
@@ -203,6 +206,8 @@ export class RemoteRoom {
       if (tv.pinExpiresAt && tv.pinExpiresAt <= now) {
         tv.pinSalt = ''; tv.pinHash = ''; tv.pinExpiresAt = 0;
       }
+      if (tv.pendingApproval && tv.pendingApproval.expires <= now)
+        tv.pendingApproval = null;
     }
     const persist = () => this.ctx.storage.put('room', root);
     const tvOnline = tv => !!tv && !!tv.tvHash && tv.tvSeen > now - TV_ONLINE_MS;
@@ -230,6 +235,7 @@ export class RemoteRoom {
       const name = used.has('TV 1') ? 'TV 2' : 'TV 1';
       state = { id: randomToken().slice(0, 32), name, tvHash: '', tvIp: '', tvSeen: 0,
         pinSalt: '', pinHash: '', pinExpiresAt: 0, pendingUntil: 0,
+        pendingApproval: null,
         controllers: [], commands: [], lastCommandAt: 0, readyUntil: 0,
         textPublicKey: '', challenges: [], failures: {}, globalFailures: [] };
       root.tvs.push(state);
@@ -237,13 +243,23 @@ export class RemoteRoom {
       state = root.tvs.find(tv => tokenHash && sameString(tv.tvHash, tokenHash));
       if (!state) return json({ error: 'unauthorized' }, 401);
     } else if (path === '/api/connect') {
+      // A Private Relay phone can present the correct one-time PIN while its
+      // public IP differs. Match the salted PIN before deciding whether the
+      // TV must explicitly approve this different-network controller.
       for (const tv of root.tvs) {
-        if (!tvNetwork(tv) || !tv.pinHash || !/^\d{10}$/.test(data.pin || '')) continue;
+        if (!tvOnline(tv) || !tv.pinHash || !/^\d{10}$/.test(data.pin || '')) continue;
         if (sameString(await sha256(tv.pinSalt + ':' + data.pin), tv.pinHash)) {
           state = tv; break;
         }
       }
-      if (!state) state = root.tvs.find(tv => tvNetwork(tv) && tv.pinHash) || root.tvs[0];
+      if (!state) state = root.tvs.find(tv => tvNetwork(tv) && tv.pinHash)
+        || root.tvs.find(tv => tvOnline(tv) && tv.pinHash) || root.tvs[0];
+    } else if (path === '/api/approval-status') {
+      const proofHash = typeof data.approvalToken === 'string' && /^[a-f0-9]{64}$/.test(data.approvalToken)
+        ? await sha256(data.approvalToken) : '';
+      state = root.tvs.find(tv => tv.pendingApproval && proofHash
+        && sameString(tv.pendingApproval.proofHash, proofHash)
+        && sameString(tv.pendingApproval.id, data.requestId));
     } else if (path === '/api/challenge') {
       state = root.tvs.find(tv => tv.controllers.some(c => c.pairedKeyId && c.pairedKeyId === data.keyId));
       if (!state && data.keyId === undefined) {
@@ -254,7 +270,9 @@ export class RemoteRoom {
     } else if (path === '/api/resume') {
       const hash = typeof data.challenge === 'string' && /^[a-f0-9]{64}$/i.test(data.challenge)
         ? await sha256(data.challenge) : '';
-      state = root.tvs.find(tv => tv.challenges.some(ch => ch.ipHash === ipHash && sameString(ch.hash, hash)));
+      state = root.tvs.find(tv => tv.challenges.some(ch =>
+        (ch.ipHash === ipHash || (ch.ipHash === '' && ch.trustedRelay === true))
+        && sameString(ch.hash, hash)));
     } else {
       state = root.tvs.find(tv => tv.controllers.some(c => tokenHash && sameString(c.controllerHash, tokenHash)));
     }
@@ -272,6 +290,48 @@ export class RemoteRoom {
     const times = state.failures[rateKey] || [];
     state.globalFailures = state.globalFailures.filter(t => t > now - RATE_WINDOW_MS);
     state.challenges = state.challenges.filter(ch => ch.expires > now).slice(-12);
+
+    if (path === '/api/approval-status') {
+      const pending = state.pendingApproval;
+      if (!pending || pending.expires <= now) return json({ error: 'approval_expired' }, 410);
+      // The short-lived approval proof is not a bearer credential. Even if
+      // that proof leaks from a phone, its non-extractable key must sign the
+      // exact approval request before the Worker releases a controller token.
+      const proof = signatureBytes(data.signature);
+      let ownsKey = false;
+      if (proof) {
+        try {
+          const key = await importPublicKey(pending.publicKey);
+          ownsKey = await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' },
+            key, proof, new TextEncoder().encode('vela-approve-v1:'
+              + pending.id + ':' + data.approvalToken));
+        } catch (_) { /* An invalid signature never advances approval. */ }
+      }
+      if (!ownsKey) return json({ error: 'session_expired' }, 401);
+      if (pending.decision === 'rejected') {
+        state.pendingApproval = null; await persist();
+        return json({ error: 'approval_denied' }, 403);
+      }
+      if (pending.decision !== 'approved') return json({ approvalPending: true }, 202);
+      if (!online || state.controllers.length >= MAX_CONTROLLERS) {
+        state.pendingApproval = null; await persist();
+        return json({ error: online ? 'max_controllers' : 'tv_offline' }, online ? 409 : 503);
+      }
+      if (state.controllers.some(c => c.pairedKeyId === pending.keyId)) {
+        state.pendingApproval = null; await persist();
+        return json({ error: 'already_paired' }, 409);
+      }
+      const token = randomToken();
+      state.controllers.push({ id: randomToken().slice(0, 24),
+        pairedKey: pending.publicKey, pairedKeyId: pending.keyId,
+        controllerHash: await sha256(token), controllerIp: ip,
+        trustedRelay: true, lease: now + LEASE_MS });
+      state.pendingUntil = 0;
+      state.pendingApproval = null;
+      await persist();
+      return json({ token, tvId: state.id, tvName: state.name,
+        trustedRelay: true, leaseSeconds: LEASE_MS / 1000 });
+    }
 
     if (path === '/api/tv/enroll') {
       if (typeof data.tvToken !== 'string' || !/^[a-f0-9]{64}$/.test(data.tvToken))
@@ -296,7 +356,6 @@ export class RemoteRoom {
     }
     if (path === '/api/connect') {
       if (!online) return json({ error: 'tv_offline' }, 503);
-      if (!sameNetwork) return json({ error: 'different_network' }, 403);
       if (!state.pinHash || !state.pinSalt)
         return json({ error: 'pairing_required' }, 409);
       if (state.controllers.length >= MAX_CONTROLLERS)
@@ -323,21 +382,42 @@ export class RemoteRoom {
       const keyId = verifiedKey ? await sha256(verifiedKey.x + ':' + verifiedKey.y) : '';
       if (keyId && state.controllers.some(c => c.pairedKeyId === keyId))
         return json({ error: 'already_paired' }, 409);
+      // Older web clients would interpret a 202 approval request as a normal
+      // lease and incorrectly claim success. They must opt into the new flow.
+      if (!sameNetwork && data.approvalProtocol !== 1)
+        return json({ error: 'different_network' }, 403);
       delete state.failures[rateKey];
-      state.pendingUntil = 0;
       // Pairing codes authorize exactly one registration, not a permanent
       // fallback credential after the lease has expired.
       state.pinSalt = ''; state.pinHash = ''; state.pinExpiresAt = 0;
+      if (!sameNetwork) {
+        // A PIN from outside the home's visible public network is never
+        // sufficient. A signed phone identity and an explicit Sony TV button
+        // press are both required before this phone can issue commands.
+        if (!verifiedKey) return json({ error: 'controller_key_required' }, 403);
+        const approvalToken = randomToken();
+        const requestId = randomToken().slice(0, 24);
+        state.pendingApproval = { id: requestId, proofHash: await sha256(approvalToken),
+          publicKey: verifiedKey, keyId, decision: 'waiting',
+          expires: now + TV_APPROVAL_MS };
+        // An approval may take 90s, but must not shorten the TV's original
+        // ten-minute unclaimed enrollment grace period.
+        if (state.pendingUntil) state.pendingUntil = Math.max(state.pendingUntil, now + TV_APPROVAL_MS);
+        await persist();
+        return json({ approvalRequired: true, approvalToken, requestId,
+          approvalSeconds: TV_APPROVAL_MS / 1000 }, 202);
+      }
+      state.pendingUntil = 0;
       const token = randomToken();
-      state.controllers.push({ pairedKey: verifiedKey, pairedKeyId: keyId,
+      state.controllers.push({ id: randomToken().slice(0, 24),
+        pairedKey: verifiedKey, pairedKeyId: keyId,
         controllerHash: await sha256(token), controllerIp: ip, lease: now + LEASE_MS });
       await persist();
       return json({ token, tvId: state.id, tvName: state.name,
-        leaseSeconds: LEASE_MS / 1000 });
+        trustedRelay: false, leaseSeconds: LEASE_MS / 1000 });
     }
     if (path === '/api/challenge') {
       if (!online) return json({ error: 'tv_offline' }, 503);
-      if (!sameNetwork) return json({ error: 'different_network' }, 403);
       if (times.length >= MAX_FAILED || state.globalFailures.length >= 40)
         return json({ error: 'locked', retryAfterSeconds: 900 }, 429);
       const requestedKey = typeof data.keyId === 'string' && /^[a-f0-9]{64}$/.test(data.keyId)
@@ -347,8 +427,12 @@ export class RemoteRoom {
         : state.controllers.length === 1 ? state.controllers[0] : null;
       if (!candidate || !candidate.pairedKey)
         return json({ error: 'pairing_required' }, 409);
+      if (!sameNetwork && candidate.trustedRelay !== true)
+        return json({ error: 'different_network' }, 403);
       const challenge = randomToken();
-      state.challenges.push({ hash: await sha256(challenge), ipHash: rateKey,
+      state.challenges.push({ hash: await sha256(challenge),
+        ipHash: candidate.trustedRelay === true ? '' : rateKey,
+        trustedRelay: candidate.trustedRelay === true,
         keyId: candidate.pairedKeyId, expires: now + RESUME_CHALLENGE_MS });
       state.challenges = state.challenges.slice(-12);
       await persist();
@@ -357,17 +441,22 @@ export class RemoteRoom {
     }
     if (path === '/api/resume') {
       if (!online) return json({ error: 'tv_offline' }, 503);
-      if (!sameNetwork) return json({ error: 'different_network' }, 403);
       if (times.length >= MAX_FAILED || state.globalFailures.length >= 40)
         return json({ error: 'locked', retryAfterSeconds: 900 }, 429);
       const bytes = signatureBytes(data.signature);
       const hash = typeof data.challenge === 'string' && /^[a-f0-9]{64}$/i.test(data.challenge)
         ? await sha256(data.challenge) : '';
-      const index = state.challenges.findIndex(ch => ch.ipHash === rateKey && sameString(ch.hash, hash));
+      const index = state.challenges.findIndex(ch =>
+        (ch.ipHash === rateKey || (ch.ipHash === '' && ch.trustedRelay === true))
+        && sameString(ch.hash, hash));
       if (!bytes || index < 0) return json({ error: 'session_expired' }, 401);
       // Single-use, short-lived challenge. A stolen signature cannot be replayed.
       const [usedChallenge] = state.challenges.splice(index, 1);
       const candidate = state.controllers.find(c => c.pairedKeyId === usedChallenge.keyId);
+      if (!candidate || (!sameNetwork && candidate.trustedRelay !== true)) {
+        await persist();
+        return json({ error: 'different_network' }, 403);
+      }
       let verified = false;
       try {
         const key = await importPublicKey(candidate.pairedKey);
@@ -389,6 +478,7 @@ export class RemoteRoom {
       // A returning phone must not cancel the other phones' queued controls.
       await persist();
       return json({ token, tvId: state.id, tvName: state.name,
+        trustedRelay: candidate.trustedRelay === true,
         leaseSeconds: LEASE_MS / 1000 });
     }
     if (path.startsWith('/api/tv/')) {
@@ -398,11 +488,18 @@ export class RemoteRoom {
       if (path === '/api/tv/pin') {
         if (typeof data.pin !== 'string' || !/^\d{10}$/.test(data.pin))
           return json({ error: 'invalid_pin' }, 400);
+        if (!sameHomeNetwork(state.tvIp, ip)) {
+          // A PIN rotation must not bypass the same network-change reset
+          // performed by the regular TV poll path.
+          state.controllers = []; state.commands = []; state.challenges = [];
+          state.readyUntil = 0;
+        }
         if (state.controllers.length >= MAX_CONTROLLERS)
           return json({ error: 'max_controllers' }, 409);
         state.pinSalt = randomToken();
         state.pinHash = await sha256(state.pinSalt + ':' + data.pin);
         state.pinExpiresAt = now + PAIRING_PIN_MS;
+        state.pendingApproval = null;
         if (state.pendingUntil) state.pendingUntil = now + UNCLAIMED_MS;
         // Adding the next trusted phone must never disconnect existing ones.
         state.tvIp = ip; state.tvSeen = now;
@@ -415,10 +512,35 @@ export class RemoteRoom {
         else await this.ctx.storage.delete('room');
         return json({ ok: true });
       }
+      if (path === '/api/tv/approve') {
+        if (!tvNetwork(state)) return json({ error: 'tv_network_changed' }, 409);
+        if (typeof data.requestId !== 'string' || !/^[a-f0-9]{24}$/.test(data.requestId)
+            || typeof data.approved !== 'boolean')
+          return json({ error: 'invalid_approval' }, 400);
+        if (!state.pendingApproval || state.pendingApproval.id !== data.requestId
+            || state.pendingApproval.expires <= now
+            || state.pendingApproval.decision !== 'waiting')
+          return json({ error: 'approval_expired' }, 409);
+        state.pendingApproval.decision = data.approved ? 'approved' : 'rejected';
+        await persist();
+        return json({ ok: true });
+      }
+      if (path === '/api/tv/revoke') {
+        if (typeof data.controllerId !== 'string' || !/^[a-f0-9]{24}$/.test(data.controllerId))
+          return json({ error: 'invalid_controller' }, 400);
+        const removed = state.controllers.find(c => c.id === data.controllerId);
+        if (!removed) return json({ error: 'controller_not_found' }, 404);
+        state.controllers = state.controllers.filter(c => c !== removed);
+        state.commands = state.commands.filter(c => c.owner !== removed.controllerHash);
+        state.challenges = state.challenges.filter(ch => ch.keyId !== removed.pairedKeyId);
+        await persist();
+        return json({ ok: true, pairedCount: state.controllers.length });
+      }
       if (!sameHomeNetwork(state.tvIp, ip)) {
         // Network changed: all phone proofs must be re-established by new PINs.
         state.controllers = []; state.commands = []; state.readyUntil = 0;
         state.challenges = []; state.pinSalt = ''; state.pinHash = ''; state.pinExpiresAt = 0;
+        state.pendingApproval = null;
       }
       state.tvIp = ip;
       state.tvSeen = now;
@@ -434,9 +556,14 @@ export class RemoteRoom {
       state.commands = [];
       await persist();
       const anyActive = state.controllers.some(c => !!c.controllerHash && c.lease > now);
-      return json({ active: anyActive, pinPending: !!state.pinHash,
+      return json({ active: anyActive,
+        pinPending: !!state.pinHash || !!(state.pendingApproval
+          && state.pendingApproval.decision === 'waiting'),
         tvId: state.id,
         pairedCount: state.controllers.length,
+        pairedPhones: state.controllers.map(c => ({ id: c.id, trustedRelay: c.trustedRelay === true })),
+        pendingApprovalId: state.pendingApproval && state.pendingApproval.decision === 'waiting'
+          ? state.pendingApproval.id : '',
         // Briefly speed up polling after real interaction or a newly opened
         // controller. An untouched phone must not consume fast polls all day.
         fast: anyActive && (state.lastCommandAt > now - 12_000 || state.readyUntil > now),
@@ -444,8 +571,9 @@ export class RemoteRoom {
     }
     const token = authToken;
     const controller = state.controllers.find(c => tokenHash && c.lease > now
-      && sameString(tokenHash, c.controllerHash) && sameHomeNetwork(ip, c.controllerIp));
-    if (!controller || !sameNetwork)
+      && sameString(tokenHash, c.controllerHash)
+      && (c.trustedRelay === true || sameHomeNetwork(ip, c.controllerIp)));
+    if (!controller || (!sameNetwork && controller.trustedRelay !== true))
       return json({ error: 'session_expired' }, 401);
     if (path === '/api/release') {
       // Disconnect removes only the requesting phone, not the other three.
