@@ -175,6 +175,21 @@ async function run() {
   assert.equal(commands.filter(c => c.key === 'volume_up').length, 1,
     'an app switch cannot replay or repeat a held key');
   assert.equal(volume.classList.contains('pressed'), false);
+  // Safari can deliver detail=0 clicks much later than a 2.5-second window.
+  // Consume a pointer-generated click once, regardless of delay.
+  volume.fire('pointerdown', { pointerId: 13 });
+  document.hidden = true; triggerDocument('visibilitychange');
+  document.hidden = false; triggerDocument('visibilitychange');
+  volume.fire('click', { detail: 0 });
+  await flush();
+  assert.equal(commands.filter(c => c.key === 'volume_up').length, 2,
+    'a delayed click after tab suspension cannot send a second command');
+  // A subsequent genuine keyboard activation must remain accessible.
+  volume.fire('keydown', { key: 'Enter' });
+  volume.fire('click', { detail: 0 });
+  await flush();
+  assert.equal(commands.filter(c => c.key === 'volume_up').length, 3,
+    'keyboard activation is not confused with a pending iOS ghost click');
   // If auto-repeat has already started, blur must stop subsequent repeats.
   const down = buttons.find(button => button.dataset.key === 'down');
   down.fire('pointerdown', { pointerId: 8 });
@@ -190,7 +205,7 @@ async function run() {
   assert.equal(commands.filter(c => c.key === 'down').length, sentBeforeBlur,
     'a blurred tab must stop an already-running repeat interval');
   console.log('PASS phone remembers two Sony TVs and routes every command to the selected pill');
-  console.log('PASS app switching and tab blur never create duplicate remote key presses');
+  console.log('PASS app switching, delayed synthetic clicks, accessibility keys and blur never duplicate remote presses');
 }
 
 run().catch(error => { console.error(error); process.exitCode = 1; });

@@ -109,7 +109,9 @@ final class CalendarIcs {
     }
     static List<Event> today(String ics,ZoneId displayZone,LocalDate day){return upcoming(ics,displayZone,day,1);}
     static List<Event> upcoming(String ics,ZoneId displayZone,LocalDate day,int days){
-        days=Math.max(1,Math.min(14,days));
+        // Calendar list displays a month; keep up to 120 days of source data
+        // so same-profile offline refresh and long-running events remain useful.
+        days=Math.max(1,Math.min(120,days));
         List<Item> items=new ArrayList<>();Item current=null;
         String unfolded=ics.replace("\r\n","\n").replace("\r","\n").replaceAll("\n[ \\t]","");
         for(String line:unfolded.split("\n")){
@@ -136,6 +138,9 @@ final class CalendarIcs {
             Map<String,String> r=rule(item.val("RRULE"));boolean isOverride=item.first("RECURRENCE-ID")!=null;
             LocalDate begins=startDay>0?Instant.ofEpochMilli(startDay-duration).atZone(original.dt.getZone()).toLocalDate().minusDays(1):day.minusDays(2);
             LocalDate finishes=Instant.ofEpochMilli(endDay).atZone(original.dt.getZone()).toLocalDate().plusDays(1);
+            // Most feeds contain many one-off fixtures. Do not scan 120 days
+            // for each when its one original occurrence is already known.
+            if(r.isEmpty()||isOverride)begins=finishes=original.dt.toLocalDate();
             for(LocalDate candidate=begins;!candidate.isAfter(finishes);candidate=candidate.plusDays(1)){
                 if(!r.isEmpty()&&!isOverride){if(!recurring(original.dt.toLocalDate(),candidate,r))continue;
                     When until=date(new Prop("UNTIL",r.getOrDefault("UNTIL","")),original.dt.getZone());if(until!=null&&candidate.atTime(original.dt.toLocalTime()).atZone(original.dt.getZone()).toInstant().isAfter(until.dt.toInstant()))continue;

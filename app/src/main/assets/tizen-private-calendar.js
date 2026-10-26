@@ -10,10 +10,17 @@ function approved(url){
   var u=new URL(url.trim());
   if(u.protocol!=='https:'||u.port||u.username||u.password||u.hash)return false;
   var google=u.hostname.toLowerCase()==='calendar.google.com'&&u.pathname.indexOf('/calendar/ical/')===0&&/\.ics$/i.test(u.pathname);
+  var stable=u.hostname.toLowerCase()==='ballerwatch-web.vudhone.workers.dev'&&
+   /^\/web\/v1\/calendar-ics\/[A-Za-z0-9_-]{43}\.ics$/.test(u.pathname)&&!u.search;
   var bw=u.hostname.toLowerCase()==='ballerwatch-web.vudhone.workers.dev'&&u.pathname==='/web/calendar.ics';
   if(bw)u.searchParams.forEach(function(v,k){if(['teams','pickup','watch'].indexOf(k)<0)bw=false;});
-  return google||bw;
+  return google||bw||stable;
  }catch(e){return false;}
+}
+function stableProfileLink(url){
+ try{var u=new URL(url);return u.hostname.toLowerCase()==='ballerwatch-web.vudhone.workers.dev'&&
+  /^\/web\/v1\/calendar-ics\/[A-Za-z0-9_-]{43}\.ics$/.test(u.pathname)&&!u.search;}
+ catch(e){return false;}
 }
 function bytesTo64(b){var s='';for(var i=0;i<b.length;i++)s+=String.fromCharCode(b[i]);return btoa(s);}
 function from64(s){var t=atob(s),out=new Uint8Array(t.length);for(var i=0;i<t.length;i++)out[i]=t.charCodeAt(i);return out;}
@@ -81,7 +88,7 @@ function download(url){
   req.open('GET',url,true);req.timeout=16000;
   req.setRequestHeader('Accept','text/calendar,text/plain');
   req.onreadystatechange=function(){if(req.readyState!==4)return;
-   if(req.status!==200){done(new Error('Calendar could not be reached (HTTP '+req.status+')'));return;}
+   if(req.status!==200){var error=new Error('Calendar source unavailable');error.httpStatus=req.status;done(error);return;}
    // Browsers follow redirects; reject unexpected destinations after completion.
    if(req.responseURL&&!approved(req.responseURL)){done(new Error('Calendar redirected to an unapproved host'));return;}
    var body=req.responseText||'';if(body.length>2000000){done(new Error('Calendar feed is too large'));return;}
@@ -132,10 +139,24 @@ function load(profile,force){
       localStorage.setItem(key(profile,'cache_'+x.kind),encrypted);
       return {kind:x.kind,events:events,verified:true,success:stamp,checked:stamp};
      });
-    }).catch(function(){return x;});
+    }).catch(function(error){
+     if(version===(revision[profile]||0)&&x.kind==='sport'&&stableProfileLink(x.url)&&
+       error&&(error.httpStatus===404||error.httpStatus===410)){
+      // A deleted/rotated token must not be resurrected from offline cache.
+      // Other profiles and the independent Google source are untouched.
+      localStorage.removeItem(key(profile,'secret_sport'));
+      localStorage.removeItem(key(profile,'cache_sport'));
+      return {kind:'sport',revoked:true,events:[],verified:false};
+     }
+     return Object.assign({},x,{refreshFailed:true});
+    });
    })).then(function(next){
-    publish(next,next.every(function(x){return x.verified;})?'Verified · updated just now':
-     next.some(function(x){return x.verified;})?'Some sources unavailable · verified cache':'Calendar sources unverified');
+    var remaining=next.filter(function(x){return !x.revoked;});
+    if(!remaining.length){status(profile,false,false,[],'BallerWatch link revoked · reconnect this source',{sources:[]});return;}
+    publish(remaining,next.some(function(x){return x.revoked;})?'BallerWatch link revoked · reconnect this source':
+     remaining.some(function(x){return x.refreshFailed;})?'Refresh unavailable · showing last verified calendar':
+     remaining.every(function(x){return x.verified;})?'Verified · updated just now':
+     remaining.some(function(x){return x.verified;})?'Some sources unavailable · verified cache':'Calendar sources unverified');
    }).then(function(){if(inflight[profile]===job)delete inflight[profile];});
   });
  }).catch(function(){if(version===(revision[profile]||0))status(profile,false,false,[],'Secure calendar storage unavailable');});

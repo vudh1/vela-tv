@@ -355,7 +355,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  row('pairCalendar','Connect using phone','QR','Scan on your trusted Wi-Fi and paste the subscription URL')+
  row('connectCalendar',attached?'Replace on TV':'Enter on TV','Enter','Paste the iCal URL on your Sony TV'))+
  (attached?row('removeCalendarSource','Remove this source','Remove','Keep the other calendar connected'):'')+
- '<p class="library-footnote">'+(isSport?'Copy the feed under BallerWatch → Settings → Share my calendar. Newly published games for selected teams update automatically. Changing your monitored teams currently creates a different link; replace this source once after a watchlist change.':'Get your secret iCal link from Google Calendar settings. You do not need to sign into Google on this TV.')+'</p>';}
+ '<p class="library-footnote">'+(isSport?'Copy your BallerWatch feed under Settings → Share my calendar. Legacy links require replacement when team selections change. An optional permanent profile link updates selections automatically when BallerWatch enables that service; revoked links must be reconnected.':'Get your secret iCal link from Google Calendar settings. You do not need to sign into Google on this TV.')+'</p>';}
  else if(type==='tizenCalendarEntry'){title='Private calendar';subtitle='Samsung · saved under this profile only';
  body='<p class="library-footnote">Paste your '+(selectedSource==='sport'?'BallerWatch sports':'Google Calendar secret')+' iCal address using the Samsung keyboard or SmartThings remote. Press Down after editing to reach Save. Vela encrypts the link before saving.</p>'+
  '<label class="calendar-input-label" for="tizenCalendarUrl">Secret HTTPS iCal URL</label>'+
@@ -539,7 +539,7 @@ function calendarDayDivider(e,previous){var now=new Date(),day=new Date(Math.max
  return '<div class="event-day-divider" aria-label="'+esc(heading)+'"><span>'+esc(heading)+'</span></div>';}
 function eventHTML(e,compact,index){var state=calendarState(e),when=calendarDate(e.start)+' · '+calendarTime(e.start,e.allDay);
  var type=e.kind==='play'?'PLAY · ':e.kind==='watch'?'WATCH · ':'';
- var meta=type+(state==='ongoing'?'NOW · ':state==='soon'?'NEXT HOUR · ':'')+when;
+ var meta=type+(state==='ongoing'?'NOW · ':state==='soon'?'NEXT · ':state==='later'?'UPCOMING · ':'')+when;
  var content='<span class="event-meta">'+esc(meta)+'</span><span class="event-summary">'+esc(e.title||'Untitled event')+'</span>'+(compact?'':'<span class="event-when">'+esc(e.allDay?'':calendarTime(e.start,false)+' – '+calendarTime(e.end,false))+'</span>');
  return compact?'<div class="event-item '+(state||'')+' event-peek">'+content+'</div>':
  '<button type="button" class="event-item focusable '+(state||'')+'" data-act="eventInfo" data-id="'+index+'" aria-label="'+esc((e.title||'Untitled event')+', '+meta)+'">'+content+'</button>';}
@@ -579,7 +579,15 @@ function maybeShowUpcomingReminder(){
 function updateCalendarView(){var n=Date.now(),today=calendarToday();
  var badge=$('#calendarBadge'),button=$('#calendarButton');badge.textContent=today.length>9?'9+':String(today.length);badge.classList.toggle('hidden',!today.length);button.classList.toggle('has-events',!!today.length);
  button.classList.toggle('calendar-attention',today.some(function(e){var state=calendarState(e);return state==='ongoing'||state==='soon';}));button.setAttribute('aria-label','Calendar: '+today.length+' event'+(today.length===1?'':'s')+' today');
- var peek=$('#calendarPeek');var next=today.filter(function(e){return e.end>n&&(!e.allDay||e.start>n);}).slice(0,2);peek.innerHTML=calConnected&&next.length?'<div class="peek-heading">TODAY</div>'+next.map(function(e){return eventHTML(e,true);}).join(''):'';
+ var peek=$('#calendarPeek');
+ // Keep one in-progress item and one next item visible when both exist.
+ // This ordering is independent of which ICS source delivered the event.
+ var relevant=today.filter(function(e){return e.end>n&&(!e.allDay||e.start>n);});
+ var ongoing=relevant.filter(function(e){return e.start<=n&&e.end>n;});
+ var upcoming=relevant.filter(function(e){return e.start>n;});
+ var next=ongoing.length?[ongoing[0]].concat(upcoming.slice(0,1)):upcoming.slice(0,2);
+ if(next.length<2&&ongoing.length>1)next.push(ongoing[1]);
+ peek.innerHTML=calConnected&&next.length?'<div class="peek-heading">NOW / NEXT</div>'+next.map(function(e){return eventHTML(e,true);}).join(''):'';
  if(screen==='calendar')renderCalendarBody();else maybeShowUpcomingReminder();}
 function receiveCalendar(json){try{var obj=typeof json==='string'?JSON.parse(json):json;if(!obj||obj.profile!==profileId)return;
  calendarProfile=obj.profile;calConnected=!!obj.connected;calVerified=!!obj.verified;calName=obj.calendarName||'';calLabel=obj.label||'';calAccount=obj.calendarId||'';calLastSuccess=Number(obj.lastSuccess)||0;calLastAttempt=Number(obj.lastAttempt)||0;

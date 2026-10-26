@@ -11,6 +11,7 @@ Vela owns TV launcher/navigation, device settings, profiles, screen presentation
 | Sony web remote + Cloudflare relay | **Implemented in source; deployment/pairing must be verified separately** | Vela owns PIN/device credential/controller lease boundaries, not FRIDAY identity. |
 | Kept Life reminders | **Proposed** | Private information off on shared displays until explicit profile/device consent. |
 | Normalized FRIDAY events and handoff | **Proposed** | Versioned authorized summaries, source app owns details; direct feeds remain fallback. |
+| BallerWatch stable read-only profile ICS (v1) | **Staged consumer on source branch; producer not activated** | Per non-Guest Vela profile only; no BallerWatch management scope. 404/410 revokes local protected cache; 503 retains last-good data. Google and parameterized ICS survive. |
 
 ## Cost boundary
 
@@ -22,6 +23,7 @@ The [FRIDAY cardless rule](https://github.com/vudh1/friday/blob/main/docs/COST_P
 - Use concise **All / Playing / Watching / Life** calendar categories, sensible ongoing/next-event behavior, correct timezone/DST and source-qualified deduplication; no invented sports broadcast labels.
 - Never commit private feed URLs, plaintext event caches, pairing secrets or device addresses.
 - If a FRIDAY adapter is added, keep existing Google/BallerWatch ICS, offline cached views and remote navigation working without it.
+- The optional BallerWatch accountless stable feed is an independent read capability, not universal identity or the proposed FRIDAY JSON event protocol. Its D1/key and production activation are gated by BallerWatch; Vela only stages the read-only client.
 - At design time, mark **No FRIDAY impact** if a feature is local. Otherwise document owner, consumer, scopes, permission, failure behavior, stable IDs/schema and rollback in a [FRIDAY issue](https://github.com/vudh1/friday/issues).
 
 See [AGENTS.md](AGENTS.md), [FRIDAY architecture](https://github.com/vudh1/friday/blob/main/docs/ARCHITECTURE.md) and [design guidance](https://github.com/vudh1/friday/blob/main/docs/DESIGN_SYSTEM.md).
