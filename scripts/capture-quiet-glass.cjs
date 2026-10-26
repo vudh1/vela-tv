@@ -12,6 +12,8 @@ const root = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 const dest = path.resolve(process.argv[3] || path.join(root, 'design/review/quiet-glass-v1'));
 const browserExecutable = process.env.VELA_CHROMIUM_PATH || undefined;
 function fixedPreviewClock() {
+  // Sunday Oct 25 at 8:42 PM in America/Los_Angeles; already Oct 26 UTC.
+  // Both browser contexts must use the same timezone to avoid fixture drift.
   const RealDate=Date, fixed=Date.parse('2026-10-26T03:42:00Z');
   window.Date=class extends RealDate {
     constructor(...args) { super(...(args.length?args:[fixed])); }
@@ -30,6 +32,8 @@ async function main() {
     await page.addInitScript(fixedPreviewClock);
     await page.goto(pathToFileURL(path.join(root, 'preview/index.html')).href);
     await page.waitForSelector('#favorites .app-card');
+    assert.equal(await page.locator('#clock').textContent(),'8:42','Pacific fixture clock');
+    assert.equal(await page.locator('#daydate').textContent(),'SUNDAY, OCTOBER 25','Pacific fixture day');
     const homeStartupMs = await page.evaluate(() => Math.round(performance.now()));
     await page.evaluate(() => {
       // These are explicitly synthetic design fixtures, not live weather or a
@@ -80,10 +84,12 @@ async function main() {
     // 3840-CSS-pixel viewport. The resulting source is a 3840×2160 bitmap.
     await page.setViewportSize({ width:1920, height:1080 });
     const hidpi = await browser.newPage({ viewport:{width:1920,height:1080},
-      deviceScaleFactor:2,reducedMotion:'reduce' });
+      timezoneId:'America/Los_Angeles',deviceScaleFactor:2,reducedMotion:'reduce' });
     await hidpi.addInitScript(fixedPreviewClock);
     await hidpi.goto(pathToFileURL(path.join(root,'preview/index.html')).href);
     await hidpi.waitForSelector('#favorites .app-card');
+    assert.equal(await hidpi.locator('#clock').textContent(),'8:42','4K Pacific fixture clock');
+    assert.equal(await hidpi.locator('#daydate').textContent(),'SUNDAY, OCTOBER 25','4K Pacific fixture day');
     const fourK=await hidpi.screenshot({animations:'disabled'});
     const fourKMeta=await sharp(fourK).metadata();
     assert.equal(fourKMeta.width,3840);
