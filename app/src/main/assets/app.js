@@ -300,7 +300,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  '<p class="library-footnote">Profiles and app activity stay on this TV. Calendar links and events are stored locally with Android Keystore encryption. Returning to Sony Home remains available under Recovery. Weather: Open-Meteo (CC BY 4.0), approximate location by IP Info.</p>';}
  else if(type==='homeApps'){title='Home favorites';subtitle='Pin up to eight apps and reorder with arrows.';body=favoritesEditor();}
  else if(type==='startupProfiles'){title="Who's Watching?";subtitle='Choose your space.';
- body='<div class="startup-avatar-grid" role="group" aria-label="Choose your profile">'+profiles.map(function(p){
+ body='<div class="startup-avatar-grid" style="--selector-columns:'+Math.min(profiles.length,4)+'" role="group" aria-label="Choose your profile">'+profiles.map(function(p){
  return '<button class="startup-avatar-card focusable" data-act="switchProfile" data-id="'+esc(p.id)+'" aria-label="Continue as '+esc(p.name)+'"><span class="startup-avatar" data-avatar="'+esc(p.avatar)+'">'+avatarSvg(p.avatar,p.name)+'</span><span class="startup-profile-name">'+esc(p.name)+'</span></button>';
  }).join('')+'</div><p class="startup-footer">SELECT A PROFILE TO CONTINUE</p>';}
  else if(type==='all'){title='All apps';subtitle='Hold OK on an icon for quick actions.';
@@ -395,6 +395,7 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  if(!focusKey){focusIndex=type==='pairing'?0:controls.findIndex(function(b){return b.getAttribute('data-act')!=='close';});if(focusIndex<0)focusIndex=0;}select(focusIndex);if(type==='pairing')pairingTick();
  if(type==='customize'||type==='all')visibleIcons();}
 function navigatePanel(type){if(screen&&screen!==type)panelHistory.push(screen);renderPanel(type);}
+function openProfileSelector(){if(startupChooserOpen)return;panelHistory=[];renderPanel('startupProfiles');}
 function checkWakeProfilePrompt(){
  if(startupChooserOpen||document.hidden||!bridge||!bridge.consumeWakeProfilePrompt)return;
  try{if(bridge.consumeWakeProfilePrompt()){
@@ -416,6 +417,7 @@ function action(name,id,dir){
  persistAppearance();home();renderPanel('appMenu',{act:'togglePin',id:id});return;}
  if(name==='appInfo'){if(bridge&&bridge.openAppInfo)bridge.openAppInfo(id);else toast('Android app settings are only available on TV');return;}
 
+ if(name==='selectProfile'){openProfileSelector();return;}
  if(name==='switchProfile'){startupChooserOpen=false;panelHistory=[];if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();if(id==='guest'){profiles=profiles.filter(function(p){return p.id!=='guest';});profiles.push(makeProfile('guest','Guest',null));}profileId=id;persistProfiles();applyProfile(true);close();if(pendingRemoteSettings){pendingRemoteSettings=false;renderPanel('settings');}return;}
  if(name==='avatarPicker'){editingAvatar=id;renderPanel('avatars');return;}
  if(name==='chooseAvatar'){var p=profiles.filter(function(x){return x.id===editingAvatar;})[0];if(p){p.avatar=id;if(p.id!=='guest')persistProfiles();applyProfile(true);}renderPanel('profiles',{act:'avatarPicker',id:editingAvatar});return;}
@@ -494,7 +496,7 @@ function action(name,id,dir){
 function trigger(){activeList();var b=controls[cursor];if(b)action(b.getAttribute('data-act'),b.getAttribute('data-id')||'',b.getAttribute('data-dir')||'');}
 function goBack(){
  if(!screen)return;
- if(screen==='startupProfiles')return;
+ if(screen==='startupProfiles'&&startupChooserOpen)return;
  if(screen==='pairing'){stopPairClock();pairingUrl='';pairingExpiresAt=0;
   if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();}
  if(panelHistory.length){var previous=panelHistory.pop();renderPanel(previous);return;}

@@ -306,10 +306,12 @@ body.booting .scene,body.booting .page{visibility:hidden}
 .overlay.startup-panel .panel-body{width:max-content;max-width:min(1170px,94vw);flex:none;max-height:61vh;margin:0;
  padding:clamp(12px,1.6vw,23px);overflow-y:auto;contain:none;border:0;
  background:transparent;box-shadow:none}
-.startup-avatar-grid{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;
- gap:clamp(8px,1.15vw,20px);padding:2px}
+.startup-avatar-grid{--avatar-card-width:clamp(140px,13.4vw,197px);display:grid;
+ grid-template-columns:repeat(var(--selector-columns,3),var(--avatar-card-width));
+ justify-content:center;justify-items:center;align-items:start;
+ column-gap:clamp(16px,2vw,32px);row-gap:clamp(12px,2vh,24px);padding:2px}
 .startup-avatar-card{display:flex;flex-direction:column;align-items:center;gap:clamp(12px,1.65vh,20px);
- width:clamp(140px,13.4vw,197px);padding:clamp(10px,1.2vw,17px) clamp(8px,1vw,15px);
+ width:var(--avatar-card-width);padding:clamp(10px,1.2vw,17px) clamp(8px,1vw,15px);
  background:rgba(255,255,255,.016);border:0;outline:0;
  border-radius:23px;color:rgba(245,247,245,.76);text-align:center;
  transition:transform .11s ease-out,background-color .11s ease-out,box-shadow .11s ease-out,color .11s ease-out}
@@ -351,11 +353,12 @@ body.booting .scene,body.booting .page{visibility:hidden}
  .overlay.startup-panel .panel h2{font-size:clamp(30px,4.5vh,42px)}
  .overlay.startup-panel .panel-header p{margin-top:8px}
  .overlay.startup-panel .panel-body{padding:8px;max-height:60vh}
- .startup-avatar-grid{gap:8px;padding:4px}
+ .startup-avatar-grid{--avatar-card-width:118px;gap:12px;padding:4px}
  .startup-avatar{width:99px;height:99px;border-radius:50%}
- .startup-avatar-card{width:118px;gap:9px;padding:8px}
+ .startup-avatar-card{width:var(--avatar-card-width);gap:9px;padding:8px}
  .startup-profile-name{font-size:16px}
  .overlay.startup-panel .startup-footer{margin-top:8px}}
+@media(max-width:680px){.startup-avatar-grid{grid-template-columns:repeat(2,var(--avatar-card-width))}}
 /* Samsung firmware owns Calendar integrations, TV Home and the system saver. */
 body.tizen-tv #monitorButton{display:none!important}
 .calendar-input-label{display:block;color:rgba(229,241,234,.82);font-size:12px;letter-spacing:.08em;margin:20px 4px 9px}

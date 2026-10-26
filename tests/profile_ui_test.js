@@ -8,6 +8,7 @@ const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'app/src/main/assets/app.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'app/src/main/assets/style.css'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'app/src/main/assets/index.html'), 'utf8');
 const start = source.indexOf('function uiTitle(text)');
 const end = source.indexOf('function appRow(', start);
 assert.ok(start >= 0 && end > start, 'Settings case helper is present');
@@ -38,4 +39,13 @@ assert.ok(!/\.startup-avatar-card\.selected[^}]*border-color/.test(css), 'Select
 assert.ok(!/\.startup-avatar-card\.selected \.startup-avatar[^}]*border-color/.test(css), 'Avatar selection never draws a border');
 assert.ok(!css.includes('backdrop-filter:'), 'Do not rely on TV GPU backdrop blur');
 assert.ok(!css.includes('background:linear-gradient(155deg,#608a88,#315252)'), 'Old colored profile blocks removed');
+assert.match(html, /id="profileButton"[^>]*data-act="selectProfile"/, 'Home avatar opens the full-screen selector');
+assert.ok(source.includes("if(name==='selectProfile'){openProfileSelector();return;}"), 'Avatar action uses shared profile selector');
+assert.ok(source.includes("function openProfileSelector(){if(startupChooserOpen)return;panelHistory=[];renderPanel('startupProfiles');}"), 'Manual entry uses the existing startup view');
+assert.ok(source.includes("if(screen==='startupProfiles'&&startupChooserOpen)return;"), 'Back can exit manual selector but not power-on gate');
+assert.ok(source.includes("style=\"--selector-columns:'+Math.min(profiles.length,4)+'\""), 'Selector receives dynamic column count');
+assert.ok(css.includes('grid-template-columns:repeat(var(--selector-columns,3),var(--avatar-card-width))'), 'Equal-width columns keep consistent profile spacing');
+assert.ok(css.includes('column-gap:clamp(16px,2vw,32px);row-gap:clamp(12px,2vh,24px)'), 'Consistent row and column gaps');
+assert.ok(source.includes("else if(type==='profiles'){title='Profiles'") && source.includes("data-act=\"avatarPicker\"") &&
+  source.includes("data-act=\"renameProfile\""), 'Rename and avatar editing stay in Settings');
 console.log('PASS cinematic glass profile chooser, remote focus and consistent Settings Title Case');
