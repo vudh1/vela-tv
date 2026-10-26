@@ -74,23 +74,50 @@ async function run() {
   }
   const tokens = { '1111111111': { token: 'first-token', tvId: 'tv-a', tvName: 'Living Room' },
     '2222222222': { token: 'second-token', tvId: 'tv-b', tvName: 'Bedroom' } };
-  const tvNames = new Map([['tv-a', 'Living Room'], ['tv-b', 'Bedroom']]);
-  const commands = [];
+  const tvNames = new Map([['tv-a', 'Living Room'], ['tv-b', 'Bedroom'],
+    ['tv-c', 'Sony BRAVIA with Private Relay']]);
+  const enrolledTvs = new Set(['tv-a', 'tv-b', 'tv-c']);
+  const offlineTvs = new Set();
+  const commands = [], releasedTokens = [];
+  let approvalChecks = 0, expireRelay = false, failNextRelease = false;
+  let releaseHeldApproval = null;
   async function fetchFake(url, options) {
     const address = new URL(url);
     const payload = options.body ? JSON.parse(options.body) : {};
     const key = (options.headers.authorization || '').replace('Bearer ', '');
     let response;
-    if (address.pathname === '/api/connect') response = tokens[payload.pin] || { error: 'incorrect_pin' };
+    if (address.pathname === '/api/connect') response = payload.pin === '4444444444'
+      ? { approvalRequired: true, approvalToken: 'e'.repeat(64), requestId: 'd'.repeat(24), approvalSeconds: 90 }
+      : payload.pin === '3333333333'
+      ? { approvalRequired: true, approvalToken: 'a'.repeat(64), requestId: 'b'.repeat(24), approvalSeconds: 90 }
+      : tokens[payload.pin] || { error: 'incorrect_pin' };
+    else if (address.pathname === '/api/approval-status') response = payload.requestId === 'd'.repeat(24)
+      ? await new Promise(resolve => { releaseHeldApproval = () => resolve({ token: 'orphan-token',
+        tvId: 'tv-d', tvName: 'Unselected TV', trustedRelay: true }); })
+      : ++approvalChecks < 2 ? { approvalPending: true }
+        : { token: 'relay-token', tvId: 'tv-c',
+          tvName: 'Sony BRAVIA with Private Relay', trustedRelay: true };
     else if (address.pathname === '/api/status') {
       const tvId = address.searchParams.get('tvId');
-      response = { online: true, busy: false, sameNetwork: true,
-        ...(tvId ? { tvId, tvName: tvNames.get(tvId) } : {}) };
+      const exists = !tvId || enrolledTvs.has(tvId);
+      response = { online: exists && !offlineTvs.has(tvId), busy: false,
+        sameNetwork: exists && tvId !== 'tv-c',
+        ...(tvId && exists ? { tvId, tvName: tvNames.get(tvId) } : {}) };
     }
-    else if (address.pathname === '/api/heartbeat') response = { textPublicKey: '' };
+    else if (address.pathname === '/api/heartbeat') response = expireRelay && key === 'relay-token'
+      ? { error: 'session_expired' } : { textPublicKey: '' };
+    else if (address.pathname === '/api/challenge') response = {
+      challenge: 'c'.repeat(64), keyId: payload.keyId };
+    else if (address.pathname === '/api/resume') response = {
+      token: 'renewed-relay-token', tvId: 'tv-c',
+      tvName: 'Sony BRAVIA with Private Relay', trustedRelay: true };
     else if (address.pathname === '/api/command') {
       commands.push({ token: key, key: payload.key }); response = { ok: true };
-    } else if (address.pathname === '/api/release') response = { ok: true };
+    } else if (address.pathname === '/api/release') {
+      response = failNextRelease ? { error: 'unavailable' } : { ok: true };
+      if (!failNextRelease) releasedTokens.push(key);
+      failNextRelease = false;
+    }
     else response = { error: 'unsupported' };
     return { ok: !response.error, status: response.error ? 401 : 200,
       async json() { return response; } };
@@ -119,6 +146,7 @@ async function run() {
       addEventListener(name, fn) { windowListeners.set(name, fn); }, confirm: () => true },
     setTimeout(fn, delay) {
       if (delay === 470) { const id = ++nextTimer; longPressTimers.set(id, fn); return id; }
+      if (delay === 2500) return setTimeout(fn, 0); // Fast-forward TV approval checks.
       return setTimeout(fn, delay);
     },
     clearTimeout(id) { longPressTimers.delete(id); clearTimeout(id); },
@@ -217,8 +245,60 @@ async function run() {
   await flush();
   assert.equal(commands.filter(c => c.key === 'left').length, leftCount,
     'a delayed synthetic click after completed pointerup cannot duplicate a press');
+  // Private Relay keeps Safari on a different IP. A correct PIN alone must
+  // wait for explicit TV approval; the resulting phone identity is persistent.
+  await element('release').fire('click'); await flush(); // Frees one TV slot.
+  element('tvPill').fire('click');
+  element('tvMenu').children[1].fire('click');
+  element('pin').value = '3333333333';
+  await element('pinForm').fire('submit'); await flush();
+  assert.equal(approvalChecks, 2, 'the phone waits for TV approval without submitting another PIN');
+  assert.equal(element('tvPill').querySelector('span').textContent,
+    'Sony BRAVIA with Private Relay');
+  assert.equal(records.get('trustedTvs').find(r => r.tvId === 'tv-c').trustedRelay, true);
+  expireRelay = true;
+  triggerWindow('focus'); await flush();
+  assert.equal(records.get('trustedTvs').find(r => r.tvId === 'tv-c').trustedRelay, true,
+    'a signed phone can resume even when sameNetwork=false');
+  hold(buttons.find(button => button.dataset.key === 'select')); await flush();
+  assert.ok(commands.some(c => c.token === 'renewed-relay-token' && c.key === 'select'));
+  // A failed network release must preserve the non-extractable identity so
+  // an owner can sign in again and remove the pairing later.
+  failNextRelease = true;
+  await element('release').fire('click'); await flush();
+  assert.equal(records.get('trustedTvs').length, 2);
+  assert.match(element('error').textContent, /Could not confirm disconnect/);
+  await element('release').fire('click'); await flush();
+  assert.equal(records.get('trustedTvs').length, 1);
+  assert.equal(element('tvPill').querySelector('span').textContent, 'Sony BRAVIA 4K VH2 (2)');
+  // The owner cancels pairing while an approved response is still in flight.
+  // The Worker may already have minted a token, so the phone must release it.
+  element('tvPill').fire('click');
+  element('tvMenu').children[1].fire('click');
+  element('pin').value = '4444444444';
+  const cancelledPair = element('pinForm').fire('submit');
+  await flush();
+  assert.equal(typeof releaseHeldApproval, 'function');
+  element('cancelPair').fire('click');
+  releaseHeldApproval();
+  await cancelledPair; await flush();
+  assert.ok(releasedTokens.includes('orphan-token'), 'cancelling a claim releases its bearer lease');
+  assert.equal(records.get('trustedTvs').length, 1);
+  // The TV going offline must not erase the recovery credential.
+  offlineTvs.add('tv-b');
+  triggerWindow('focus'); await flush();
+  assert.equal(records.get('trustedTvs').length, 1);
+  // Disabling/re-enrolling the TV removes its ID from the relay; the phone
+  // must immediately clear the pill and persisted key.
+  enrolledTvs.delete('tv-b');
+  triggerWindow('focus'); await flush();
+  assert.equal(records.has('trustedTvs'), false);
+  assert.equal(element('controller').classList.contains('hidden'), true);
   console.log('PASS phone remembers two Sony TVs and routes every command to the selected pill');
   console.log('PASS app switching and tab blur never create duplicate remote key presses');
+  console.log('PASS Private Relay waits for TV approval and resumes using a stored signing key');
+  console.log('PASS failed disconnect preserves trust; TV revocation clears phone trust');
+  console.log('PASS cancelled TV approval cannot strand a newly authorized lease');
 }
 
 run().catch(error => { console.error(error); process.exitCode = 1; });
