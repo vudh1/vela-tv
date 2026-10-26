@@ -121,6 +121,33 @@ test('two Sony TVs share one relay, but keep PINs, phones and commands isolated'
   assert.equal((await storage.get('room')).tvs.length, 1);
 });
 
+test('only enrolled TVs can publish short model labels; existing phones update without re-pairing', async () => {
+  const { env, storage } = setup();
+  const otherToken = 'cd'.repeat(32);
+  const first = await enroll(env);
+  const second = await enroll(env, NEXT_PIN, otherToken);
+  assert.equal(first.status, 200); assert.equal(second.status, 200);
+  const paired = await call(env, '/api/connect', { data: { pin: PIN } });
+  assert.equal(paired.status, 200);
+  assert.equal((await call(env, '/api/tv/poll', { origin: null, data: {
+    tvName: 'Injected Phone Name' }, token: paired.body.token })).status, 401);
+  assert.equal((await call(env, '/api/tv/poll', { origin: null, data: {
+    tvName: 'Sony BRAVIA 4K VH2' }, token: TV_TOKEN })).status, 200);
+  assert.equal((await call(env, '/api/tv/poll', { origin: null, data: {
+    tvName: 'Sony BRAVIA 4K VH2' }, token: otherToken })).status, 200);
+  assert.equal((await call(env, '/api/status?tvId=' + first.body.tvId)).body.tvName,
+    'Sony BRAVIA 4K VH2');
+  assert.equal((await call(env, '/api/status?tvId=' + second.body.tvId)).body.tvName,
+    'Sony BRAVIA 4K VH2 (2)');
+  assert.equal((await call(env, '/api/tv/poll', { origin: null, data: {
+    tvName: '<script>alert(1)</script>' }, token: TV_TOKEN })).status, 200);
+  assert.equal((await call(env, '/api/status?tvId=' + first.body.tvId)).body.tvName,
+    'Sony BRAVIA 4K VH2', 'invalid names must not overwrite a legitimate label');
+  assert.equal((await call(env, '/api/heartbeat', { data: {}, token: paired.body.token })).status, 200,
+    'model updates cannot revoke an existing paired phone');
+  assert.equal((await storage.get('room')).tvs[0].controllers.length, 1);
+});
+
 test('a second TV cannot be enrolled from a different public network', async () => {
   const { env } = setup(); await enroll(env);
   assert.equal((await enroll(env, NEXT_PIN, 'cd'.repeat(32), OTHER_IP)).status, 403);

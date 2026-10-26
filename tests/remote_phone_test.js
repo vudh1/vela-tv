@@ -45,10 +45,9 @@ async function run() {
   };
   element('controller').classList.add('hidden');
   element('tvMenu').classList.add('hidden');
-  for (const name of ['devicePanel', 'keyboardPanel', 'cancelPair'])
-    element(name).classList.add('hidden');
+  element('cancelPair').classList.add('hidden');
   const buttons = ['up', 'down', 'left', 'right', 'select', 'home', 'back', 'power_toggle',
-    'volume_up', 'volume_down', 'mute', 'play_pause', 'hdmi1', 'hdmi2', 'hdmi3', 'hdmi4']
+    'volume_up', 'volume_down', 'mute', 'play_pause']
     .map(name => {
       const button = new Element(name);
       button.dataset = { key: name };
@@ -75,6 +74,7 @@ async function run() {
   }
   const tokens = { '1111111111': { token: 'first-token', tvId: 'tv-a', tvName: 'Living Room' },
     '2222222222': { token: 'second-token', tvId: 'tv-b', tvName: 'Bedroom' } };
+  const tvNames = new Map([['tv-a', 'Living Room'], ['tv-b', 'Bedroom']]);
   const commands = [];
   async function fetchFake(url, options) {
     const address = new URL(url);
@@ -82,7 +82,11 @@ async function run() {
     const key = (options.headers.authorization || '').replace('Bearer ', '');
     let response;
     if (address.pathname === '/api/connect') response = tokens[payload.pin] || { error: 'incorrect_pin' };
-    else if (address.pathname === '/api/status') response = { online: true, busy: false, sameNetwork: true };
+    else if (address.pathname === '/api/status') {
+      const tvId = address.searchParams.get('tvId');
+      response = { online: true, busy: false, sameNetwork: true,
+        ...(tvId ? { tvId, tvName: tvNames.get(tvId) } : {}) };
+    }
     else if (address.pathname === '/api/heartbeat') response = { textPublicKey: '' };
     else if (address.pathname === '/api/command') {
       commands.push({ token: key, key: payload.key }); response = { ok: true };
@@ -125,6 +129,8 @@ async function run() {
     clearInterval(id) { repeatTimers.delete(id); },
     console, Date, btoa, atob };
   const code = fs.readFileSync(path.join(__dirname, '../remote/app.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '../remote/index.html'), 'utf8');
+  assert.doesNotMatch(html, /TV options|Type on TV|id="devicePanel"|id="keyboardPanel"/);
   vm.runInNewContext(code, context);
   const flush = async () => { for (let i = 0; i < 15; i++) await new Promise(resolve => setTimeout(resolve, 0)); };
   await flush();
@@ -145,6 +151,13 @@ async function run() {
   await flush();
   assert.equal(element('tvPill').querySelector('span').textContent, 'Bedroom');
   assert.equal(records.get('trustedTvs').length, 2);
+  // TVs publish their models after an app update, without breaking existing
+  // phone pairing or changing the stable routing IDs.
+  tvNames.set('tv-b', 'Sony BRAVIA 4K VH2 (2)');
+  triggerWindow('focus'); await flush();
+  assert.equal(element('tvPill').querySelector('span').textContent, 'Sony BRAVIA 4K VH2 (2)');
+  assert.equal(records.get('trustedTvs')[1].tvName, 'Sony BRAVIA 4K VH2 (2)');
+  tvNames.set('tv-a', 'Sony BRAVIA 4K VH2');
 
   hold(buttons.find(button => button.dataset.key === 'select'));
   await flush();
@@ -157,7 +170,7 @@ async function run() {
     { token: 'second-token', key: 'select' },
     { token: 'first-token', key: 'power_toggle' }
   ], 'commands must target the selected TV only');
-  assert.equal(element('tvPill').querySelector('span').textContent, 'Living Room');
+  assert.equal(element('tvPill').querySelector('span').textContent, 'Sony BRAVIA 4K VH2');
   const volume = buttons.find(button => button.dataset.key === 'volume_up');
   volume.fire('pointerdown', { pointerId: 7 });
   await flush();

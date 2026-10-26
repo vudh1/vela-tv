@@ -366,27 +366,26 @@ assert 'android.permission.ACCESS_NETWORK_STATE' in ET.tostring(m,encoding='unic
 assert 'usesCleartextTraffic' in ET.tostring(m,encoding='unicode')
 print('PASS Sony on-device PSK isolation, restricted HTTP hosts, opt-in IRCC and offline fallback')
 
-# TV utilities: a single Sony power-toggle button, advanced HDMI/Wi-Fi options
-# without separate Settings/Input buttons, and non-password remote
-# typing. ECDH private material must never enter the public remote or Worker.
+# Lean phone remote: no device/keyboard panel. Old encrypted-text command
+# support stays server-side for backward compatibility with older clients.
 mobile=(r/'remote/index.html').read_text()
 text_crypto=(r/'app/src/main/java/com/danielvu/quiethome/VelaRemoteText.java').read_text()
 assert 'Apps & Activity' in js and 'Device & Support' in js and 'Home & Profiles' in js
 assert 'Apps & activity' not in js and 'Device & support' not in js
-assert 'data-key="hdmi1"' in mobile and 'data-key="hdmi4"' in mobile
-assert 'id="wifiButton"' in mobile and 'id="powerOffButton"' not in mobile
+assert 'data-key="hdmi1"' not in mobile and 'data-key="hdmi4"' not in mobile
+assert 'id="wifiButton"' not in mobile and 'id="powerOffButton"' not in mobile
 assert 'data-key="input"' not in mobile and 'data-key="settings"' not in mobile
 assert 'data-key="power_toggle"' in mobile and 'Toggle Sony TV power' in mobile
-assert 'id="remoteText"' in mobile and 'id="textForm"' in mobile
-assert 'id="deviceToggle"' in mobile and 'id="keyboardToggle"' in mobile
+assert 'id="remoteText"' not in mobile and 'id="textForm"' not in mobile
+assert 'id="deviceToggle"' not in mobile and 'id="keyboardToggle"' not in mobile
 assert 'openRemoteWifiSettings(Context context)' in main and 'Settings.ACTION_WIFI_SETTINGS' in main
 assert 'case "power_toggle"' in codes and 'case "hdmi4"' in codes and 'case "input"' in codes
 assert 'AAAAAQAAAAEAAAAVAw==' in codes
 assert "send('power_off')" not in remote_js and "$('powerOffButton')" not in remote_js
 assert 'case "power_toggle"' in remote_native and "'power_toggle'" in remote_worker
-assert "window.confirm('Open Wi-Fi settings" in remote_js
-assert 'encryptText(value, state.textPublicKey)' in remote_js
-assert "'/api/command', { key: 'type_text', payload }" in remote_js
+assert "window.confirm('Open Wi-Fi settings" not in remote_js
+assert 'encryptText(value, state.textPublicKey)' not in remote_js
+assert "'/api/command', { key: 'type_text', payload }" not in remote_js
 assert 'KeyAgreement.getInstance("ECDH")' in text_crypto
 assert 'VelaRemoteClient.encrypt(' in text_crypto and 'AES/GCM/NoPadding' in text_crypto
 assert 'field.isEditable()' in navigation and 'field.isPassword()' in navigation
@@ -395,7 +394,10 @@ assert "data.key === 'type_text'" in remote_worker and 'textPublicKey' in remote
 assert 'textPublicKey: state.textPublicKey' in remote_worker
 assert 'data.text ' not in remote_worker and 'plainText' not in remote_worker
 assert (r/'remote/ux.css').exists() and 'href="ux.css"' in mobile
-print('PASS single Sony power button, HDMI/Wi-Fi options and encrypted focused text entry')
+assert 'Build.MANUFACTURER' in remote_native and 'Build.MODEL' in remote_native
+assert 'poll.put("tvName", displayModel())' in remote_native
+assert 'uniqueTvName(data.tvName, root, state)' in remote_worker
+print('PASS lean Sony phone remote, authenticated model labels and legacy TV command compatibility')
 
 assert 'MAX_CONTROLLERS = 4' in remote_worker and 'controllers: (' in remote_worker
 assert 'state.controllers.push(' in remote_worker and 'state.controllers.filter(c => c !== controller)' in remote_worker
@@ -416,7 +418,7 @@ assert 'tvHash: tv.tvHash' in remote_worker and 'tvId: state.id' in remote_worke
 assert 'selectedRemote' in remote_js and "storedKey('trustedTvs'" in remote_js
 assert 'id="tvPill"' in mobile and 'id="tvMenu"' in mobile
 assert 'height:100dvh' in remote_css and 'overflow:hidden' in remote_css
-assert 'grid-template-rows:auto auto auto minmax(0,1fr) auto auto' in remote_css
+assert 'grid-template-rows:auto auto minmax(0,1fr) auto auto' in remote_css
 assert "parseWindow(body,Date.now(),60)" in (asset/'tizen-private-calendar.js').read_text()
 assert 'Math.min(120' in (asset/'tizen-calendar.js').read_text()
 print('PASS isolated dual Sony TVs, two trusted TVs per phone, fixed iPhone remote and longer source cache')
