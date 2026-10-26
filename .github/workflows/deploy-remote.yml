@@ -4,8 +4,10 @@ on:
   push:
     branches: [main]
     paths:
-      - 'remote-worker/**'
-      - '.github/workflows/deploy-remote.yml'
+      - 'remote-worker/src/**'
+      - 'remote-worker/package.json'
+      - 'remote-worker/package-lock.json'
+      - 'remote-worker/wrangler.toml'
 permissions:
   contents: read
 jobs:
