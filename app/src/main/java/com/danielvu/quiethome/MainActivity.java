@@ -25,6 +25,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.text.format.DateFormat;
 import android.util.Base64;
@@ -67,6 +68,14 @@ import java.lang.ref.WeakReference;
 /** Light WebView TV launcher. All pages/scripts/images are bundled assets: no network permission. */
 public final class MainActivity extends Activity {
     private static volatile WeakReference<MainActivity> visibleActivity = new WeakReference<>(null);
+    // DreamService shares this process; timestamps cannot survive a stale app/TV restart.
+    private static volatile boolean homeForegroundForDream;
+    private static volatile long homePausedForDreamAt;
+
+    static boolean wasHomeUnderDream(long dreamStartedElapsed) {
+        return VelaDreamReturnPolicy.beganOverVela(
+            homeForegroundForDream, homePausedForDreamAt, dreamStartedElapsed);
+    }
     private static final String PREFS = "quiet-home";
     private static final String EXTRA_REMOTE_SETTINGS = "com.danielvu.quiethome.OPEN_REMOTE_SETTINGS";
     private static final String EXTRA_REMOTE_WIFI_SETTINGS = "com.danielvu.quiethome.OPEN_REMOTE_WIFI_SETTINGS";
@@ -227,6 +236,8 @@ public final class MainActivity extends Activity {
         super.onResume();
         homeResumed = true;
         visibleActivity = new WeakReference<>(this);
+        homeForegroundForDream = true;
+        homePausedForDreamAt = 0L;
         updater.onResume();
         if (!screenIsInteractive()) markNextViewingSession();
         startVolumeObservation();
@@ -272,7 +283,11 @@ public final class MainActivity extends Activity {
 
     @Override protected void onPause() {
         visibleActivity = new WeakReference<>(null);
-        if (!screenIsInteractive()) markNextViewingSession();
+        boolean interactive = screenIsInteractive();
+        // A dream covers Home immediately; a streaming app switch leaves this timestamp stale.
+        homePausedForDreamAt = interactive ? SystemClock.elapsedRealtime() : 0L;
+        homeForegroundForDream = false;
+        if (!interactive) markNextViewingSession();
         homeResumed = false;
         stopVolumeObservation();
         if (pendingLongSelect != null) longSelectHandler.removeCallbacks(pendingLongSelect);
