@@ -97,7 +97,11 @@ function setScenery(){var n=parseInt(scenery,10)||0;if(n<0||n>=wallpapers.length
 function makeProfile(id,name,legacy){return {id:id,name:name,avatar:id==='tram'?'flower':id==='guest'?'guest':'initial',favorites:legacy&&legacy.favorites?legacy.favorites:null,
  layout:legacy&&legacy.layout||'dock',theme:legacy&&legacy.theme||'dark',scenery:legacy&&legacy.scenery||'0',font:'classic',clockFormat:'auto',recent:[],usage:[],appSort:'name',labels:'focus',channels:{},rotate:0,monitorEnabled:false};}
 function currentProfile(){for(var i=0;i<profiles.length;i++)if(profiles[i].id===profileId)return profiles[i];return profiles[0];}
-function persistProfiles(){save('profile_data_v2',JSON.stringify({profiles:profiles.filter(function(p){return p.id!=='guest';})}));save('active_profile_v2',profileId==='guest'?'duong':profileId);}
+function persistProfiles(){save('profile_data_v2',JSON.stringify({profiles:profiles.filter(function(p){return p.id!=='guest';})}));
+ // The native screensaver reads this active-profile marker. Write Guest while
+ // Guest is foreground so a later DreamService cannot show Duong's cached events.
+ // initProfiles() intentionally restores Duong instead on a new app launch.
+ save('active_profile_v2',profileId);}
 function persistAppearance(){var p=currentProfile();if(!p)return;p.favorites=fav.slice(0,8);p.layout=mode;p.theme=theme;p.scenery=scenery;p.font=fontStyle;p.rotate=rotationMinutes;p.monitorEnabled=monitorEnabled;p.clockFormat=clockFormat;p.labels=appLabelMode;persistProfiles();}
 function initProfiles(){var parsed=null;try{parsed=JSON.parse(get('profile_data_v2')||'null');}catch(e){}
  if(parsed&&Array.isArray(parsed.profiles)&&parsed.profiles.length){profiles=parsed.profiles.filter(function(p){return p&&p.id!=='guest'&&typeof p.id==='string'&&typeof p.name==='string';}).map(function(p){
@@ -394,7 +398,11 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  if(type==='calendar')lastCalendarMarkup=body;else lastCalendarMarkup='';
  if(!focusKey){focusIndex=type==='pairing'?0:controls.findIndex(function(b){return b.getAttribute('data-act')!=='close';});if(focusIndex<0)focusIndex=0;}select(focusIndex);if(type==='pairing')pairingTick();
  if(type==='customize'||type==='all')visibleIcons();}
-function navigatePanel(type){if(screen&&screen!==type)panelHistory.push(screen);renderPanel(type);}
+// Remember the control and scroll position that opened a nested group. Returning
+// with Back or Left should never send the viewer to the top of Settings.
+function navigatePanel(type){if(screen&&screen!==type)panelHistory.push({screen:screen,
+ focus:focusedControl?{act:focusedControl.getAttribute('data-act'),id:focusedControl.getAttribute('data-id')||undefined,dir:focusedControl.getAttribute('data-dir')||undefined}:null,
+ scroll:$('#panelContent').scrollTop});renderPanel(type);}
 function openProfileSelector(){if(startupChooserOpen)return;panelHistory=[];renderPanel('startupProfiles');}
 function checkWakeProfilePrompt(){
  if(startupChooserOpen||document.hidden||!bridge||!bridge.consumeWakeProfilePrompt)return;
@@ -499,7 +507,8 @@ function goBack(){
  if(screen==='startupProfiles'&&startupChooserOpen)return;
  if(screen==='pairing'){stopPairClock();pairingUrl='';pairingExpiresAt=0;
   if(bridge&&bridge.cancelCalendarPair)bridge.cancelCalendarPair();}
- if(panelHistory.length){var previous=panelHistory.pop();renderPanel(previous);return;}
+ if(panelHistory.length){var previous=panelHistory.pop();renderPanel(previous.screen,previous.focus);
+  $('#panelContent').scrollTop=previous.scroll;listDirty=true;return;}
  close();
 }
 function remote(key){
@@ -521,6 +530,15 @@ function remote(key){
  if(best>=0)select(best);
  else if(key==='left'&&screen)goBack();
 }
+// De-duplicate the same public fixture arriving through Google and BallerWatch
+// even when the two providers assign different UIDs. Location is deliberately
+// part of the identity: similarly named games at distinct fields remain separate.
+function dedupeCalendarEvents(items){var seen=Object.create(null);return items.filter(function(e){
+ var title=String(e.title||'').trim().replace(/\s+/g,' ').toLowerCase();
+ var location=String(e.location||'').trim().replace(/\s+/g,' ').toLowerCase();
+ var key=[Number(e.start),Number(e.end),e.kind||'other',title,location].join('|');
+ if(seen[key])return false;seen[key]=true;return true;
+});}
 function calendarTime(ms,allDay){if(allDay)return 'All day';var d=new Date(ms);return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}
 function calendarDate(ms){return new Date(ms).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});}
 function calendarState(e){if(e.allDay)return '';var n=Date.now();return e.start<=n&&e.end>n?'ongoing':e.start>n&&e.start<=n+3600000?'soon':e.start>n&&e.start<=n+2*3600000?'later':'';}
@@ -538,9 +556,14 @@ function calendarDayDivider(e,previous){var now=new Date(),day=new Date(Math.max
  day.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
  return '<div class="event-day-divider" aria-label="'+esc(heading)+'"><span>'+esc(heading)+'</span></div>';}
 function eventHTML(e,compact,index){var state=calendarState(e),when=calendarDate(e.start)+' · '+calendarTime(e.start,e.allDay);
- var type=e.kind==='play'?'PLAY · ':e.kind==='watch'?'WATCH · ':'';
- var meta=type+(state==='ongoing'?'NOW · ':state==='soon'?'NEXT HOUR · ':'')+when;
+ var type=e.kind==='play'?'PLAYING · ':e.kind==='watch'?'WATCHING · ':'LIFE · ';
+ var meta=(compact?(state==='ongoing'?'NOW · ':state==='soon'?'NEXT · ':'UPCOMING · '):type+(state==='ongoing'?'NOW · ':state==='soon'?'NEXT HOUR · ':''))+when;
+ // Home may show a known field or user-confirmed channel, never an inferred
+ // broadcaster. Descriptions and private links stay in selected-event detail.
+ var p=currentProfile();var confirmed=p&&p.channels&&p.channels[eventKey(e)]||'';
+ var hint=compact?(e.kind==='play'?e.location:e.kind==='watch'?confirmed:''):'';
  var content='<span class="event-meta">'+esc(meta)+'</span><span class="event-summary">'+esc(e.title||'Untitled event')+'</span>'+(compact?'':'<span class="event-when">'+esc(e.allDay?'':calendarTime(e.start,false)+' – '+calendarTime(e.end,false))+'</span>');
+ if(hint)content+='<span class="event-hint">'+esc(hint)+'</span>';
  return compact?'<div class="event-item '+(state||'')+' event-peek">'+content+'</div>':
  '<button type="button" class="event-item focusable '+(state||'')+'" data-act="eventInfo" data-id="'+index+'" aria-label="'+esc((e.title||'Untitled event')+', '+meta)+'">'+content+'</button>';}
 function calendarEventList(){
@@ -579,9 +602,11 @@ function maybeShowUpcomingReminder(){
 function updateCalendarView(){var n=Date.now(),today=calendarToday();
  var badge=$('#calendarBadge'),button=$('#calendarButton');badge.textContent=today.length>9?'9+':String(today.length);badge.classList.toggle('hidden',!today.length);button.classList.toggle('has-events',!!today.length);
  button.classList.toggle('calendar-attention',today.some(function(e){var state=calendarState(e);return state==='ongoing'||state==='soon';}));button.setAttribute('aria-label','Calendar: '+today.length+' event'+(today.length===1?'':'s')+' today');
- var peek=$('#calendarPeek');var next=today.filter(function(e){return e.end>n&&(!e.allDay||e.start>n);}).slice(0,2);peek.innerHTML=calConnected&&next.length?'<div class="peek-heading">TODAY</div>'+next.map(function(e){return eventHTML(e,true);}).join(''):'';
+ var peek=$('#calendarPeek');var next=calEvents.filter(function(e){return e.end>n&&(!e.allDay||e.start>n);})
+  .sort(function(a,b){var an=a.start<=n,bn=b.start<=n;return an!==bn?(an?-1:1):a.start-b.start;}).slice(0,2);
+ peek.innerHTML=calConnected&&next.length?'<div class="peek-heading">NOW / NEXT'+(!calVerified?' · SAVED':'')+'</div>'+next.map(function(e){return eventHTML(e,true);}).join(''):'';
  if(screen==='calendar')renderCalendarBody();else maybeShowUpcomingReminder();}
-function receiveCalendar(json){try{var obj=typeof json==='string'?JSON.parse(json):json;if(!obj||obj.profile!==profileId)return;
+function receiveCalendar(json){try{if(profileId==='guest')return;var obj=typeof json==='string'?JSON.parse(json):json;if(!obj||obj.profile!==profileId)return;
  calendarProfile=obj.profile;calConnected=!!obj.connected;calVerified=!!obj.verified;calName=obj.calendarName||'';calLabel=obj.label||'';calAccount=obj.calendarId||'';calLastSuccess=Number(obj.lastSuccess)||0;calLastAttempt=Number(obj.lastAttempt)||0;
  calSources=Array.isArray(obj.sources)?obj.sources.filter(function(s){return s&&['google','sport'].indexOf(s.kind)>=0;}).slice(0,2):[];
  calEvents=Array.isArray(obj.events)?obj.events.filter(function(e){return e&&Number.isFinite(e.start)&&Number.isFinite(e.end);}).slice(0,150).map(function(e){
@@ -590,6 +615,7 @@ function receiveCalendar(json){try{var obj=typeof json==='string'?JSON.parse(jso
    location:String(e.location||'').slice(0,180),description:String(e.description||'').slice(0,1400),
    channel:String(e.channel||'').slice(0,80),url:String(e.url||'').slice(0,512)};
  }):[];
+ calEvents=dedupeCalendarEvents(calEvents);
  calStatus=obj.status||'';calendarChecked=Date.now();updateCalendarView();if(screen==='calendarSettings'||screen==='calendarSource')renderPanel(screen);/* Cached calendar status must never close a live phone pairing. */}catch(e){toast('Could not read calendar data');}}
 function calendarSaveReady(profile,okay,message){if(profile!==profileId)return;
  if(okay){renderPanel('calendarSettings');toast('Private calendar saved');}else toast(message||'Could not save calendar');}

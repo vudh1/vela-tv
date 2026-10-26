@@ -102,7 +102,13 @@ function load(profile,force){
   sets.forEach(function(x){
    sources.push({kind:x.kind,verified:!!x.verified});
    if(x.verified){verified++;last=Math.max(last,x.success||0);}
-   (x.events||[]).forEach(function(e){var id=String(e.uid||e.title)+'/'+e.start;if(!seen[id]){seen[id]=true;all.push(e);}});
+   (x.events||[]).forEach(function(e){
+    // Prefer event semantics over provider UID for duplicate public fixtures;
+    // the same named event at a different field must still be distinct.
+    var id=[e.start,e.end,e.kind||'other',String(e.title||'').trim().replace(/\s+/g,' ').toLowerCase(),
+     String(e.location||'').trim().replace(/\s+/g,' ').toLowerCase()].join('|');
+    if(!seen[id]){seen[id]=true;all.push(e);}
+   });
   });
   all.sort(function(a,b){return a.start-b.start;});all=all.slice(0,150);
   status(profile,true,verified>0,all,label,{label:sets.map(function(x){return x.kind==='sport'?'BallerWatch':'Google';}).join(' + '),success:last,sources:sources});

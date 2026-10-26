@@ -50,6 +50,13 @@ final class VelaCalendarController {
     }
     void shutdown(){worker.shutdownNow();}
     private static boolean profileOkay(String p){return p!=null&&p.matches("[a-zA-Z0-9_-]{1,48}");}
+    /** Display identity across independent providers without conflating games at different fields. */
+    private static String displayEventKey(JSONObject e) {
+        return e.optLong("start")+"|"+e.optLong("end")+"|"+
+            e.optString("kind").trim().toLowerCase(java.util.Locale.ROOT)+"|"+
+            e.optString("title").trim().replaceAll("\\s+"," ").toLowerCase(java.util.Locale.ROOT)+"|"+
+            e.optString("location").trim().replaceAll("\\s+"," ").toLowerCase(java.util.Locale.ROOT);
+    }
     private static String sourceOf(String url){
         try{return "ballerwatch-web.vudhone.workers.dev".equalsIgnoreCase(Uri.parse(url).getHost())?"sport":"google";}
         catch(Exception ignored){return "google";}
@@ -223,7 +230,7 @@ final class VelaCalendarController {
             prefs.edit().putLong("attempt_"+profile,System.currentTimeMillis()).apply();
             try{
                 ZoneId zone=ZoneId.systemDefault();LocalDate day=LocalDate.now(zone);
-                List<JSONObject> combined=new ArrayList<>();Set<String> ids=new HashSet<>();
+                List<JSONObject> combined=new ArrayList<>();Set<String> ids=new HashSet<>(),seenEvents=new HashSet<>();
                 int refreshed=0,total=0;String displayName="";
                 for(String source:new String[]{"google","sport"}){
                     String url=sourceUrl(profile,source);if(url.isEmpty())continue;total++;
@@ -249,7 +256,7 @@ final class VelaCalendarController {
                     for(int i=0;i<list.length();i++){
                         JSONObject obj=list.optJSONObject(i);if(obj==null)continue;
                         String id=obj.optString("uid","")+"/"+obj.optLong("start");
-                        if(ids.add(id))combined.add(obj);
+                        if(ids.add(id)&&seenEvents.add(displayEventKey(obj)))combined.add(obj);
                     }
                 }
                 combined.sort((a,b)->Long.compare(a.optLong("start"),b.optLong("start")));

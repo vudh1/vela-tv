@@ -68,3 +68,20 @@ footer{flex:0 0 auto;min-height:14px;padding-top:6px;border:0;margin:0;line-heig
   .round-action span{font-size:10px}
   .pair-illustration,.pair .trust{display:none}
 }
+
+/* FRIDAY Quiet Glass v1, phone-scale counterpart to the Vela TV palette. */
+:root{--vela-canvas:#0D121B;--vela-surface:#18212E;--vela-raised:#243143;
+ --vela-text:#F4F6FA;--vela-muted:#ADB7C5;--vela-gold:#F2C47E;--vela-focus:#BCEAFF}
+body{background:var(--vela-canvas);color:var(--vela-text)}
+.tv-pill{background:var(--vela-surface);border-color:#3C4B5D;color:var(--vela-text);box-shadow:none;
+ font:600 13px/1.2 system-ui,sans-serif}
+.dpad .select{background:var(--vela-gold);color:var(--vela-canvas)}
+.tv-pill[aria-expanded="true"]{background:var(--vela-raised);border-color:var(--vela-gold)}
+.tv-menu{background:#18212ef8;border-color:#3C4B5D;backdrop-filter:none}
+.tv-choice{color:var(--vela-text)}.tv-choice.selected,.tv-choice:focus-visible{background:var(--vela-raised);color:var(--vela-gold)}
+.tv-choice.add-tv{color:var(--vela-gold)}
+.round-action:focus-visible,.media-row button:focus-visible,.dpad button:focus-visible,
+.tv-pill:focus-visible,.text-button:focus-visible{outline:2px solid var(--vela-focus);outline-offset:2px}
+[data-key].pressed{background:var(--vela-raised);box-shadow:inset 0 0 0 2px var(--vela-gold)}
+.network span{font-variant-numeric:tabular-nums}
+@media(prefers-reduced-motion:reduce){.tv-pill,[data-key]{transition:none!important}}

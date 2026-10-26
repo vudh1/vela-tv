@@ -102,16 +102,16 @@ public final class VelaDreamService extends DreamService {
                 weatherGroup.setVisibility(View.GONE);return;
             }
             String unit = "C".equals(s.optString("unit")) ? "C" : "F";
-            String condition = s.optString("condition", "Cloudy");
+            String condition = s.optString("condition", "");
             weatherNow.setText(Math.round(temp) + "°" + unit + "  ·  " + condition);
             String city = s.optString("city", ""),country = s.optString("country", "");
             String area = "US".equals(country) ? s.optString("region", "") : country;
             weatherWhere.setText(city + (!city.isEmpty() && !area.isEmpty() ? ", " : "") + area);
-            double precip = s.optDouble("precipitation", 0);
+            double precip = s.optDouble("precipitation", Double.NaN);
             String u = "in".equals(s.optString("precipUnit")) ? "in" : "mm";
-            String current = precip > 0 ? "Precip now " + String.format(Locale.US,u.equals("in")?"%.2f":"%.1f",precip) + " " + u : "Dry now";
+            String current = Double.isFinite(precip) ? (precip > 0 ? "Precip now " + String.format(Locale.US,u.equals("in")?"%.2f":"%.1f",precip) + " " + u : "Dry now") : "";
             Object chance = s.opt("rainChance");
-            if (chance instanceof Number) current += "  ·  " + ((Number)chance).intValue() + "% next hour";
+            if (chance instanceof Number) current += (current.isEmpty()?"":"  ·  ") + ((Number)chance).intValue() + "% next hour";
             weatherRain.setText(current);
             weatherGroup.setVisibility(View.VISIBLE);
         } catch (Exception ignored) { weatherGroup.setVisibility(View.GONE); }
@@ -139,7 +139,7 @@ public final class VelaDreamService extends DreamService {
         });
         eventBlock.setVisibility(events.isEmpty() ? View.GONE : View.VISIBLE);
         if (events.isEmpty()) return;
-        TextView heading = label("ON YOUR CALENDAR", 11, Color.rgb(198, 214, 208));
+        TextView heading = label("NOW / NEXT", 11, Color.rgb(173, 183, 197));
         heading.setLetterSpacing(.17f);
         LinearLayout.LayoutParams headParams = new LinearLayout.LayoutParams(-1, -2);
         headParams.bottomMargin = dp(12);
@@ -161,11 +161,11 @@ public final class VelaDreamService extends DreamService {
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setPadding(0, dp(9), 0, dp(9));
             // Calm sage-white for both statuses, no bright gold or green boxes.
-            TextView status = label(when, 11, ongoing ? Color.rgb(220, 237, 224) : Color.rgb(182, 207, 195));
+            TextView status = label(when, 11, ongoing ? Color.rgb(242, 196, 126) : Color.rgb(173, 183, 197));
             status.setTypeface(null, android.graphics.Typeface.BOLD);
             status.setLetterSpacing(.025f);
             row.addView(status, new LinearLayout.LayoutParams(dp(214), -2));
-            TextView summary = label(title, 16, ongoing ? Color.rgb(242, 249, 244) : Color.rgb(222, 232, 225));
+            TextView summary = label(title, 16, ongoing ? Color.rgb(244, 246, 250) : Color.rgb(214, 221, 231));
             row.addView(summary, new LinearLayout.LayoutParams(0, -2, 1));
             eventBlock.addView(row, new LinearLayout.LayoutParams(-1, -2));
         }
@@ -194,7 +194,7 @@ public final class VelaDreamService extends DreamService {
             }
             int step = (int) ((System.currentTimeMillis() / 300000L) % 4);
             float[] dx = {0f, 1f, 0f, -1f}, dy = {0f, 0f, -1f, 1f};
-            float x = dp(9) * dx[step], y = dp(7) * dy[step];
+            float x = dp(18) * dx[step], y = dp(14) * dy[step];
             clockGroup.setTranslationX(x); clockGroup.setTranslationY(y);
             eventBlock.setTranslationX(x); eventBlock.setTranslationY(y);
             if (weatherGroup != null) {weatherGroup.setTranslationX(-x);weatherGroup.setTranslationY(-y);}
@@ -217,10 +217,10 @@ public final class VelaDreamService extends DreamService {
         super.onAttachedToWindow();
         setInteractive(false); setFullscreen(true); setScreenBright(true);
         root = new FrameLayout(this);
-        root.setBackgroundColor(Color.rgb(17, 34, 38));
+        root.setBackgroundColor(Color.rgb(13, 18, 27));
         scenery = new ImageView(this);
         scenery.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        scenery.setAlpha(.72f);
+        scenery.setAlpha(.58f);
         Bitmap bitmap = loadScenery();
         if (bitmap != null) scenery.setImageBitmap(bitmap);
         root.addView(scenery, new FrameLayout.LayoutParams(-1, -1));
@@ -231,11 +231,11 @@ public final class VelaDreamService extends DreamService {
         clockGroup = new LinearLayout(this);
         clockGroup.setOrientation(LinearLayout.VERTICAL);
         clockGroup.setGravity(Gravity.START);
-        time = label(DateFormat.getTimeFormat(this).format(new Date()), 78, Color.rgb(245, 250, 246));
+        time = label(DateFormat.getTimeFormat(this).format(new Date()), 78, Color.rgb(244, 246, 250));
         time.setTypeface(android.graphics.Typeface.create("serif", android.graphics.Typeface.NORMAL));
         time.setLetterSpacing(-.055f);
         date = label(new SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(new Date()),
-            18, Color.rgb(211, 227, 220));
+            18, Color.rgb(173, 183, 197));
         LinearLayout.LayoutParams dateParams = new LinearLayout.LayoutParams(-2, -2);
         dateParams.topMargin = dp(7);
         clockGroup.addView(time, new LinearLayout.LayoutParams(-2, -2));
@@ -246,9 +246,9 @@ public final class VelaDreamService extends DreamService {
         eventBlock.setOrientation(LinearLayout.VERTICAL);
         eventBlock.setPadding(dp(22), dp(18), dp(22), dp(16));
         GradientDrawable glass = new GradientDrawable();
-        glass.setColor(Color.argb(64, 12, 29, 32));
+        glass.setColor(Color.argb(150, 24, 33, 46));
         glass.setCornerRadius(dp(18));
-        glass.setStroke(dp(1), Color.argb(41, 219, 236, 223));
+        glass.setStroke(dp(1), Color.argb(24, 244, 246, 250));
         eventBlock.setBackground(glass);
         root.addView(eventBlock, new FrameLayout.LayoutParams(-2, -2, Gravity.END | Gravity.BOTTOM));
         weatherGroup = new LinearLayout(this);
@@ -256,11 +256,11 @@ public final class VelaDreamService extends DreamService {
         weatherGroup.setOrientation(LinearLayout.VERTICAL);
         weatherGroup.setPadding(dp(20), dp(15), dp(20), dp(15));
         GradientDrawable weatherGlass = new GradientDrawable();
-        weatherGlass.setColor(Color.argb(38, 12, 29, 32));
+        weatherGlass.setColor(Color.argb(120, 24, 33, 46));
         weatherGlass.setCornerRadius(dp(17));
-        weatherGlass.setStroke(dp(1),Color.argb(25, 230, 244, 234));
+        weatherGlass.setStroke(dp(1),Color.argb(22, 244, 246, 250));
         weatherGroup.setBackground(weatherGlass);
-        TextView weatherHeader = label("LOCAL WEATHER  ·  APPROX.", 11, Color.rgb(186,207,197));
+        TextView weatherHeader = label("LOCAL WEATHER  ·  APPROX.", 11, Color.rgb(173, 183, 197));
         weatherHeader.setLetterSpacing(.16f);
         weatherGroup.addView(weatherHeader, new LinearLayout.LayoutParams(-1, -2));
         weatherNow = label("", 30, Color.rgb(245, 250, 246));
