@@ -14,6 +14,16 @@ public class CalendarIcsTest {
   if(game.size()!=2)throw new RuntimeException("Expected two seven-day sports events, got "+game.size());
   if(!"play".equals(game.get(0).kind)||!"Jefferson Park Playfield".equals(game.get(0).location)||!game.get(0).description.contains("Wear orange"))throw new RuntimeException("Playing metadata missing");
   if(!"watch".equals(game.get(1).kind)||!"Drogon Sports HD".equals(game.get(1).channel))throw new RuntimeException("Watching/channel metadata missing");
-  System.out.println("PASS ICS seven-day sports categories/channel/field, all-day, timezone, recurring weekly and EXDATE");
+  String dst="BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:fall\nSUMMARY:Fall transition\nDTSTART;TZID=America/Los_Angeles:20261025T013000\nDTEND;TZID=America/Los_Angeles:20261025T023000\nRRULE:FREQ=WEEKLY;COUNT=3\nEND:VEVENT\nBEGIN:VEVENT\nUID:cancel\nSUMMARY:Cancelled sports\nDTSTART:20261101T190000Z\nDTEND:20261101T210000Z\nSTATUS:CANCELLED\nEND:VEVENT\nEND:VCALENDAR";
+  java.util.List<CalendarIcs.Event> across=CalendarIcs.upcoming(dst,ZoneId.of("America/Los_Angeles"),LocalDate.of(2026,10,25),21);
+  if(across.size()!=3)throw new RuntimeException("Cancelled or recurring DST events mishandled: "+across.size());
+  if(across.get(0).start!=Instant.parse("2026-10-25T08:30:00Z").toEpochMilli()||
+     across.get(1).start!=Instant.parse("2026-11-01T08:30:00Z").toEpochMilli()||
+     across.get(2).start!=Instant.parse("2026-11-08T09:30:00Z").toEpochMilli())
+    throw new RuntimeException("Fall DST transitions must retain source wall time");
+  String future="BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:future\nSUMMARY:Game next month\nDTSTART:20261203T040000Z\nDTEND:20261203T060000Z\nEND:VEVENT\nEND:VCALENDAR";
+  if(CalendarIcs.upcoming(future,ZoneId.of("America/Los_Angeles"),LocalDate.of(2026,10,25),120).size()!=1)
+    throw new RuntimeException("120-day source cache silently truncated to two weeks");
+  System.out.println("PASS ICS playing/watching, all-day, timezone/DST, cancelled events, 120-day cache, RRULE/EXDATE");
  }
 }

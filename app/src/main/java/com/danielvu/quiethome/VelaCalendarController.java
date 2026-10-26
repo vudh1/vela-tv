@@ -101,23 +101,8 @@ final class VelaCalendarController {
             return new JSONArray(data);
         } catch(Exception ignored) { return empty; }
     }
-    private static boolean allowedCalendarUrl(String url){
-        try {
-            if(url==null||url.length()>4096)return false;
-            Uri u=Uri.parse(url.trim());
-            if(!"https".equalsIgnoreCase(u.getScheme())||u.getPort()!=-1
-               ||u.getUserInfo()!=null||u.getFragment()!=null)return false;
-            String host=u.getHost(),path=u.getEncodedPath();
-            if(host==null||path==null)return false;
-            boolean google="calendar.google.com".equalsIgnoreCase(host)
-                &&path.startsWith("/calendar/ical/")&&path.endsWith(".ics");
-            boolean ballerwatch="ballerwatch-web.vudhone.workers.dev".equalsIgnoreCase(host)
-                &&path.equals("/web/calendar.ics");
-            if(ballerwatch)for(String key:u.getQueryParameterNames())
-                if(!key.equals("teams")&&!key.equals("pickup")&&!key.equals("watch"))return false;
-            return google||ballerwatch;
-        }catch(Exception ignored){return false;}
-    }
+    private static boolean allowedCalendarUrl(String url){return VelaCalendarPolicy.approved(url);}
+    private static final class RevokedFeedException extends Exception {}
     private String download(String url) throws Exception {
         // Never follow a redirect to an unapproved host or feed path.
         for(int redirect=0;redirect<4;redirect++){
@@ -128,6 +113,7 @@ final class VelaCalendarController {
             try{
                 int status=connection.getResponseCode();
                 if(status>=300&&status<400){String target=connection.getHeaderField("Location");if(target==null)throw new IllegalStateException("Redirect without location");url=new URL(new URL(url),target).toString();continue;}
+                if(VelaCalendarPolicy.revokedStableFeed(url,status))throw new RevokedFeedException();
                 if(status!=200)throw new IllegalStateException("Calendar source returned HTTP "+status);
                 try(InputStream in=connection.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
                     byte[] buf=new byte[8192];int n,total=0;
@@ -224,7 +210,7 @@ final class VelaCalendarController {
             try{
                 ZoneId zone=ZoneId.systemDefault();LocalDate day=LocalDate.now(zone);
                 List<JSONObject> combined=new ArrayList<>();Set<String> ids=new HashSet<>();
-                int refreshed=0,total=0;String displayName="";
+                int refreshed=0,total=0,revoked=0;String displayName="";
                 for(String source:new String[]{"google","sport"}){
                     String url=sourceUrl(profile,source);if(url.isEmpty())continue;total++;
                     JSONArray list=cachedSource(profile,source,day.toString());
@@ -243,6 +229,12 @@ final class VelaCalendarController {
                             .putLong("success_"+source+"_"+profile,now).putString("day_"+source+"_"+profile,day.toString()).apply();
                         refreshed++;
                         displayName+=displayName.isEmpty()?calendarName(feed):" + "+(source.equals("sport")?"BallerWatch":"Google");
+                    }catch(RevokedFeedException e){
+                        // A rotated/deleted read capability is not an offline error.
+                        // Purge only this profile's sports link/cache, never Google or other profiles.
+                        prefs.edit().remove("sport_url_"+profile).remove("cache_sport_"+profile)
+                            .remove("success_sport_"+profile).remove("day_sport_"+profile).apply();
+                        list=new JSONArray();revoked++;
                     }catch(Exception e){
                         android.util.Log.w("VelaCalendar","Source refresh failed: "+e.getClass().getSimpleName());
                     }
@@ -260,7 +252,9 @@ final class VelaCalendarController {
                 if(refreshed>0)e.putLong("success_"+profile,System.currentTimeMillis());
                 if(!displayName.isEmpty())e.putString("name_"+profile,encrypt(displayName));
                 e.apply();
-                deliver(profile,true,data,refreshed==total?(array.length()==0?"Verified · no upcoming events":"Verified · updated just now"):
+                boolean stillConnected=!sourceUrl(profile,"google").isEmpty()||!sourceUrl(profile,"sport").isEmpty();
+                deliver(profile,stillConnected,data,revoked>0?"BallerWatch link revoked · reconnect this source":
+                    refreshed==total?(array.length()==0?"Verified · no upcoming events":"Verified · updated just now"):
                     refreshed>0?"Some sources failed · showing their last saved events":"Refresh failed · showing saved calendar events");
             }catch(Exception e){android.util.Log.w("VelaCalendar","Calendar refresh failed (no URL logged): "+e.getClass().getSimpleName());deliver(profile,true,cache,prefs.getLong("success_"+profile,0)>0?"Last refresh failed · showing verified cache":"Link saved, but calendar source has not returned a valid feed");}
         });

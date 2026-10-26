@@ -154,7 +154,7 @@ The Sony web remote lives at **https://vudh1.github.io/velatv/remote/**. GitHub 
 - **Phone remote Power:** The one-tap Power button uses an authenticated, owner-configured Sony IRCC toggle. A relay queue acknowledgment does not prove the TV changed state. The Settings/Input menu UI buttons are removed, but older commands remain allowlisted for backward compatibility. **No FRIDAY impact**.
 - **Sony ARC volume feedback:** With Sony IP control configured, Vela sends Sony's official native Volume Up/Down/Mute IRCC codes before falling back to Android audio control. This gives the Sony/Vizio HDMI ARC path an opportunity to display its own indicator, but Sony's on-screen volume display is still firmware-dependent; never apply both volume steps. **No FRIDAY impact**.
 - **Latency and cost:** The selected TV briefly arms fast (~180 ms) polling when the remote opens or keys are pressed. Idle Sony TV polling is ~2.5 seconds; only the selected TV on each phone gets a ~40-second heartbeat. A phone left open all night does not continuously fast-poll Cloudflare. A first press after a long idle can still be slower. **No FRIDAY impact**.
-- **Phone app-switch behavior:** Each pointer gesture sends one immediate key action; the browser's follow-on click cannot send a duplicate. For supported directional and volume buttons, deliberate long presses still repeat, but losing tab focus, switching iPhone apps, suspending Safari or switching the selected TV immediately cancels repetition. Delayed synthetic clicks after returning to Safari are ignored. **No FRIDAY impact or billing change.**
+- **Phone app-switch behavior:** Each pointer gesture sends one immediate key action; browser follow-on clicks cannot send a duplicate, even if Safari delays them during app switching. For supported directional and volume buttons, deliberate long presses still repeat, but losing tab focus, suspending Safari or switching the selected TV immediately cancels repetition. Genuine keyboard activation remains supported. **No FRIDAY impact or billing change.**
 
 **Two TVs per phone, four phones per TV:** The existing `primary-tv` Durable Object isolates up to **two Sony TVs on the same home Internet network**. One phone can pair with both, open the **TV 1 / TV 2** pill and switch the active target; buttons never broadcast to both TVs. Each TV independently supports four signed phone remotes at once, with its own command queue and disconnect/revocation. The entire iPhone remote fits one locked viewport without page scrolling; TV options and encrypted typing open as overlays. A fifth phone on either TV must free that TV's registration slot. Cloudflare Free usage remains metered: two always-connected TVs may approach the daily free request limit, so monitor usage and stop or reduce polling if necessary; do not upgrade to paid Workers automatically.
 
@@ -203,6 +203,28 @@ To update your sports/team selection, copy the new BallerWatch URL and replace
 just that source. Treat secret Google URLs as passwords; match-feed URLs can
 encode your viewing preferences. Only the approved Google and BallerWatch
 hosts can be used (including redirects).
+
+### Staged BallerWatch stable profile subscriptions (not activated by Vela)
+
+Vela source also accepts BallerWatch's optional v1 **read-only profile ICS** URL,
+`/web/v1/calendar-ics/{opaque-token}.ics`, for an individually selected, non-Guest
+Vela display profile. BallerWatch's producer service must separately pass its
+D1/key/release gate and the owner must explicitly opt in there before such a
+link exists. Vela does not provision BallerWatch, create a FRIDAY identity,
+write watchlists, or read BallerWatch's encrypted state. Keep the existing
+Google and parameterized BallerWatch ICS addresses if this service is disabled.
+
+The profile URL is encrypted with the same on-TV secret storage as legacy ICS.
+Now/Next prioritizes an ongoing event beside the next event; the detailed
+Calendar still uses All / Playing / Watching / Life. Successful refreshes
+replace cancellations, duplicate UID/occurrences are collapsed, and ordinary
+timeouts or quota errors retain the last-good encrypted cache. When the
+optional stable endpoint explicitly returns 404/410 after rotation or deletion,
+Vela removes only the active profile's revoked BallerWatch link and its
+cached events; reconnect the new link manually. A producer outage (503) does
+not revoke a previously good link. Cross-profile/Guest display is not enabled.
+No Kept reminders or private household data are consumed. Sony, Samsung and
+iPhone physical acceptance remain separate from these source-level checks.
 
 ## License and attribution
 

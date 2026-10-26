@@ -20,11 +20,12 @@ function element(id){
   if(!values[id]){
     const names=new Set();
     values[id]={
-      textContent:'',
+      textContent:'',innerHTML:'',
       attrs:{},
       setAttribute(k,v){this.attrs[k]=v;},
       classList:{
-        add(k){names.add(k);},remove(k){names.delete(k);},contains(k){return names.has(k);}
+        add(k){names.add(k);},remove(k){names.delete(k);},contains(k){return names.has(k);},
+        toggle(k,on){if(on===undefined?!names.has(k):on)names.add(k);else names.delete(k);}
       }
     };
   }
@@ -44,6 +45,10 @@ const context={
 };
 vm.createContext(context);
 vm.runInContext(source.slice(start,end),context,{filename:'calendar.js'});
+const receiveStart=source.indexOf('function receiveCalendar(json){',end);
+const receiveEnd=source.indexOf('function calendarSaveReady(',receiveStart);
+assert.ok(receiveStart>end&&receiveEnd>receiveStart,'calendar display and profile receive handlers present');
+vm.runInContext(source.slice(end,receiveEnd),context,{filename:'calendar-view.js'});
 const detailsStart=source.indexOf('function eventKey(e){');
 const detailsEnd=source.indexOf('function recentApps(){',detailsStart);
 assert.ok(detailsStart>0&&detailsEnd>detailsStart,'event details functions present');
@@ -84,6 +89,16 @@ const playing={...event(40,'Pickup football'),kind:'play',uid:'play-1',location:
 const watching={...event(60,'Sounders match'),kind:'watch',uid:'watch-1',description:'Watching · professional sports'};
 const other={...event(90,'Family birthday'),kind:'other',uid:'other-1',description:'Bring cake'};
 context.calEvents=[playing,watching,other];
+const ongoing={...event(-20,'Match in progress'),uid:'ongoing',end:fixed+40*60000};
+const nextMatch={...event(35,'Match next'),uid:'next'};
+context.calEvents=[nextMatch,ongoing,playing];
+context.updateCalendarView();
+const preview=element('#calendarPeek').innerHTML;
+assert.match(preview,/NOW \/ NEXT/,'Home offers a concise Now/Next grouping');
+assert.ok(preview.indexOf('Match in progress')<preview.indexOf('Match next'),
+  'ongoing sport comes before the next match even when provider order is unsorted');
+assert.ok(!preview.includes('Jefferson Park Playfield'),'Home never exposes event private details');
+context.calEvents=[playing,watching,other];
 context.calendarFilter='play';
 const playList=context.calendarEventList();
 assert.ok(playList.includes('Pickup football')&&!playList.includes('Sounders match'),'play tab isolates playing events');
@@ -106,6 +121,13 @@ assert.ok(context.eventDetailsBody().includes('Drogon Sports HD'),'saved channel
 context.selectedEvent=other;
 assert.ok(context.eventDetailsBody().includes('Bring cake'),'other detail shows freeform context');
 assert.ok(!context.eventDetailsBody().includes('Perfect Player'),'other event does not show IPTV actions');
+context.calEvents=[];
+context.receiveCalendar({profile:'tram',connected:true,verified:true,events:[playing]});
+assert.equal(context.calEvents.length,0,'another TV profile cannot inject its events');
+context.profileId='guest';
+context.receiveCalendar({profile:'duong',connected:true,verified:true,events:[playing]});
+assert.equal(context.calEvents.length,0,'Guest never inherits a saved profile payload');
+context.profileId='duong';
 context.calEvents=[
   event(7,'Reminder event'),
   event(12,'Another soon'),

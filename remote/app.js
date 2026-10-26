@@ -11,12 +11,16 @@
   let remotes = [], selectedRemote = null, addingTv = false;
   let holdTimer, repeatTimer, pingTimer, statusTimer;
   let activePress = null;
-  let suppressGhostClickUntil = 0;
+  // A suspended iOS tab can deliver its synthetic click arbitrarily late.
+  // Consume the next click for any gesture already sent on pointerdown,
+  // even when Safari was backgrounded longer than a fixed time threshold.
+  const pointerClicksPending = new WeakSet();
+  const recentPointerClicks = new WeakMap();
   function stopHeldKey(lostFocus = false) {
     // iOS may synthesize the original tap's click after Safari resumes.
     // Pointerdown already sent that command; ignore late accessibility-like
     // detail=0 clicks for this abandoned gesture.
-    if (lostFocus && activePress) suppressGhostClickUntil = Date.now() + 2500;
+    // Keep pointerClicksPending after focus loss until the matching click.
     clearTimeout(holdTimer); clearInterval(repeatTimer);
     holdTimer = null; repeatTimer = null;
     if (activePress) activePress.button.classList.remove('pressed');
@@ -353,14 +357,13 @@
   });
   document.querySelectorAll('[data-key]').forEach(button => {
     const key = button.dataset.key;
-    let lastPointerDown = 0;
     button.addEventListener('pointerdown', event => {
       if (event.button !== 0 || event.isPrimary === false || !state.token || document.hidden) return;
       stopHeldKey();
       const press = { button, key, pointerId: event.pointerId,
         remote: selectedRemote, token: state.token };
       activePress = press;
-      lastPointerDown = Date.now();
+      pointerClicksPending.add(button);
       button.classList.add('pressed'); send(key);
       if (['up', 'down', 'left', 'right', 'volume_up', 'volume_down'].includes(key)) {
         holdTimer = setTimeout(() => {
@@ -380,12 +383,25 @@
     };
     button.addEventListener('pointerup', cancel); button.addEventListener('pointercancel', cancel);
     button.addEventListener('pointerleave', cancel);
+    button.addEventListener('keydown', event => {
+      // Keyboard/assistive activation is legitimate even if a previous
+      // pointer gesture never received its browser-generated click.
+      if (event.key === 'Enter' || event.key === ' ') {
+        pointerClicksPending.delete(button); recentPointerClicks.delete(button);
+      }
+    });
     button.addEventListener('click', event => {
-      // The pointerdown already sent one command. A click synthesized after
-      // Safari was backgrounded must never send it a second time. Keyboard/
-      // assistive activation has detail=0 and does not need a pointerdown.
-      if (event.detail === 0 && !document.hidden
-          && Date.now() > suppressGhostClickUntil && Date.now() - lastPointerDown > 400) send(key);
+      if (pointerClicksPending.has(button)) {
+        pointerClicksPending.delete(button);
+        recentPointerClicks.set(button,Date.now());
+        return;
+      }
+      // iOS may produce a second, detail=0 synthetic click immediately after
+      // the pointer's ordinary click when the page returns to foreground.
+      if (Date.now()-(recentPointerClicks.get(button)||0)<1000) return;
+      // Touch/mouse commands are sent on pointerdown. A detail=0 click with
+      // no preceding pointer is keyboard or accessibility activation.
+      if (event.detail === 0 && !document.hidden) send(key);
     });
   });
   $('release').addEventListener('click', async () => {

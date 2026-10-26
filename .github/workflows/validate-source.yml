@@ -53,8 +53,10 @@ jobs:
       - name: Test Android iCal parser, recurrence and sports metadata
         run: |
           javac -source 8 -target 8 -classpath build/ci-classes \
-            -d build/ci-classes tests/java/com/danielvu/quiethome/CalendarIcsTest.java
+            -d build/ci-classes tests/java/com/danielvu/quiethome/CalendarIcsTest.java \
+            tests/java/com/danielvu/quiethome/VelaCalendarPolicyTest.java
           java -cp build/ci-classes com.danielvu.quiethome.CalendarIcsTest
+          java -cp build/ci-classes com.danielvu.quiethome.VelaCalendarPolicyTest
       - name: Test Sony IRCC command encoding and key constraints
         run: |
           javac -source 8 -target 8 -d build/ci-classes \
