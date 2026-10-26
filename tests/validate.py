@@ -299,7 +299,8 @@ assert "'/api/challenge'" in remote_js and "'/api/resume'" in remote_js
 assert "path === '/api/resume'" in remote_worker and 'pairedKeyId' in remote_worker
 # Page suspension must cancel a pressed key, but must not revoke the trusted
 # controller lease (Safari frequently pagehides when changing phone apps).
-assert "window.addEventListener('pagehide', () => stopHeldKey(true))" in remote_js
+assert "window.addEventListener('pagehide', suspendInput)" in remote_js
+assert 'suppressGhostClickUntil = Math.max(suppressGhostClickUntil, Date.now() + 2500)' in remote_js
 assert "document.addEventListener('visibilitychange'" in remote_js
 assert 'clearInterval(repeatTimer)' in remote_js
 assert 'content-security-policy' in remote_page.lower()

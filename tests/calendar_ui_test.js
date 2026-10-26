@@ -7,7 +7,7 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
 const source=fs.readFileSync(path.resolve(__dirname,'../app/src/main/assets/app.js'),'utf8');
-const start=source.indexOf('function calendarTime(ms,allDay){');
+const start=source.indexOf('function dedupeCalendarEvents(items){');
 const end=source.indexOf('function updateCalendarView(){',start);
 assert.ok(start>=0&&end>start,'calendar utility section present');
 const fixed=new Date(2026,9,24,12,0,0).getTime();
@@ -24,7 +24,8 @@ function element(id){
       attrs:{},
       setAttribute(k,v){this.attrs[k]=v;},
       classList:{
-        add(k){names.add(k);},remove(k){names.delete(k);},contains(k){return names.has(k);}
+        add(k){names.add(k);},remove(k){names.delete(k);},contains(k){return names.has(k);},
+        toggle(k,force){if(force===undefined?!names.has(k):force)names.add(k);else names.delete(k);}
       }
     };
   }
@@ -152,4 +153,32 @@ assert.equal(calls.length,2,'deduplicate alert per event per profile');
 context.calEvents=[event(8,'<script>alert(1)</script>')];
 assert.ok(context.calendarEventList().includes('&lt;script>'),'event titles are HTML escaped');
 assert.ok(!context.calendarEventList().includes('<script>'),'event titles are never injected as markup');
+// The same game can arrive from Google and BallerWatch with different UIDs.
+const updateStart=source.indexOf('function updateCalendarView(){');
+const updateEnd=source.indexOf('function calendarSaveReady(',updateStart);
+vm.runInContext(source.slice(updateStart,updateEnd),context,{filename:'calendar-receive.js'});
+context.profileId='duong';context.screen='';context.document.hidden=true;
+const shared={...event(-10,'Match Night'),kind:'play',location:'Field A'};
+context.receiveCalendar({profile:'duong',connected:true,verified:false,sources:[{kind:'google'},{kind:'sport'}],events:[
+ {...shared,uid:'google-99'}, {...shared,uid:'ballerwatch-101'},
+ {...shared,uid:'another-field',location:'Field B'},
+ event(25,'Next Game')
+]});
+assert.equal(context.calEvents.length,3,'semantic duplicate suppressed, separate venues kept');
+assert.ok(element('#calendarPeek').innerHTML.includes('NOW / NEXT · SAVED'),'stale cached Home is labeled saved');
+assert.ok(element('#calendarPeek').innerHTML.includes('Field A'),'known playing field appears in quiet peek');
+assert.ok(!element('#calendarPeek').innerHTML.includes('Description'),'private notes stay off Home');
+context.receiveCalendar({profile:'tram',connected:true,events:[event(8,'Other profile private event')]});
+assert.equal(context.calEvents.length,3,'late result for other TV profile never replaces current events');
+context.profileId='guest';context.calEvents=[];
+context.receiveCalendar({profile:'guest',connected:true,verified:true,events:[event(8,'Leaked cache')]});
+assert.equal(context.calEvents.length,0,'Guest rejects even an erroneous native calendar payload');
+context.profileId='duong';
+const beforeDST=Date.parse('2026-11-01T08:30:00Z');
+const afterDST=Date.parse('2026-11-01T09:30:00Z');
+assert.equal(context.dedupeCalendarEvents([
+ {title:'Game',start:beforeDST,end:beforeDST+60000,kind:'play'},
+ {title:'Game',start:afterDST,end:afterDST+60000,kind:'play'}
+]).length,2,'repeated local DST hour has distinct absolute instants');
 console.log('PASS calendar date, categories, private event details, saved TV channels, reminders, profile scoping and escaping');
+console.log('PASS Now/Next saved state, cross-provider duplicate removal, field distinction and DST instants');

@@ -12,6 +12,12 @@
   let holdTimer, repeatTimer, pingTimer, statusTimer;
   let activePress = null;
   let suppressGhostClickUntil = 0;
+  function suspendInput() {
+    // WebKit can deliver a delayed synthetic click even when pointerup ran
+    // before the browser lost foreground. Invalidate the whole gesture epoch.
+    suppressGhostClickUntil = Math.max(suppressGhostClickUntil, Date.now() + 2500);
+    stopHeldKey(true);
+  }
   function stopHeldKey(lostFocus = false) {
     // iOS may synthesize the original tap's click after Safari resumes.
     // Pointerdown already sent that command; ignore late accessibility-like
@@ -19,7 +25,10 @@
     if (lostFocus && activePress) suppressGhostClickUntil = Date.now() + 2500;
     clearTimeout(holdTimer); clearInterval(repeatTimer);
     holdTimer = null; repeatTimer = null;
-    if (activePress) activePress.button.classList.remove('pressed');
+    if (activePress) {
+      activePress.button.classList.remove('pressed');
+      activePress.button.setAttribute('aria-pressed', 'false');
+    }
     activePress = null;
   }
   const resumeTasks = new WeakMap();
@@ -94,7 +103,7 @@
     message('');
   }
   function selectTv(remote) {
-    stopHeldKey();
+    suspendInput();
     snapshot(); selectedRemote = remote;
     state.tvId = remote.tvId || ''; state.tvName = remote.tvName || 'Vela TV';
     state.token = remote.token || ''; state.textPublicKey = remote.textPublicKey || '';
@@ -310,7 +319,7 @@
         remote: selectedRemote, token: state.token };
       activePress = press;
       lastPointerDown = Date.now();
-      button.classList.add('pressed'); send(key);
+      button.classList.add('pressed'); button.setAttribute('aria-pressed', 'true'); send(key);
       if (['up', 'down', 'left', 'right', 'volume_up', 'volume_down'].includes(key)) {
         holdTimer = setTimeout(() => {
           if (activePress !== press || document.hidden || selectedRemote !== press.remote
@@ -357,11 +366,11 @@
     status();
   }
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) stopHeldKey(true);
+    if (document.hidden) suspendInput();
     else foreground();
   });
-  window.addEventListener('blur', () => stopHeldKey(true));
-  window.addEventListener('pagehide', () => stopHeldKey(true));
+  window.addEventListener('blur', suspendInput);
+  window.addEventListener('pagehide', suspendInput);
   window.addEventListener('focus', foreground);
   window.addEventListener('online', status);
   $('tvPill').addEventListener('click', () => {

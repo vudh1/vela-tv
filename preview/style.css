@@ -431,3 +431,66 @@ body.light .event-day-divider:after{background:linear-gradient(90deg,rgba(27,60,
 .event-details-copy{padding:12px 15px 16px;border-bottom:1px solid rgba(224,243,232,.105)}
 .event-details-copy p{white-space:pre-line!important;overflow-wrap:anywhere;color:rgba(241,249,243,.86)!important;
  font-size:14px!important;line-height:1.65!important;margin-top:10px!important;max-width:100%!important}
+
+/* Quiet Glass v1 / Vela TV semantic mapping — no shared runtime dependency.
+   All focus transitions use only opacity/transform/color; no live backdrop blur. */
+:root{
+ --friday-canvas:#0D121B;--friday-surface:#18212E;--friday-raised:#243143;
+ --friday-text:#F4F6FA;--friday-secondary:#ADB7C5;--friday-edge:#3C4B5D;
+ --vela-gold:#F2C47E;--vela-focus:#BCEAFF;
+ --text:var(--friday-text);--muted:var(--friday-secondary);
+ --glass:rgba(24,33,46,.72);--hair:rgba(173,183,197,.19)
+}
+body{background:var(--friday-canvas)}
+.scrim{background:linear-gradient(90deg,rgba(13,18,27,.84),rgba(13,18,27,.48) 48%,rgba(13,18,27,.14)),
+ linear-gradient(0deg,rgba(13,18,27,.83),transparent 60%)}
+.clock{font-variant-numeric:tabular-nums;color:var(--friday-text);text-shadow:0 5px 24px rgba(0,0,0,.24)}
+.daydate{color:var(--friday-secondary)}
+.favorites.dock{background:rgba(13,18,27,.27);border-color:rgba(244,246,250,.06)}
+.app-icon-frame{background:rgba(13,18,27,.34)}
+.app-card.selected,.app-card:focus{
+ border-color:var(--vela-focus);background:rgba(36,49,67,.69);
+ box-shadow:0 0 0 3px rgba(188,234,255,.17),0 16px 32px rgba(0,0,0,.28);
+ transform:translateY(-4px) scale(1.045)
+}
+.gear,.calendar-button,.monitor-button{background:rgba(24,33,46,.63);border-color:rgba(173,183,197,.16)}
+.brand.selected,.brand:focus,.gear.selected,.gear:focus,
+.calendar-button.selected,.calendar-button:focus,.monitor-button.selected,.monitor-button:focus{
+ border-color:var(--vela-focus);background:var(--friday-raised);
+ box-shadow:0 0 0 3px rgba(188,234,255,.13)
+}
+.calendar-badge{background:var(--vela-gold);color:var(--friday-canvas)}
+.calendar-peek{width:min(420px,43vw)}
+.peek-heading{color:var(--vela-gold);letter-spacing:.16em}
+.event-peek:before,.event-peek.ongoing:before{background:var(--vela-gold)}
+.event-meta,.event-item.ongoing .event-meta{color:var(--friday-secondary)}
+.event-peek.ongoing .event-meta{color:var(--vela-gold)}
+.event-hint{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+ color:var(--friday-secondary);font-size:clamp(13px,.9vw,17px);line-height:1.3}
+.event-peek .event-summary{font-size:clamp(16px,1.04vw,20px)}
+.event-peek .event-meta{font-size:clamp(13px,.85vw,16px)}
+.focus-label{font-size:clamp(16px,1.08vw,21px);padding:8px 14px;max-width:360px}
+.event-meta{font-size:clamp(13px,.83vw,16px)}
+.panel-body .event-summary{font-size:clamp(16px,1vw,20px)}
+.panel-body .event-when,.row-sub{font-size:clamp(13px,.82vw,16px)}
+.calendar-filter{font-size:clamp(14px,.84vw,17px)}
+.weather-card{background:rgba(13,18,27,.35);border-color:rgba(244,246,250,.07);
+ color:var(--friday-text);text-shadow:0 1px 8px rgba(0,0,0,.35)}
+.weather-kicker,.weather-location,.weather-precip{color:var(--friday-secondary)}
+.panel{background:linear-gradient(145deg,rgba(24,33,46,.98),rgba(13,18,27,.98));
+ border-color:rgba(173,183,197,.16)}
+.panel h2{color:var(--friday-text)}
+.panel-row{border-color:rgba(173,183,197,.09);background:rgba(244,246,250,.035)}
+.panel-row.selected,.panel-row:focus,.close.selected,.close:focus,
+.mini-button.selected,.mini-button:focus,.calendar-filter.selected,.calendar-filter:focus,
+.panel-body .event-item.focusable.selected,.panel-body .event-item.focusable:focus{
+ border-color:var(--vela-focus);outline:0;background:rgba(36,49,67,.85);
+ box-shadow:inset 0 0 0 1px rgba(188,234,255,.60)}
+.row-right,.eyebrow,.connection-pill.pending{color:var(--vela-gold)}
+.overlay.startup-panel{background:radial-gradient(ellipse 62% 65% at 50% 44%,#1c2633 0%,#0D121B 68%,#070A10 100%)}
+.startup-avatar-card.selected .startup-avatar,.startup-avatar-card:focus .startup-avatar{
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.29),0 0 43px rgba(var(--tint),.36),
+ 0 0 0 2px rgba(242,196,126,.35),0 19px 43px rgba(0,0,0,.30)}
+.startup-footer{color:var(--friday-secondary)}
+@media(prefers-reduced-motion:reduce){.app-card,.gear,.calendar-button,.monitor-button,
+ .startup-avatar,.startup-avatar-card,.focus-label,.event-reminder{transition:none!important}}

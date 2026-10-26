@@ -202,6 +202,21 @@ async function run() {
   await flush();
   assert.equal(commands.filter(c => c.key === 'down').length, sentBeforeBlur,
     'a blurred tab must stop an already-running repeat interval');
+  assert.equal(down.attributes.get('aria-pressed'), 'false',
+    'cancelling a gesture clears accessible pressed feedback');
+  // Safari can complete pointerup before app switching, then replay an
+  // accessibility-style click after return. This was not covered by the old
+  // activePress-only background guard.
+  const left = buttons.find(button => button.dataset.key === 'left');
+  left.fire('pointerdown', { pointerId: 9 });
+  left.fire('pointerup', { pointerId: 9 });
+  const leftCount = commands.filter(c => c.key === 'left').length;
+  document.hidden = true; triggerDocument('visibilitychange');
+  document.hidden = false; triggerDocument('visibilitychange');
+  left.fire('click', { detail: 0 });
+  await flush();
+  assert.equal(commands.filter(c => c.key === 'left').length, leftCount,
+    'a delayed synthetic click after completed pointerup cannot duplicate a press');
   console.log('PASS phone remembers two Sony TVs and routes every command to the selected pill');
   console.log('PASS app switching and tab blur never create duplicate remote key presses');
 }

@@ -16,6 +16,20 @@ const context = {esc: text => String(text).replace(/&/g, '&amp;').replace(/</g, 
 vm.createContext(context);
 vm.runInContext(source.slice(start, end), context);
 
+// Shared native DreamService reads the active profile marker. Guest must never
+// alias Duong here even though Guest itself is not persisted across cold start.
+const guestSaved = {};
+const guestContext = {profileId:'guest',profiles:[{id:'duong',name:'Duong'},{id:'guest',name:'Guest'}],
+  save:(key,value)=>{guestSaved[key]=value;}};
+vm.createContext(guestContext);
+vm.runInContext(source.slice(source.indexOf('function persistProfiles(){'),
+  source.indexOf('function persistAppearance(){')),guestContext);
+guestContext.persistProfiles();
+assert.equal(guestSaved.active_profile_v2,'guest','DreamService sees Guest and hides saved private calendar');
+assert.ok(!guestSaved.profile_data_v2.includes('"id":"guest"'),'Guest has no persisted profile record');
+guestContext.profileId='duong';guestContext.persistProfiles();
+assert.equal(guestSaved.active_profile_v2,'duong','returning to owner restores normal native cache scope');
+
 assert.equal(context.uiTitle('Daily life'), 'Daily Life');
 assert.equal(context.uiTitle('Apps & activity'), 'Apps & Activity');
 assert.equal(context.uiTitle('Device & support'), 'Device & Support');
