@@ -41,6 +41,7 @@ final class VelaRemoteClient {
     private volatile boolean polling;
     private volatile long generation;
     private volatile String cachedToken;
+    private volatile int pairedCount = -1;
     private final AtomicBoolean generatingPin = new AtomicBoolean(false);
 
     private VelaRemoteClient(Context c) {
@@ -57,6 +58,7 @@ final class VelaRemoteClient {
     }
     boolean enabled() { return prefs.getBoolean("enabled", false) && token().length() == 64; }
     boolean revocationPending() { return !prefs.getBoolean("enabled", false) && token().length() == 64; }
+    int pairedCount() { return pairedCount; }
     private String token() {
         if (cachedToken != null) return cachedToken;
         cachedToken = decrypt(prefs.getString("token_encrypted", ""));
@@ -141,6 +143,8 @@ final class VelaRemoteClient {
                 JSONObject answer = post(rotating ? "/api/tv/pin" : "/api/tv/enroll",
                     rotating ? deviceToken : "", payload);
                 if (!answer.optBoolean("ok")) throw new Exception("Enrollment rejected");
+                if (answer.has("pairedCount")) updatePairedCount(answer.optInt("pairedCount", -1));
+                else if (!rotating) updatePairedCount(0);
                 prefs.edit().putString("token_encrypted", sealedToken)
                     .remove("pin_encrypted").putBoolean("enabled", true).apply();
                 cachedToken = deviceToken;
@@ -165,6 +169,7 @@ final class VelaRemoteClient {
             try { if (oldToken.length() == 64) post("/api/tv/disable", oldToken, new JSONObject());
                 prefs.edit().remove("token_encrypted").remove("pin_encrypted").apply();
                 cachedToken = "";
+                updatePairedCount(0);
                 callback.done("Remote access disabled."); }
             catch (Exception ex) { callback.done("Remote paused. Revoke again when Cloudflare is reachable."); }
         }, "VelaRemoteDisable").start();
@@ -187,6 +192,7 @@ final class VelaRemoteClient {
                     String textPublicKey = secureText.publicKey();
                     if (!textPublicKey.isEmpty()) poll.put("textPublicKey", textPublicKey);
                     JSONObject answer = post("/api/tv/poll", token(), poll);
+                    if (answer.has("pairedCount")) updatePairedCount(answer.optInt("pairedCount", -1));
                     // Check on every active poll: the owner might reopen the
                     // PIN dialog while an already-paired controller is online.
                     if (answer.optBoolean("active") && !answer.optBoolean("pinPending"))
@@ -213,6 +219,7 @@ final class VelaRemoteClient {
                         prefs.edit().putBoolean("enabled", false)
                             .remove("token_encrypted").remove("pin_encrypted").apply();
                         cachedToken = "";
+                        updatePairedCount(0);
                         break;
                     }
                     next = 15_000;
@@ -220,6 +227,11 @@ final class VelaRemoteClient {
                 try { Thread.sleep(next); } catch (InterruptedException ignored) { break; }
             }
         } finally { synchronized (this) { if (generation == epoch) polling = false; } }
+    }
+    private void updatePairedCount(int count) {
+        if (count < 0 || count == pairedCount) return;
+        pairedCount = count;
+        MainActivity.remotePairingStatusChanged(count);
     }
     private static boolean allowed(String key) {
         switch (key) {

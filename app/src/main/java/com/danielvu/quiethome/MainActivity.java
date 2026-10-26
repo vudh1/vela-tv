@@ -795,6 +795,12 @@ public final class MainActivity extends Activity {
         });
     }
 
+    /** Keep the currently open remote settings in sync with the relay. */
+    static void remotePairingStatusChanged(int count) {
+        MainActivity activity = visibleActivity.get();
+        if (activity != null) activity.sendToJs("QH.remotePairingStatusChanged(" + count + ")");
+    }
+
     private void showRemotePin(String pin) {
         if (remotePinDialog != null) remotePinDialog.dismiss();
         android.widget.TextView code = new android.widget.TextView(this);
@@ -835,21 +841,24 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public boolean remoteRevocationPending() {
             return VelaRemoteClient.get(MainActivity.this).revocationPending();
         }
+        @JavascriptInterface public int remotePairedCount() {
+            return VelaRemoteClient.get(MainActivity.this).pairedCount();
+        }
         @JavascriptInterface public void pairWebRemote() {
             runOnUiThread(() -> generateRemotePin());
         }
         @JavascriptInterface public void rotateWebRemotePin() {
             runOnUiThread(() -> new AlertDialog.Builder(MainActivity.this)
-                .setTitle("Regenerate remote PIN?")
-                .setMessage("The old PIN and any connected phone will stop working immediately. A new 10-digit PIN will appear on this TV.")
+                .setTitle("Add Another Remote?")
+                .setMessage("Create a fresh one-time PIN for the next phone. Already paired phones will remain connected. Any previous unused PIN expires.")
                 .setNegativeButton("Cancel", (d, w) -> {})
                 .setPositiveButton("Regenerate", (d, w) -> generateRemotePin())
                 .show());
         }
         @JavascriptInterface public void disableWebRemote() {
             runOnUiThread(() -> new AlertDialog.Builder(MainActivity.this)
-                .setTitle("Disable Vela Remote?")
-                .setMessage("Disconnect the web remote and revoke this TV's current enrollment.")
+                .setTitle("Turn Off Vela Remote?")
+                .setMessage("Revoke this TV's enrollment and all of its paired phones, if any. This cannot be undone without generating new PINs.")
                 .setNegativeButton("Cancel", (d, w) -> {})
                 .setPositiveButton("Disable", (d, w) -> VelaRemoteClient.get(MainActivity.this)
                     .disable(message -> sendToJs("QH.remoteStatusReady(" + JSONObject.quote(message) + ")")))

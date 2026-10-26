@@ -186,9 +186,27 @@
     if (selectedRemote) selectedRemote.token = '';
     $('pin').value = ''; message(reason); showConnection();
   }
+  async function forgetRemote(remote, reason) {
+    if (!remote || !remotes.includes(remote)) return;
+    suspendInput();
+    // Only erase the device's recovery key after the relay confirmed a
+    // release, or status confirmed that the TV enrollment no longer exists.
+    remotes = remotes.filter(item => item !== remote);
+    if (remote === selectedRemote) {
+      selectedRemote = null;
+      state.token = ''; state.tvId = ''; state.tvName = '';
+      state.textPublicKey = ''; state.online = false; state.sameNetwork = false;
+    }
+    await saveRemotes();
+    if (!selectedRemote) {
+      if (remotes.length) selectTv(remotes[0]);
+      else { if (pingTimer) clearInterval(pingTimer); pingTimer = null; showPair(); }
+    } else drawTvPicker();
+    if (reason) message(reason);
+  }
   const errors = {
     incorrect_pin: 'Incorrect PIN. Check the 10-digit code shown in Vela TV settings.',
-    different_network: 'Your phone and TV must use the same home Internet connection. Turn off your VPN or mobile data.',
+    different_network: 'Vela sees different Internet addresses. Check both devices use home Wi-Fi; on iPhone, temporarily turn off Wi-Fi → Limit IP Address Tracking and any VPN. IPv4/IPv6 differences can also trigger this check.',
     tv_offline: 'Vela TV is offline. Open Vela and check Remote settings.',
     max_tvs: 'Two Sony TVs are already registered. Disable remote on a TV before adding another.',
     max_controllers: 'Four remotes are already paired. Disconnect one or reset remote access on the TV.',
@@ -247,6 +265,13 @@
       const selected = selectedRemote;
       const data = await request('/api/status' + (selected?.tvId ? '?tvId=' + encodeURIComponent(selected.tvId) : ''));
       if (selected !== selectedRemote) return;
+      if (selected?.tvId && !data.tvId) {
+        // An authenticated Worker response with no such TV ID means the TV
+        // was disabled/re-enrolled. Offline TVs retain their ID, so do not
+        // erase recovery keys merely because the TV is unreachable.
+        await forgetRemote(selected, 'This TV revoked its connection. Pair again with a new PIN.');
+        return;
+      }
       // An already-paired phone learns the model after the TV updates. No
       // re-pairing, public device discovery, or locally configured name needed.
       if (selected && data.tvId === selected.tvId && typeof data.tvName === 'string'
@@ -349,15 +374,19 @@
   $('release').addEventListener('click', async () => {
     const token = state.token;
     const departing = selectedRemote;
+    if (!departing) return;
+    $('release').disabled = true;
     manuallyDisconnected = true;
-    disconnected('Disconnected. Generate a new PIN on Vela TV to pair again.');
-    try { await request('/api/release', {}, token); }
-    catch (_) { /* The short-lived lease expires automatically. */ }
-    remotes = remotes.filter(remote => remote !== departing);
-    selectedRemote = null; state.token = '';
-    await saveRemotes().catch(() => {});
-    if (remotes.length) selectTv(remotes[0]); else showPair();
-    manuallyDisconnected = false;
+    try {
+      if (!token) throw new Error('session_expired');
+      await request('/api/release', {}, token);
+      await forgetRemote(departing, 'Phone disconnected. Generate a new TV PIN to reconnect.');
+    } catch (_) {
+      // Preserve the signing key: otherwise the relay may still count this
+      // phone as paired while the phone can never authorize its own removal.
+      message('Could not confirm disconnect. Your pairing is saved; reconnect and try again.');
+      if (!state.token) status();
+    } finally { manuallyDisconnected = false; $('release').disabled = false; }
   });
   // Do not release on pagehide: mobile browsers routinely suspend tabs.
   function foreground() {

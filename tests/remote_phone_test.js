@@ -75,6 +75,8 @@ async function run() {
   const tokens = { '1111111111': { token: 'first-token', tvId: 'tv-a', tvName: 'Living Room' },
     '2222222222': { token: 'second-token', tvId: 'tv-b', tvName: 'Bedroom' } };
   const tvNames = new Map([['tv-a', 'Living Room'], ['tv-b', 'Bedroom']]);
+  const activeTvs = new Set(['tv-a', 'tv-b']);
+  let failNextRelease = false;
   const commands = [];
   async function fetchFake(url, options) {
     const address = new URL(url);
@@ -84,13 +86,18 @@ async function run() {
     if (address.pathname === '/api/connect') response = tokens[payload.pin] || { error: 'incorrect_pin' };
     else if (address.pathname === '/api/status') {
       const tvId = address.searchParams.get('tvId');
-      response = { online: true, busy: false, sameNetwork: true,
-        ...(tvId ? { tvId, tvName: tvNames.get(tvId) } : {}) };
+      const exists = !tvId || activeTvs.has(tvId);
+      response = { online: exists, busy: false, sameNetwork: exists,
+        ...(tvId && exists ? { tvId, tvName: tvNames.get(tvId) } : {}) };
     }
-    else if (address.pathname === '/api/heartbeat') response = { textPublicKey: '' };
+    else if (address.pathname === '/api/heartbeat') response = activeTvs.has(key === 'first-token' ? 'tv-a' : 'tv-b')
+      ? { textPublicKey: '' } : { error: 'session_expired' };
     else if (address.pathname === '/api/command') {
       commands.push({ token: key, key: payload.key }); response = { ok: true };
-    } else if (address.pathname === '/api/release') response = { ok: true };
+    } else if (address.pathname === '/api/release') {
+      response = failNextRelease ? { error: 'unavailable' } : { ok: true };
+      failNextRelease = false;
+    }
     else response = { error: 'unsupported' };
     return { ok: !response.error, status: response.error ? 401 : 200,
       async json() { return response; } };
@@ -217,8 +224,23 @@ async function run() {
   await flush();
   assert.equal(commands.filter(c => c.key === 'left').length, leftCount,
     'a delayed synthetic click after completed pointerup cannot duplicate a press');
+  // If release fails, retain the trusted private key so the phone can retry.
+  failNextRelease = true;
+  await element('release').fire('click'); await flush();
+  assert.equal(records.get('trustedTvs').length, 2);
+  assert.match(element('error').textContent, /Could not confirm disconnect/);
+  await element('release').fire('click'); await flush();
+  assert.equal(records.get('trustedTvs').length, 1);
+  assert.equal(element('tvPill').querySelector('span').textContent, 'Sony BRAVIA 4K VH2 (2)');
+  // A revoked TV is missing from status, unlike a merely offline TV.
+  activeTvs.delete('tv-b');
+  triggerWindow('focus'); await flush();
+  assert.equal(records.has('trustedTvs'), false,
+    'TV-side revocation must clear the phone pill and saved signing key');
+  assert.equal(element('controller').classList.contains('hidden'), true);
   console.log('PASS phone remembers two Sony TVs and routes every command to the selected pill');
   console.log('PASS app switching and tab blur never create duplicate remote key presses');
+  console.log('PASS failed disconnect preserves trust; TV revocation clears phone trust');
 }
 
 run().catch(error => { console.error(error); process.exitCode = 1; });

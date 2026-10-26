@@ -359,7 +359,13 @@ test('a new TV network invalidates the old controller lease', async () => {
 test('TV can revoke all sessions and no API routes permit arbitrary commands', async () => {
   const { env } = setup(); await enroll(env);
   const connected = await call(env, '/api/connect', { data: { pin: PIN } });
+  const before = await call(env, '/api/status?tvId=' + connected.body.tvId);
+  assert.equal(before.body.tvId, connected.body.tvId);
+  assert.equal((await poll(env)).body.pairedCount, 1);
   assert.equal((await call(env, '/api/tv/disable', { origin: null, data: {}, token: TV_TOKEN })).status, 200);
+  const after = await call(env, '/api/status?tvId=' + connected.body.tvId);
+  assert.equal(after.status, 200);
+  assert.equal(after.body.tvId, undefined, 'phone can confirm revocation without treating an offline TV as revoked');
   assert.equal((await call(env, '/api/command', { token: connected.body.token, data: { key: 'up' } })).status, 401);
   assert.equal((await poll(env)).status, 401);
   assert.equal((await call(env, '/api/anything', { data: {} })).status, 404);
@@ -448,6 +454,9 @@ test('explicit disconnect removes only its phone; network change revokes all', a
   const identity = await controllerIdentity();
   let session = await call(env, '/api/connect', { data: { pin: PIN, publicKey: identity.publicKey } });
   assert.equal((await call(env, '/api/release', { data: {}, token: session.body.token })).status, 200);
+  assert.equal((await poll(env)).body.pairedCount, 0, 'Sony settings must lose the revoke-all-phones option');
+  assert.equal((await call(env, '/api/status?tvId=' + session.body.tvId)).body.tvId, session.body.tvId,
+    'the TV enrollment stays available for adding a new phone');
   assert.equal((await call(env, '/api/challenge', { data: {} })).status, 409);
   assert.equal((await rotate(env)).status, 200);
   session = await call(env, '/api/connect', { data: { pin: NEXT_PIN, publicKey: identity.publicKey } });

@@ -284,12 +284,15 @@ function renderPanel(type,focusKey,retainScroll){hideUpcomingReminder();var host
  row('recovery','Recovery','Open','Return to Sony Home and restore controls')+
  row('about','About Vela','Info','Version and privacy');
  }
- else if(type==='remoteSettings'){title='Web remote';subtitle='Use your phone at vudh1.github.io/velatv/remote.';
- body=(bridge&&bridge.remoteRevocationPending&&bridge.remoteRevocationPending()?row('remoteDisable','Retry revocation','Pending','The TV is paused until Cloudflare confirms removal'):
+ else if(type==='remoteSettings'){title='Web Remote';subtitle='Use your phone at vudh1.github.io/velatv/remote.';
+ var paired=bridge&&bridge.remotePairedCount?bridge.remotePairedCount():-1;
+ var pairingLabel=paired<0?'Checking phones…':paired===1?'1 phone paired':paired+' phones paired';
+ body=(bridge&&bridge.remoteRevocationPending&&bridge.remoteRevocationPending()?row('remoteDisable','Retry Revocation','Pending','The TV is paused until Cloudflare confirms removal'):
  bridge&&bridge.remoteEnabled&&bridge.remoteEnabled()?
+ '<div class="version-meta" id="remotePairedStatus">'+esc(pairingLabel)+'</div>'+
  row('remoteRotate','Add Another Remote','Generate PIN','Pair another phone without disconnecting existing remotes (up to 4)')+
- row('remoteDisable','Disable remote','Revoke','Disconnect all phones and revoke this TV key'):
- row('remotePair','Enable remote','Generate PIN','Generate a new private 10-digit PIN on this TV'))+
+ row('remoteDisable',paired>0?'Disconnect All Phones':'Turn Off Web Remote',paired>0?'Revoke':'Turn Off',paired>0?'Revoke all paired phones and remove this TV enrollment':'Remove this TV enrollment; no phones are paired'):
+ row('remotePair','Enable Remote','Generate PIN','Generate a new private 10-digit PIN on this TV'))+
  row('remoteAccessibility','Control other apps','Sony settings','Optional accessibility service; app compatibility varies')+
  row('sonyIpSetup','Sony native-app controls',bridge&&bridge.sonyIpControlEnabled&&bridge.sonyIpControlEnabled()?'Connected':'Set up','Optional IP control for Netflix/YouTube navigation; key stays on the TV')+
  (bridge&&bridge.sonyIpControlEnabled&&bridge.sonyIpControlEnabled()?
@@ -675,6 +678,6 @@ document.addEventListener('keydown',function(e){if(!preview)return;
  if(e.key==='Enter'){e.preventDefault();if(!e.repeat){previewEnterAt=Date.now();previewLong=false;}else if(!previewLong&&Date.now()-previewEnterAt>=500){previewLong=true;remote('longselect');}return;}
  var k={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',Escape:'back',Backspace:'back'}[e.key];if(k){e.preventDefault();remote(k);}});
 document.addEventListener('keyup',function(e){if(preview&&e.key==='Enter'){e.preventDefault();if(!previewLong)remote('select');previewEnterAt=0;previewLong=false;}});
-window.QH={pause:pause,checkWakeProfilePrompt:checkWakeProfilePrompt,profileNameReady:profileNameReady,profileDeleteConfirmed:profileDeleteConfirmed,remote:remote,remoteStatusReady:function(message){toast(message);if(screen==='remoteSettings')renderPanel('remoteSettings');},refreshApps:refreshApps,receiveApps:receiveApps,catalogRefreshed:catalogRefreshed,iconReady:iconReady,refreshWallpaper:refreshWallpaper,wallpaperReady:wallpaperReady,resume:resume,tick:clock,updateStatusReady:receiveUpdateStatus,receiveCalendar:receiveCalendar,calendarSaveReady:calendarSaveReady,pairingReady:pairingReady,pairingCompleted:pairingCompleted,volumeChanged:volumeChanged,watchChannelReady:watchChannelReady,weatherReady:function(data){if(window.VelaWeatherClient)window.VelaWeatherClient.receive(data);}};
+window.QH={pause:pause,checkWakeProfilePrompt:checkWakeProfilePrompt,profileNameReady:profileNameReady,profileDeleteConfirmed:profileDeleteConfirmed,remote:remote,remotePairedCountChanged:function(){if(screen==='remoteSettings'){var focus=focusedControl?{act:focusedControl.getAttribute('data-act'),id:focusedControl.getAttribute('data-id')||undefined}:null;renderPanel('remoteSettings',focus,true);}},remoteStatusReady:function(message){toast(message);if(screen==='remoteSettings')renderPanel('remoteSettings');},refreshApps:refreshApps,receiveApps:receiveApps,catalogRefreshed:catalogRefreshed,iconReady:iconReady,refreshWallpaper:refreshWallpaper,wallpaperReady:wallpaperReady,resume:resume,tick:clock,updateStatusReady:receiveUpdateStatus,receiveCalendar:receiveCalendar,calendarSaveReady:calendarSaveReady,pairingReady:pairingReady,pairingCompleted:pairingCompleted,volumeChanged:volumeChanged,watchChannelReady:watchChannelReady,weatherReady:function(data){if(window.VelaWeatherClient)window.VelaWeatherClient.receive(data);}};
 init();
 })();
