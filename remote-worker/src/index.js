@@ -40,6 +40,19 @@ function validPublicKey(key) {
     && typeof key.x === 'string' && /^[a-zA-Z0-9_-]{43}$/.test(key.x)
     && typeof key.y === 'string' && /^[a-zA-Z0-9_-]{43}$/.test(key.y);
 }
+function validatedTvName(input) {
+  if (typeof input !== 'string' || input.length > 80) return '';
+  const name = input.trim().replace(/\s+/g, ' ');
+  // Accept a short, ordinary marketing name only. Never store or display
+  // serial numbers, control characters, or arbitrary HTML from a TV client.
+  return name.length >= 3 && name.length <= 48 && /^[A-Za-z0-9][A-Za-z0-9 ._()+-]*$/.test(name)
+    ? name : '';
+}
+function uniqueTvName(input, root, self) {
+  const name = validatedTvName(input);
+  if (!name) return self.name;
+  return root.tvs.some(tv => tv !== self && tv.name === name) ? name + ' (2)' : name;
+}
 async function importPublicKey(jwk) {
   return crypto.subtle.importKey('jwk',
     { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y, ext: true },
@@ -270,6 +283,7 @@ export class RemoteRoom {
       // The secret PIN alone never authorizes TV takeover.
       if (state.tvHash) return json({ error: 'already_enrolled' }, 409);
       state.tvHash = await sha256(data.tvToken);
+      state.name = uniqueTvName(data.tvName, root, state);
       state.textPublicKey = '';
       state.tvIp = ip;
       state.tvSeen = now;
@@ -408,6 +422,7 @@ export class RemoteRoom {
       }
       state.tvIp = ip;
       state.tvSeen = now;
+      state.name = uniqueTvName(data.tvName, root, state);
       // The enrolled TV, and only the TV, publishes its local encryption key.
       // The server cannot decrypt typed text; only the paired controller sees
       // this public key and only the Sony device holds the wrapped private key.

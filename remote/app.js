@@ -238,6 +238,15 @@
       const selected = selectedRemote;
       const data = await request('/api/status' + (selected?.tvId ? '?tvId=' + encodeURIComponent(selected.tvId) : ''));
       if (selected !== selectedRemote) return;
+      // An already-paired phone learns the model after the TV updates. No
+      // re-pairing, public device discovery, or locally configured name needed.
+      if (selected && data.tvId === selected.tvId && typeof data.tvName === 'string'
+          && data.tvName && data.tvName !== selected.tvName) {
+        selected.tvName = data.tvName;
+        state.tvName = data.tvName;
+        drawTvPicker();
+        saveRemotes().catch(() => {});
+      }
       state.online = !!data.online; state.busy = !!data.busy;
       state.sameNetwork = !!data.sameNetwork;
       showConnection();
@@ -291,66 +300,6 @@
       else $('remoteInfo').textContent = 'TV did not receive this command. Check the connection.';
     }
   }
-  function toggleTool(name) {
-    const opening = $(name + 'Panel').classList.contains('hidden');
-    for (const panel of ['device', 'keyboard']) {
-      $(panel + 'Panel').classList.toggle('hidden', panel !== name || !opening);
-      $(panel + 'Toggle').setAttribute('aria-expanded', String(panel === name && opening));
-    }
-    if (opening && name === 'keyboard') $('remoteText').focus();
-  }
-  $('deviceToggle').addEventListener('click', () => toggleTool('device'));
-  $('keyboardToggle').addEventListener('click', () => toggleTool('keyboard'));
-  $('wifiButton').addEventListener('click', () => {
-    if (window.confirm('Open Wi-Fi settings on your Sony TV? Changing networks may disconnect this remote.'))
-      send('wifi_settings');
-  });
-
-  const encode64 = bytes => {
-    let raw = '';
-    for (const byte of new Uint8Array(bytes)) raw += String.fromCharCode(byte);
-    return btoa(raw);
-  };
-  const decode64 = input => Uint8Array.from(atob(input), character => character.charCodeAt(0));
-  async function encryptText(text, publicKey) {
-    // Fresh ephemeral ECDH for every submission. Cloudflare receives only
-    // opaque ciphertext + ephemeral public key, never the characters typed.
-    const tvPublic = await crypto.subtle.importKey('spki', decode64(publicKey),
-      { name: 'ECDH', namedCurve: 'P-256' }, false, []);
-    const ephemeral = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
-    const secret = await crypto.subtle.deriveBits({ name: 'ECDH', public: tvPublic }, ephemeral.privateKey, 256);
-    const keyBytes = await crypto.subtle.digest('SHA-256', secret);
-    const key = await crypto.subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt']);
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(text));
-    return { ephemeral: encode64(await crypto.subtle.exportKey('spki', ephemeral.publicKey)),
-      iv: encode64(iv), cipher: encode64(encrypted) };
-  }
-  $('textForm').addEventListener('submit', async event => {
-    event.preventDefault();
-    const value = $('remoteText').value;
-    const plain = new TextEncoder().encode(value);
-    if (!value || value.length > 160 || plain.length > 240 || /[\r\n\0]/.test(value)) {
-      $('remoteInfo').textContent = 'Enter up to 160 characters of ordinary text.';
-      return;
-    }
-    if (!state.token || !state.textPublicKey) {
-      $('remoteInfo').textContent = 'Secure TV keyboard is connecting. Make sure Vela is updated and Accessibility is enabled.';
-      await heartbeat();
-      return;
-    }
-    const button = $('sendText');
-    button.disabled = true;
-    try {
-      const payload = await encryptText(value, state.textPublicKey);
-      lastControlAt = Date.now();
-      await request('/api/command', { key: 'type_text', payload }, state.token);
-      $('remoteText').value = '';
-      $('remoteInfo').textContent = 'Sent securely. Check the selected text field on the TV.';
-    } catch (_) {
-      $('remoteInfo').textContent = 'Text not delivered. Try again after selecting a field on TV.';
-    } finally { button.disabled = false; }
-  });
   document.querySelectorAll('[data-key]').forEach(button => {
     const key = button.dataset.key;
     let lastPointerDown = 0;

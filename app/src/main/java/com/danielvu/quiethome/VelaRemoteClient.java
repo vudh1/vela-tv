@@ -3,6 +3,7 @@ package com.danielvu.quiethome;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.media.AudioManager;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.security.keystore.KeyGenParameterSpec;
@@ -98,6 +99,18 @@ final class VelaRemoteClient {
         for (int i = 0; i < 10; i++) digits.append(random.nextInt(10));
         return digits.toString();
     }
+    private static String displayModel() {
+        // Public marketing model only; never a serial number, network name or
+        // user account. Each enrolled TV supplies its own model via its token.
+        String maker = Build.MANUFACTURER == null ? "" : Build.MANUFACTURER.trim();
+        String model = Build.MODEL == null ? "" : Build.MODEL.trim();
+        if (maker.isEmpty() && model.isEmpty()) return "Vela TV";
+        String label = (maker.isEmpty() || model.toLowerCase(java.util.Locale.US)
+            .startsWith(maker.toLowerCase(java.util.Locale.US)) ? "" : maker + " ") + model;
+        label = label.replaceAll("[^A-Za-z0-9 ._()+-]", " ").replaceAll("\\s+", " ").trim();
+        if (label.isEmpty()) return "Vela TV";
+        return label.length() > 48 ? label.substring(0, 48).trim() : label;
+    }
     void generatePin(PinCallback callback) {
         if (revocationPending()) {
             callback.done("", "Finish revoking the previous TV connection first.");
@@ -123,6 +136,7 @@ final class VelaRemoteClient {
                 String sealedToken = encrypt(deviceToken);
                 JSONObject payload = new JSONObject();
                 payload.put("pin", pin);
+                payload.put("tvName", displayModel());
                 if (!rotating) payload.put("tvToken", deviceToken);
                 JSONObject answer = post(rotating ? "/api/tv/pin" : "/api/tv/enroll",
                     rotating ? deviceToken : "", payload);
@@ -169,6 +183,7 @@ final class VelaRemoteClient {
                 long next = 7_000; // idle: ~12k requests/day, below free-tier limits
                 try {
                     JSONObject poll = new JSONObject();
+                    poll.put("tvName", displayModel());
                     String textPublicKey = secureText.publicKey();
                     if (!textPublicKey.isEmpty()) poll.put("textPublicKey", textPublicKey);
                     JSONObject answer = post("/api/tv/poll", token(), poll);
