@@ -26,6 +26,8 @@ jobs:
         run: node tests/calendar_ui_test.js
       - name: Test startup profile design and Settings labels
         run: node tests/profile_ui_test.js
+      - name: Test nested Settings focus and Back restoration
+        run: node tests/focus_navigation_test.js
       - name: Test passive IP-weather, rain and cache expiry
         run: node tests/weather_test.js
       - name: Test Samsung adapter and staged shared app

@@ -1,5 +1,7 @@
 # Vela TV
 
+> Review-only Quiet Glass v1 living-room implementation and platform test checklist: [design and validation note](docs/QUIET_GLASS_V1_REVIEW.md). Source previews and a PR do not mean this design has reached `production` or a physical TV.
+
 Minimalist TV Home experience. One shared interface with platform-specific
 integration and installation targets.
 
