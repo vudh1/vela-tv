@@ -2,6 +2,16 @@
 
 **State:** source-only design PR, **not** Sony production, Samsung WGT, remote Pages, Worker deployment, or installed TV verification. FRIDAY's [`DESIGN_SYSTEM.md`](https://github.com/vudh1/friday/blob/main/docs/DESIGN_SYSTEM.md) and `design/tokens.v1.json` remain a proposal, not a production dependency. This PR maps selected values locally.
 
+## Editable Figma review
+
+[Vela TV · Quiet Glass v1 Interaction System](https://www.figma.com/design/fOsOBZmiRUjxo2Xm1Rhhqh) now contains native editable frames on three pages:
+
+- **01 · TV Screens:** 1920×1080 Home idle/focus, three circular profiles with selected glow, Playing calendar/Now-Next, native Sony ambient screen, nested Settings. Reusable source-linked tile and medallion focus components.
+- **02 · Phone Remote:** 390×844 paired, key pressed, two-TV picker, and disconnected states, with reusable key components.
+- **03 · Focus & Platforms:** overscan-safe D-pad state map and separate Sony Android/Google TV versus Samsung Tizen capability/release gates.
+
+FRIDAY/Vela semantic Figma variables (dark palette, focus, accent, spacing and radii) use editable aliases. The source uses Arial/Georgia, which were unavailable in the connected Figma editor; the review file uses **Inter/DM Serif Display as clearly documented design substitutes** and is not asserted to be typographically pixel-identical. Sample events and neutral app artwork proxies are illustrative, not licensed replacements for device-provided installed-app icons. The native source and its optimized original wallpapers remain authoritative; Figma is a review surface, not a runtime asset source.
+
 ## Direction and semantic mapping
 
 Calm cinematic Home, minimal outlining at rest, warm light only for events/active controls, and spatial focus that works from a sofa. Do not copy a proprietary UI. Wallpaper is atmosphere, never a legibility or launch dependency.
