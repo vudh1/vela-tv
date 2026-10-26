@@ -37,7 +37,7 @@
     <section id="controller" class="controller hidden" aria-label="Vela TV remote">
       <div class="controller-top">
         <div class="tv-picker">
-          <button id="tvPill" class="tv-pill" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="tvMenu"><span>TV 1</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+          <button id="tvPill" class="tv-pill" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="tvMenu"><span>Vela TV</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
           <div id="tvMenu" class="tv-menu hidden" role="group" aria-label="Switch Sony TV"></div>
         </div>
         <button id="release" type="button" class="text-button">Disconnect</button>
@@ -47,31 +47,6 @@
         <button data-key="back" class="round-action" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h12a6 6 0 0 1 6 6"/></svg><span>Back</span></button>
         <button data-key="power_toggle" class="round-action" aria-label="Toggle Sony TV power"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M7.1 5.8A8 8 0 1 0 16.9 5.8"/></svg><span>Power</span></button>
       </div>
-      <div class="remote-tools" role="group" aria-label="More remote controls">
-        <button id="deviceToggle" type="button" aria-expanded="false" aria-controls="devicePanel">TV options</button>
-        <button id="keyboardToggle" type="button" aria-expanded="false" aria-controls="keyboardPanel">Type on TV</button>
-      </div>
-      <section id="devicePanel" class="tool-panel hidden" aria-label="TV device controls">
-        <p class="tool-title">HDMI source</p>
-        <div class="source-grid">
-          <button data-key="hdmi1" type="button">HDMI 1</button>
-          <button data-key="hdmi2" type="button">HDMI 2</button>
-          <button data-key="hdmi3" type="button">HDMI 3</button>
-          <button data-key="hdmi4" type="button">HDMI 4</button>
-        </div>
-        <div class="device-options">
-          <button id="wifiButton" type="button">Wi-Fi settings</button>
-        </div>
-        <p class="tool-note">The Power button uses Sony's toggle command while Vela is connected. Once the TV sleeps, this remote may not be able to wake it. HDMI source selection is separate from your Vizio soundbar's audio input.</p>
-      </section>
-      <section id="keyboardPanel" class="tool-panel hidden" aria-label="Type on TV">
-        <form id="textForm" autocomplete="off">
-          <label for="remoteText">TV search or text field</label>
-          <input id="remoteText" type="text" maxlength="160" autocomplete="off" autocapitalize="sentences" placeholder="Select a text box on TV first">
-          <button id="sendText" class="primary" type="submit">Send text securely</button>
-        </form>
-        <p class="tool-note">Replaces the selected non-password field when Accessibility supports it. Text is encrypted for your TV; never enter passwords here.</p>
-      </section>
       <div class="dpad" role="group" aria-label="Directional navigation">
         <button data-key="up" class="direction up" aria-label="Up"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
         <button data-key="left" class="direction left" aria-label="Left"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>
