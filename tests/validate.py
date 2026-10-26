@@ -423,3 +423,15 @@ assert 'grid-template-rows:auto auto minmax(0,1fr) auto auto' in remote_css
 assert "parseWindow(body,Date.now(),60)" in (asset/'tizen-private-calendar.js').read_text()
 assert 'Math.min(120' in (asset/'tizen-calendar.js').read_text()
 print('PASS isolated dual Sony TVs, two trusted TVs per phone, fixed iPhone remote and longer source cache')
+
+# Trusted Phone Access requires a TV-owner decision, a signed claim and a
+# stable revocation route, never an automatic bypass of the IP gate.
+assert "path === '/api/approval-status'" in remote_worker
+assert "path === '/api/tv/approve'" in remote_worker
+assert "path === '/api/tv/revoke'" in remote_worker
+assert 'vela-approve-v1:' in remote_worker and 'vela-approve-v1:' in remote_js
+assert 'trustedRelay === true' in remote_worker and 'pendingApprovalId' in remote_native
+assert 'remoteApprovalRequested' in main and 'Approve Trusted Phone?' in main
+assert 'remotePairedCount' in main and 'manageWebRemotePhones' in main
+assert "row('remoteDevices','Paired Phones'" in js
+print('PASS owner-approved Private Relay trust, signed claim and individual phone revocation')

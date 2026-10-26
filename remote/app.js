@@ -9,6 +9,7 @@
   // Only the selected TV is controlled. Each phone can retain two independent
   // non-extractable identities; commands never fan out to both TVs.
   let remotes = [], selectedRemote = null, addingTv = false;
+  let pairingAttempt = 0;
   let holdTimer, repeatTimer, pingTimer, statusTimer;
   let activePress = null;
   let suppressGhostClickUntil = 0;
@@ -66,7 +67,8 @@
   }
   async function saveRemotes() {
     const trusted = remotes.filter(r => r.identity).map(r => ({
-      tvId: r.tvId, tvName: r.tvName, identity: r.identity }));
+      tvId: r.tvId, tvName: r.tvName, identity: r.identity,
+      trustedRelay: r.trustedRelay === true }));
     await storedKey('trustedTvs', trusted.length ? trusted : null);
   }
   function snapshot() {
@@ -95,6 +97,7 @@
     }
   }
   function showPair(addAnother = false) {
+    pairingAttempt++;
     addingTv = addAnother;
     $('tvMenu').classList.add('hidden'); $('tvPill').setAttribute('aria-expanded', 'false');
     $('controller').classList.add('hidden'); $('pair').classList.remove('hidden');
@@ -103,6 +106,7 @@
     message('');
   }
   function selectTv(remote) {
+    pairingAttempt++;
     suspendInput();
     snapshot(); selectedRemote = remote;
     state.tvId = remote.tvId || ''; state.tvName = remote.tvName || 'Vela TV';
@@ -155,7 +159,7 @@
     $('network').querySelector('span').textContent = !state.online ? 'TV offline' : state.token ? 'Connected'
       : state.busy ? 'Other remotes connected' : 'TV available';
   }
-  async function setConnected(token, tvId, tvName, identity) {
+  async function setConnected(token, tvId, tvName, identity, trustedRelay = false) {
     snapshot();
     let remote = remotes.find(r => r.tvId && r.tvId === tvId);
     if (!remote && identity) remote = remotes.find(r => r.identity?.publicKey?.x === identity.publicKey.x);
@@ -168,6 +172,7 @@
     remote.tvId = tvId || remote.tvId || 'tv-1';
     remote.tvName = tvName || remote.tvName || 'Vela TV';
     if (identity) remote.identity = identity;
+    remote.trustedRelay = trustedRelay === true;
     remote.token = token; remote.online = true; remote.busy = true; remote.sameNetwork = true;
     // Persist both TV identities before deleting the legacy migration slots.
     // A failed IndexedDB write must never discard the only recovery key.
@@ -186,6 +191,24 @@
     if (selectedRemote) selectedRemote.token = '';
     $('pin').value = ''; message(reason); showConnection();
   }
+  async function forgetRemote(remote, reason) {
+    if (!remote || !remotes.includes(remote)) return;
+    suspendInput();
+    remotes = remotes.filter(item => item !== remote);
+    if (remote === selectedRemote) {
+      selectedRemote = null;
+      state.token = ''; state.tvId = ''; state.tvName = '';
+      state.textPublicKey = ''; state.online = false; state.sameNetwork = false;
+    }
+    // Never discard the recovery key merely because the TV is temporarily
+    // unreachable; only a confirmed release or authoritative revocation does.
+    await saveRemotes();
+    if (!selectedRemote) {
+      if (remotes.length) selectTv(remotes[0]);
+      else { if (pingTimer) clearInterval(pingTimer); pingTimer = null; showPair(); }
+    } else drawTvPicker();
+    if (reason) message(reason);
+  }
   const errors = {
     incorrect_pin: 'Incorrect PIN. Check the 10-digit code shown in Vela TV settings.',
     different_network: 'Your phone and TV must use the same home Internet connection. Turn off your VPN or mobile data.',
@@ -196,11 +219,15 @@
     locked: 'Too many attempts. Wait 15 minutes before trying again.',
     pairing_required: 'Choose Add Another Remote in Vela TV settings for a new pairing PIN.',
     already_enrolled: 'A different TV is already registered.',
+    controller_key_required: 'Trusted Phone Access needs secure browser storage. Use normal Safari, not Private Browsing.',
+    approval_denied: 'The TV denied this pairing. Generate a new PIN to try again.',
+    approval_expired: 'TV approval expired. Generate a fresh PIN to try again.',
     session_expired: 'Connection interrupted. Reconnecting to Vela TV…'
   };
   async function resume() {
     const remote = selectedRemote;
-    if (!remote || state.token || manuallyDisconnected || !state.online || !state.sameNetwork) return;
+    if (!remote || state.token || manuallyDisconnected || !state.online
+        || (!state.sameNetwork && remote.trustedRelay !== true)) return;
     if (resumeTasks.has(remote)) return resumeTasks.get(remote);
     if (Date.now() - (remote.lastResumeAttempt || 0) < 5500) return;
     remote.lastResumeAttempt = Date.now();
@@ -225,16 +252,20 @@
         remote.token = data.token;
         remote.tvId = data.tvId || remote.tvId || 'tv-1';
         remote.tvName = data.tvName || remote.tvName || 'TV 1';
+        remote.trustedRelay = data.trustedRelay === true;
         await saveRemotes();
         await clearKeys();
-        if (remote === selectedRemote) await setConnected(data.token, remote.tvId, remote.tvName, identity);
+        if (remote === selectedRemote) await setConnected(data.token, remote.tvId, remote.tvName,
+          identity, remote.trustedRelay);
         return;
       }
       if (remote === selectedRemote) message(errors.pairing_required);
     })().catch(error => {
       if (remote !== selectedRemote) return;
       if (error.message === 'pairing_required') {
-        message(errors.pairing_required);
+        // A once-trusted key no longer exists on an online relay TV. This is
+        // an authoritative revocation, distinct from temporary offline.
+        forgetRemote(remote, 'This TV revoked this phone. Pair again with a new PIN.').catch(() => {});
       } else if (error.message === 'locked') message(errors.locked);
       else if (error.message === 'different_network') message(errors.different_network);
       else if (error.message === 'session_expired') message('Reconnection expired. Trying again…');
@@ -247,6 +278,10 @@
       const selected = selectedRemote;
       const data = await request('/api/status' + (selected?.tvId ? '?tvId=' + encodeURIComponent(selected.tvId) : ''));
       if (selected !== selectedRemote) return;
+      if (selected?.tvId && !data.tvId) {
+        await forgetRemote(selected, 'This TV revoked its connection. Pair again with a new PIN.');
+        return;
+      }
       // An already-paired phone learns the model after the TV updates. No
       // re-pairing, public device discovery, or locally configured name needed.
       if (selected && data.tvId === selected.tvId && typeof data.tvName === 'string'
@@ -278,20 +313,62 @@
       }
     }
   }
+  async function waitForTvApproval(data, identity, attempt) {
+    const deadline = Date.now() + Math.min(90, Number(data.approvalSeconds) || 90) * 1000;
+    message('Approve Trusted Phone on your Sony TV. This grants access even away from home.');
+    while (Date.now() < deadline && pairingAttempt === attempt) {
+      await new Promise(resolve => setTimeout(resolve, 2500));
+      if (pairingAttempt !== attempt) return;
+      try {
+        const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' },
+          identity.privateKey, new TextEncoder().encode('vela-approve-v1:'
+            + data.requestId + ':' + data.approvalToken));
+        const result = await request('/api/approval-status', {
+          requestId: data.requestId, approvalToken: data.approvalToken, signature: hex(signature) });
+        if (result.approvalPending) continue;
+        if (!result.token) throw new Error('approval_expired');
+        if (pairingAttempt !== attempt) {
+          // TV approved while the person was leaving pairing. Explicitly
+          // release the newly minted lease instead of abandoning it.
+          await request('/api/release', {}, result.token).catch(() => {});
+          return;
+        }
+        await setConnected(result.token, result.tvId, result.tvName,
+          identity, result.trustedRelay === true);
+        return;
+      } catch (error) {
+        if (error.status === 403 || error.status === 401 || error.status === 409
+            || error.status === 410) throw error;
+        // A transient timeout does not bypass TV approval. Retry only within
+        // the original bounded window; the Worker keeps no unapproved lease.
+      }
+    }
+    if (pairingAttempt === attempt) throw new Error('approval_expired');
+  }
   $('pinForm').addEventListener('submit', async event => {
     event.preventDefault();
     const pin = $('pin').value;
     if (!/^\d{10}$/.test(pin)) { message('Enter the 10-digit PIN generated by your TV.'); return; }
     // The PIN selects the TV server-side; the currently selected TV may be off.
     $('connect').disabled = true; message('');
+    const attempt = pairingAttempt;
     try {
       let identity = null;
       try { if (hasTrustedStorage()) identity = await newIdentity(); }
       catch (_) { /* Private browsing might disable IndexedDB. */ }
-      const data = await request('/api/connect', { pin,
+      const data = await request('/api/connect', { pin, approvalProtocol: 1,
         ...(identity ? { publicKey: identity.publicKey } : {}) });
-      await setConnected(data.token, data.tvId, data.tvName, identity);
-    } catch (error) { message(errors[error.message] || 'Connection failed. Try again in a moment.'); }
+      if (pairingAttempt !== attempt) {
+        if (data.token) await request('/api/release', {}, data.token).catch(() => {});
+        return;
+      }
+      if (data.approvalRequired) await waitForTvApproval(data, identity, attempt);
+      else await setConnected(data.token, data.tvId, data.tvName, identity,
+        data.trustedRelay === true);
+    } catch (error) {
+      if (pairingAttempt === attempt)
+        message(errors[error.message] || 'Connection failed. Try again in a moment.');
+    }
     finally { $('pin').value = ''; $('connect').disabled = false; }
   });
   async function send(key) {
@@ -349,15 +426,17 @@
   $('release').addEventListener('click', async () => {
     const token = state.token;
     const departing = selectedRemote;
+    if (!departing) return;
+    $('release').disabled = true;
     manuallyDisconnected = true;
-    disconnected('Disconnected. Generate a new PIN on Vela TV to pair again.');
-    try { await request('/api/release', {}, token); }
-    catch (_) { /* The short-lived lease expires automatically. */ }
-    remotes = remotes.filter(remote => remote !== departing);
-    selectedRemote = null; state.token = '';
-    await saveRemotes().catch(() => {});
-    if (remotes.length) selectTv(remotes[0]); else showPair();
-    manuallyDisconnected = false;
+    try {
+      if (!token) throw new Error('session_expired');
+      await request('/api/release', {}, token);
+      await forgetRemote(departing, 'Phone disconnected. Generate a new TV PIN to reconnect.');
+    } catch (_) {
+      message('Could not confirm disconnect. Pairing is saved; reconnect and try again.');
+      if (!state.token) status();
+    } finally { manuallyDisconnected = false; $('release').disabled = false; }
   });
   // Do not release on pagehide: mobile browsers routinely suspend tabs.
   function foreground() {
@@ -386,7 +465,8 @@
       saved = (current || pending) ? [{ tvId: '', tvName: 'TV 1', identity: current || pending }] : [];
     }
     remotes = saved.slice(0, 2).filter(r => r.identity && r.identity.privateKey)
-      .map(r => ({ ...r, token: '', online: false, busy: false, sameNetwork: false, textPublicKey: '' }));
+      .map(r => ({ ...r, trustedRelay: r.trustedRelay === true,
+        token: '', online: false, busy: false, sameNetwork: false, textPublicKey: '' }));
     if (remotes.length) selectTv(remotes[0]); else { showPair(); status(); }
   })().catch(() => { showPair(); status(); });
   // Connected phones already heartbeat; avoid quadrupling constant Worker

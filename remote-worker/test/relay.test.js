@@ -59,6 +59,219 @@ async function resumeWith(env, identity, challenge, ip = TV_IP) {
   return call(env, '/api/resume', { ip,
     data: { challenge, signature: Buffer.from(signature).toString('hex') } });
 }
+async function requestTrustedPhone(env, identity, pin = PIN, ip = OTHER_IP) {
+  return call(env, '/api/connect', { ip, data: { pin, publicKey: identity.publicKey,
+    approvalProtocol: 1 } });
+}
+async function decideTrustedPhone(env, pending, approved, tvToken = TV_TOKEN) {
+  return call(env, '/api/tv/approve', { origin: null, token: tvToken,
+    data: { requestId: pending.requestId, approved } });
+}
+async function claimTrustedPhone(env, pending, identity, ip = OTHER_IP) {
+  const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' },
+    identity.privateKey, new TextEncoder().encode('vela-approve-v1:'
+      + pending.requestId + ':' + pending.approvalToken));
+  return call(env, '/api/approval-status', { ip, data: {
+    requestId: pending.requestId, approvalToken: pending.approvalToken,
+    signature: Buffer.from(signature).toString('hex') } });
+}
+
+test('Private Relay pairing requires both a valid PIN and explicit authenticated TV approval', async () => {
+  const { env, storage } = setup(); await enroll(env);
+  const identity = await controllerIdentity();
+  assert.equal((await call(env, '/api/connect', { ip: OTHER_IP, data: {
+    pin: PIN, publicKey: identity.publicKey } })).status, 403,
+    'old web clients cannot accidentally treat an approval request as a lease');
+  const pending = await requestTrustedPhone(env, identity);
+  assert.equal(pending.status, 202);
+  assert.equal(pending.body.approvalRequired, true);
+  assert.equal(pending.body.approvalToken.length, 64);
+  assert.equal((await poll(env)).body.pendingApprovalId, pending.body.requestId);
+  assert.equal((await poll(env)).body.pinPending, true);
+  assert.equal((await claimTrustedPhone(env, pending.body, identity)).status, 202);
+  assert.equal((await storage.get('room')).tvs[0].controllers.length, 0);
+  assert.equal(JSON.stringify(await storage.get('room')).includes(pending.body.approvalToken), false);
+  assert.equal((await call(env, '/api/tv/approve', { data: {
+    requestId: pending.body.requestId, approved: true } })).status, 403,
+    'a browser cannot approve its own pending request');
+  assert.equal((await decideTrustedPhone(env, pending.body, true, 'ef'.repeat(32))).status, 401);
+  assert.equal((await decideTrustedPhone(env, pending.body, true)).status, 200);
+  const forged = await call(env, '/api/approval-status', { ip: OTHER_IP, data: {
+    requestId: pending.body.requestId, approvalToken: 'f0'.repeat(32) } });
+  assert.equal(forged.status, 401);
+  assert.equal((await claimTrustedPhone(env, pending.body, await controllerIdentity())).status, 401,
+    'stolen approval proof alone cannot mint a controller lease');
+  const paired = await claimTrustedPhone(env, pending.body, identity);
+  assert.equal(paired.status, 200);
+  assert.equal(paired.body.trustedRelay, true);
+  assert.equal((await claimTrustedPhone(env, pending.body, identity)).status, 401,
+    'a successful approval can only issue one bearer lease');
+  assert.equal((await call(env, '/api/command', { ip: OTHER_IP, token: paired.body.token,
+    data: { key: 'up' } })).status, 200);
+  assert.deepEqual((await poll(env)).body.commands.map(c => c.key), ['up']);
+  assert.equal((await storage.get('room')).tvs[0].controllers[0].trustedRelay, true);
+});
+
+test('TV rejection, pending timeout and invalid approval do not authorize a phone', async () => {
+  const { env, storage } = setup(); await enroll(env);
+  const identity = await controllerIdentity();
+  let pending = await requestTrustedPhone(env, identity);
+  assert.equal(pending.status, 202);
+  assert.equal((await decideTrustedPhone(env, pending.body, false)).status, 200);
+  assert.equal((await claimTrustedPhone(env, pending.body, identity)).body.error, 'approval_denied');
+  assert.equal((await storage.get('room')).tvs[0].controllers.length, 0);
+  assert.equal((await requestTrustedPhone(env, identity)).status, 409,
+    'the rejected PIN must not be reusable');
+  assert.equal((await rotate(env)).status, 200);
+  pending = await requestTrustedPhone(env, identity, NEXT_PIN);
+  assert.equal(pending.status, 202);
+  assert.equal((await call(env, '/api/tv/approve', { origin: null, token: TV_TOKEN,
+    data: { requestId: pending.body.requestId, approved: 'yes' } })).status, 400);
+  const now = Date.now;
+  Date.now = () => now() + 91_000;
+  try {
+    assert.notEqual((await claimTrustedPhone(env, pending.body, identity)).status, 200);
+    assert.equal((await decideTrustedPhone(env, pending.body, true)).status, 409);
+    assert.equal((await storage.get('room')).tvs[0].controllers.length, 0);
+  } finally { Date.now = now; }
+});
+
+test('trusted phone signature resumes through a changed Private Relay IP but impostors fail', async () => {
+  const { env } = setup(); await enroll(env);
+  const identity = await controllerIdentity(), impostor = await controllerIdentity();
+  const pending = await requestTrustedPhone(env, identity);
+  assert.equal((await decideTrustedPhone(env, pending.body, true)).status, 200);
+  const paired = await claimTrustedPhone(env, pending.body, identity);
+  const otherRelayIp = '198.51.100.71';
+  const now = Date.now;
+  Date.now = () => now() + 120_000;
+  try {
+    await poll(env); // TV remains online across the phone's expired lease.
+    assert.equal((await call(env, '/api/heartbeat', { ip: OTHER_IP,
+      token: paired.body.token, data: {} })).status, 401);
+    const keyId = await identityId(identity);
+    const challenge = await call(env, '/api/challenge', { ip: otherRelayIp, data: { keyId } });
+    assert.equal(challenge.status, 200);
+    assert.equal((await resumeWith(env, impostor, challenge.body.challenge, otherRelayIp)).status, 401);
+    assert.equal((await resumeWith(env, identity, challenge.body.challenge, otherRelayIp)).status, 401,
+      'a failed signature consumes the challenge');
+    const next = await call(env, '/api/challenge', { ip: otherRelayIp, data: { keyId } });
+    const renewed = await resumeWith(env, identity, next.body.challenge, otherRelayIp);
+    assert.equal(renewed.status, 200);
+    assert.equal(renewed.body.trustedRelay, true);
+    assert.equal((await call(env, '/api/command', { ip: otherRelayIp,
+      token: renewed.body.token, data: { key: 'back' } })).status, 200);
+    assert.equal((await call(env, '/api/resume', { ip: otherRelayIp, data: {
+      challenge: next.body.challenge, signature: '00'.repeat(64) } })).status, 401);
+  } finally { Date.now = now; }
+});
+
+test('adding and revoking a Private Relay phone preserves the existing phone and TV isolation', async () => {
+  const { env } = setup(); await enroll(env);
+  const firstIdentity = await controllerIdentity();
+  const first = await call(env, '/api/connect', { data: { pin: PIN,
+    publicKey: firstIdentity.publicKey } });
+  assert.equal(first.status, 200);
+  assert.equal((await rotate(env)).status, 200);
+  const secondIdentity = await controllerIdentity();
+  const pending = await requestTrustedPhone(env, secondIdentity, NEXT_PIN);
+  assert.equal(pending.status, 202);
+  assert.equal((await call(env, '/api/heartbeat', { token: first.body.token, data: {} })).status, 200);
+  assert.equal((await decideTrustedPhone(env, pending.body, true)).status, 200);
+  const second = await claimTrustedPhone(env, pending.body, secondIdentity);
+  assert.equal((await poll(env)).body.pairedCount, 2);
+  assert.equal((await call(env, '/api/release', { ip: OTHER_IP,
+    token: second.body.token, data: {} })).status, 200);
+  assert.equal((await call(env, '/api/command', { ip: OTHER_IP, token: second.body.token,
+    data: { key: 'up' } })).status, 401);
+  assert.equal((await poll(env)).body.pairedCount, 1);
+  assert.equal((await call(env, '/api/heartbeat', { token: first.body.token, data: {} })).status, 200);
+  assert.equal((await call(env, '/api/tv/disable', { origin: null,
+    token: TV_TOKEN, data: {} })).status, 200);
+  assert.equal((await call(env, '/api/heartbeat', { token: first.body.token, data: {} })).status, 401);
+});
+
+test('Sony owner can revoke a single trusted phone, without affecting another phone', async () => {
+  const { env } = setup(); await enroll(env);
+  const local = await controllerIdentity();
+  const first = await call(env, '/api/connect', { data: { pin: PIN, publicKey: local.publicKey } });
+  await rotate(env);
+  const relayIdentity = await controllerIdentity();
+  const approval = await requestTrustedPhone(env, relayIdentity, NEXT_PIN);
+  await decideTrustedPhone(env, approval.body, true);
+  const second = await claimTrustedPhone(env, approval.body, relayIdentity);
+  const active = await poll(env);
+  assert.equal(active.body.pairedPhones.length, 2);
+  const trusted = active.body.pairedPhones.find(c => c.trustedRelay);
+  assert.ok(trusted);
+  assert.equal((await call(env, '/api/tv/revoke', { data: { controllerId: trusted.id } })).status,
+    403, 'browser-origin requests may not use TV-owner revocation');
+  assert.equal((await call(env, '/api/tv/revoke', { origin: null, token: 'ff'.repeat(32),
+    data: { controllerId: trusted.id } })).status, 401);
+  assert.equal((await call(env, '/api/tv/revoke', { origin: null, token: TV_TOKEN,
+    data: { controllerId: trusted.id } })).body.pairedCount, 1);
+  assert.equal((await call(env, '/api/command', { ip: OTHER_IP, token: second.body.token,
+    data: { key: 'up' } })).status, 401);
+  assert.equal((await call(env, '/api/heartbeat', { token: first.body.token, data: {} })).status, 200);
+  assert.equal((await call(env, '/api/challenge', { ip: OTHER_IP,
+    data: { keyId: await identityId(relayIdentity) } })).status, 409,
+    'owner revocation also removes the phone signing key');
+  assert.equal((await poll(env)).body.pairedPhones.length, 1);
+});
+
+test('Private Relay approvals are isolated to the chosen TV and a single pending PIN claim', async () => {
+  const { env, storage } = setup();
+  const secondTvToken = 'cd'.repeat(32);
+  const tvA = await enroll(env);
+  const tvB = await enroll(env, NEXT_PIN, secondTvToken);
+  const firstIdentity = await controllerIdentity(), secondIdentity = await controllerIdentity();
+  const pending = await requestTrustedPhone(env, firstIdentity, NEXT_PIN);
+  assert.equal(pending.status, 202);
+  assert.equal((await requestTrustedPhone(env, secondIdentity, NEXT_PIN)).status, 401,
+    'serialized PIN usage cannot produce a second pending owner approval');
+  assert.equal((await decideTrustedPhone(env, pending.body, true, TV_TOKEN)).status, 409,
+    'TV A cannot approve the pending request belonging to TV B');
+  assert.equal((await decideTrustedPhone(env, pending.body, true, secondTvToken)).status, 200);
+  const connected = await claimTrustedPhone(env, pending.body, firstIdentity);
+  assert.equal(connected.status, 200);
+  assert.equal(connected.body.tvId, tvB.body.tvId);
+  assert.notEqual(connected.body.tvId, tvA.body.tvId);
+  assert.equal((await storage.get('room')).tvs[0].controllers.length, 0);
+  assert.equal((await storage.get('room')).tvs[1].controllers.length, 1);
+  assert.equal((await call(env, '/api/command', { ip: OTHER_IP, token: connected.body.token,
+    data: { key: 'select' } })).status, 200);
+  assert.deepEqual((await poll(env)).body.commands, []);
+  assert.deepEqual((await poll(env, TV_IP, secondTvToken)).body.commands.map(c => c.key), ['select']);
+});
+
+test('changing TV network cancels even a previously approved unclaimed Private Relay request', async () => {
+  const { env, storage } = setup(); await enroll(env);
+  const identity = await controllerIdentity();
+  const pending = await requestTrustedPhone(env, identity);
+  assert.equal(pending.status, 202);
+  assert.equal((await decideTrustedPhone(env, pending.body, true)).status, 200);
+  await poll(env, '192.0.2.91');
+  assert.notEqual((await claimTrustedPhone(env, pending.body, identity)).status, 200);
+  assert.equal((await storage.get('room')).tvs[0].controllers.length, 0);
+});
+
+test('TV approval and PIN rotation cannot preserve phones after a TV network change', async () => {
+  const { env } = setup(); await enroll(env);
+  const identity = await controllerIdentity();
+  const first = await requestTrustedPhone(env, identity);
+  assert.equal((await call(env, '/api/tv/approve', { ip: '192.0.2.77', origin: null,
+    token: TV_TOKEN, data: { requestId: first.body.requestId, approved: true } })).status, 409);
+  assert.equal((await decideTrustedPhone(env, first.body, true)).status, 200);
+  const paired = await claimTrustedPhone(env, first.body, identity);
+  assert.equal(paired.status, 200);
+  const changedIp = '192.0.2.77';
+  const rotated = await call(env, '/api/tv/pin', { ip: changedIp, origin: null,
+    token: TV_TOKEN, data: { pin: NEXT_PIN } });
+  assert.equal(rotated.status, 200);
+  assert.equal(rotated.body.pairedCount, 0);
+  assert.equal((await call(env, '/api/heartbeat', { ip: OTHER_IP,
+    token: paired.body.token, data: {} })).status, 401);
+});
 
 test('needs no GitHub or Cloudflare PIN secret; rejects browser-origin TV claims', async () => {
   const { env } = setup();

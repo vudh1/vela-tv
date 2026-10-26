@@ -96,6 +96,8 @@ public final class MainActivity extends Activity {
     // Only the on-TV PIN dialog is dismissed when an authenticated controller
     // actually connects. The underlying Web remote settings remain unchanged.
     private AlertDialog remotePinDialog;
+    private AlertDialog remoteApprovalDialog;
+    private String remoteApprovalId = "";
     // Streaming-app returns reuse this Activity; a new launcher process is a
     // fresh viewing session. Some Sony standby paths never emit SCREEN_OFF.
     // A cold launch fallback covers those paths (at the cost of a prompt if
@@ -302,6 +304,10 @@ public final class MainActivity extends Activity {
         if (remotePinDialog != null) {
             remotePinDialog.dismiss();
             remotePinDialog = null;
+        }
+        if (remoteApprovalDialog != null) {
+            remoteApprovalDialog.dismiss();
+            remoteApprovalDialog = null;
         }
         visibleActivity = new WeakReference<>(null);
         stopVolumeObservation();
@@ -795,6 +801,77 @@ public final class MainActivity extends Activity {
         });
     }
 
+    /** Off-network pairings cannot be authorized by the PIN alone. */
+    static void remoteApprovalRequested(String requestId) {
+        MainActivity activity = visibleActivity.get();
+        if (activity == null) return;
+        activity.runOnUiThread(() -> {
+            if (!activity.homeResumed || !VelaRemoteClient.get(activity).enabled()
+                    || requestId == null || !requestId.matches("[a-f0-9]{24}")
+                    || requestId.equals(activity.remoteApprovalId)) return;
+            activity.remoteApprovalId = requestId;
+            if (activity.remotePinDialog != null) activity.remotePinDialog.dismiss();
+            if (activity.remoteApprovalDialog != null) activity.remoteApprovalDialog.dismiss();
+            activity.remoteApprovalDialog = new AlertDialog.Builder(activity)
+                .setTitle("Approve Trusted Phone?")
+                .setMessage("A phone entered your one-time PIN, but its public network address does not match this TV. This may be iCloud Private Relay. Only approve if you are pairing that phone now. Once trusted, it may also control this TV from outside your home until revoked.")
+                .setNegativeButton("Deny", (dialog, which) -> activity.answerRemoteApproval(requestId, false))
+                .setPositiveButton("Approve", (dialog, which) -> activity.answerRemoteApproval(requestId, true))
+                .setOnCancelListener(dialog -> activity.answerRemoteApproval(requestId, false))
+                .create();
+            activity.remoteApprovalDialog.setOnDismissListener(dialog -> activity.remoteApprovalDialog = null);
+            activity.remoteApprovalDialog.show();
+        });
+    }
+
+    static void remoteApprovalRetry(String requestId) {
+        MainActivity activity = visibleActivity.get();
+        if (activity != null) activity.runOnUiThread(() -> {
+            if (requestId.equals(activity.remoteApprovalId)) activity.remoteApprovalId = "";
+        });
+    }
+
+    /** Reflect server-confirmed phone release and full revocation in settings. */
+    static void remotePairingStatusChanged(int count) {
+        MainActivity activity = visibleActivity.get();
+        if (activity != null) activity.sendToJs("QH.remotePairingStatusChanged(" + count + ")");
+    }
+
+    private void answerRemoteApproval(String requestId, boolean approved) {
+        VelaRemoteClient.get(this).respondToApproval(requestId, approved,
+            message -> runOnUiThread(() -> toast(message)));
+    }
+
+    private void manageRemotePhones() {
+        VelaRemoteClient client = VelaRemoteClient.get(this);
+        JSONArray phones = client.pairedPhones();
+        if (phones.length() == 0) {
+            toast("No phones are currently paired.");
+            return;
+        }
+        String[] names = new String[phones.length()];
+        for (int i = 0; i < phones.length(); i++) {
+            JSONObject phone = phones.optJSONObject(i);
+            names[i] = (phone != null && phone.optBoolean("trustedRelay")
+                ? "Trusted Phone " : "Home Phone ") + (i + 1);
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Paired Phones")
+            .setItems(names, (dialog, index) -> {
+                JSONObject phone = phones.optJSONObject(index);
+                String id = phone == null ? "" : phone.optString("id", "");
+                new AlertDialog.Builder(this)
+                    .setTitle("Revoke " + names[index] + "?")
+                    .setMessage("This phone will immediately lose Vela access, including access from outside your home. Other paired phones will keep working.")
+                    .setNegativeButton("Cancel", (d, w) -> {})
+                    .setPositiveButton("Revoke", (d, w) -> client.revokePhone(id,
+                        message -> runOnUiThread(() -> toast(message))))
+                    .show();
+            })
+            .setNegativeButton("Close", (dialog, which) -> {})
+            .show();
+    }
+
     private void showRemotePin(String pin) {
         if (remotePinDialog != null) remotePinDialog.dismiss();
         android.widget.TextView code = new android.widget.TextView(this);
@@ -835,13 +912,19 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public boolean remoteRevocationPending() {
             return VelaRemoteClient.get(MainActivity.this).revocationPending();
         }
+        @JavascriptInterface public int remotePairedCount() {
+            return VelaRemoteClient.get(MainActivity.this).pairedCount();
+        }
+        @JavascriptInterface public void manageWebRemotePhones() {
+            runOnUiThread(() -> manageRemotePhones());
+        }
         @JavascriptInterface public void pairWebRemote() {
             runOnUiThread(() -> generateRemotePin());
         }
         @JavascriptInterface public void rotateWebRemotePin() {
             runOnUiThread(() -> new AlertDialog.Builder(MainActivity.this)
-                .setTitle("Regenerate remote PIN?")
-                .setMessage("The old PIN and any connected phone will stop working immediately. A new 10-digit PIN will appear on this TV.")
+                .setTitle("Add Another Remote?")
+                .setMessage("Create a fresh PIN for the next phone. Already paired phones remain connected. Any previous unused PIN expires.")
                 .setNegativeButton("Cancel", (d, w) -> {})
                 .setPositiveButton("Regenerate", (d, w) -> generateRemotePin())
                 .show());
@@ -849,7 +932,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void disableWebRemote() {
             runOnUiThread(() -> new AlertDialog.Builder(MainActivity.this)
                 .setTitle("Disable Vela Remote?")
-                .setMessage("Disconnect the web remote and revoke this TV's current enrollment.")
+                .setMessage("Revoke this TV enrollment and every paired phone, including Trusted Phones that can connect from outside your home. Generate new PINs to reconnect.")
                 .setNegativeButton("Cancel", (d, w) -> {})
                 .setPositiveButton("Disable", (d, w) -> VelaRemoteClient.get(MainActivity.this)
                     .disable(message -> sendToJs("QH.remoteStatusReady(" + JSONObject.quote(message) + ")")))
