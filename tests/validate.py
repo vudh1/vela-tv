@@ -297,7 +297,11 @@ assert 'sessionStorage.setItem' not in remote_js and 'localStorage.setItem' not 
 assert 'indexedDB' in remote_js and 'crypto.subtle.sign' in remote_js
 assert "'/api/challenge'" in remote_js and "'/api/resume'" in remote_js
 assert "path === '/api/resume'" in remote_worker and 'pairedKeyId' in remote_worker
-assert "addEventListener('pagehide'" not in remote_js
+# Page suspension must cancel a pressed key, but must not revoke the trusted
+# controller lease (Safari frequently pagehides when changing phone apps).
+assert "window.addEventListener('pagehide', () => stopHeldKey(true))" in remote_js
+assert "document.addEventListener('visibilitychange'" in remote_js
+assert 'clearInterval(repeatTimer)' in remote_js
 assert 'content-security-policy' in remote_page.lower()
 subprocess.run(['node','--check',str(r/'remote/app.js')],check=True)
 subprocess.run(['node','--check',str(r/'remote-worker/src/index.js')],check=True)

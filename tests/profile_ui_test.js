@@ -28,7 +28,12 @@ assert.ok(css.includes('.overlay.startup-panel{z-index:80;background:radial-grad
 assert.ok(css.includes('overflow-y:auto;contain:none;border:0;\n background:transparent;box-shadow:none}'), 'Profile group has no enclosing border or shelf');
 assert.ok(css.includes('background:rgba(255,255,255,.016);border:0;outline:0;'), 'Inactive profile tiles have no borders');
 assert.ok(css.includes('.startup-avatar-card.selected,.startup-avatar-card:focus'), 'Focus remains visible with remote navigation');
-assert.ok(css.includes('0 0 38px rgba(181,235,222,.16)') && css.includes('0 0 42px rgba(176,237,225,.27)'), 'Selection is highlighted by light and glow');
+assert.ok(css.includes('0 0 43px rgba(var(--tint),.36)'), 'Selection is highlighted by tinted light and glow');
+assert.ok(css.includes('.startup-avatar{') && css.includes('border-radius:50%;border:0;') &&
+  css.includes('.startup-avatar{width:99px;height:99px;border-radius:50%}'),
+  'Profile medallions stay perfectly circular, including short TV screens');
+assert.ok(source.includes('var avatars={') && source.includes('viewBox="0 0 64 64"') &&
+  source.includes('avatar-art avatar-tone-'), 'Profile artwork uses rich scalable original vector glyphs');
 assert.ok(!/\.startup-avatar-card\.selected[^}]*border-color/.test(css), 'Selection never draws a focus border');
 assert.ok(!/\.startup-avatar-card\.selected \.startup-avatar[^}]*border-color/.test(css), 'Avatar selection never draws a border');
 assert.ok(!css.includes('backdrop-filter:'), 'Do not rely on TV GPU backdrop blur');
