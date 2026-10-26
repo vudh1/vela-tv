@@ -56,6 +56,8 @@ The update emphasizes readable Now/Next, a known field and a stronger single foc
 
 `home-4k-scaling.webp` is rendered as **1920 CSS pixels × DPR 2**, yielding 3840 × 2160 image pixels. Reproduce locally with `VELA_CHROMIUM_PATH=/path/to/chromium node scripts/capture-quiet-glass.cjs`; this optional script requires locally installed `playwright` and `sharp`, not part of the TV application or its CI dependencies.
 
+The optional browser capture now asserts that the paired phone remote fits without vertical scrolling at **320×568, 375×667, 390×844 and 430×932**, with a visible TV-switch pill. It also prints elapsed time to first Home app card in desktop headless Chromium (one local sample: ~104 ms). This is a synthetic DOM-readiness diagnostic, **not** Android cold-start latency, Sony memory use, Safari validation, or a production performance benchmark. The 4K screen now uses the same fixed preview clock as 1080p for repeatable snapshots.
+
 ## Platform and security boundaries
 
 | Sony Android/Google TV | Samsung Tizen |

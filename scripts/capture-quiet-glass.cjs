@@ -11,6 +11,13 @@ const sharp = require('sharp');
 const root = path.resolve(process.argv[2] || path.join(__dirname, '..'));
 const dest = path.resolve(process.argv[3] || path.join(root, 'design/review/quiet-glass-v1'));
 const browserExecutable = process.env.VELA_CHROMIUM_PATH || undefined;
+function fixedPreviewClock() {
+  const RealDate=Date, fixed=Date.parse('2026-10-26T03:42:00Z');
+  window.Date=class extends RealDate {
+    constructor(...args) { super(...(args.length?args:[fixed])); }
+    static now() { return fixed; }
+  };
+}
 
 async function main() {
   fs.mkdirSync(dest, { recursive: true });
@@ -20,15 +27,10 @@ async function main() {
   try {
     const page = await browser.newPage({ viewport:{ width:1920, height:1080 },
       timezoneId:'America/Los_Angeles',deviceScaleFactor:1, reducedMotion:'reduce' });
-    await page.addInitScript(() => {
-      const RealDate=Date, fixed=Date.parse('2026-10-26T03:42:00Z');
-      window.Date=class extends RealDate {
-        constructor(...args) { super(...(args.length?args:[fixed])); }
-        static now() { return fixed; }
-      };
-    });
+    await page.addInitScript(fixedPreviewClock);
     await page.goto(pathToFileURL(path.join(root, 'preview/index.html')).href);
     await page.waitForSelector('#favorites .app-card');
+    const homeStartupMs = await page.evaluate(() => Math.round(performance.now()));
     await page.evaluate(() => {
       // These are explicitly synthetic design fixtures, not live weather or a
       // private feed. Source never sends them to a server.
@@ -79,6 +81,7 @@ async function main() {
     await page.setViewportSize({ width:1920, height:1080 });
     const hidpi = await browser.newPage({ viewport:{width:1920,height:1080},
       deviceScaleFactor:2,reducedMotion:'reduce' });
+    await hidpi.addInitScript(fixedPreviewClock);
     await hidpi.goto(pathToFileURL(path.join(root,'preview/index.html')).href);
     await hidpi.waitForSelector('#favorites .app-card');
     const fourK=await hidpi.screenshot({animations:'disabled'});
@@ -99,14 +102,25 @@ async function main() {
       document.querySelector('#tvPill span').textContent='Sony BRAVIA 4K VH2';
       document.querySelector('#network span').textContent='Connected · Preview';
     });
-    const height=await phone.evaluate(() => ({body:document.body.scrollHeight,
-      view:innerHeight,controller:document.querySelector('#controller').getBoundingClientRect().bottom}));
-    assert.ok(height.body<=height.view+1,'phone remote must not scroll vertically');
-    assert.ok(height.controller<=height.view,'controller must fit the iPhone viewport');
+    // Resize the exact same paired-controller state rather than testing only
+    // one newer iPhone. A short display is the limiting case for this layout.
+    for (const [width,height] of [[320,568],[375,667],[390,844],[430,932]]) {
+      await phone.setViewportSize({width,height});
+      const size=await phone.evaluate(() => ({body:document.body.scrollHeight,
+        view:innerHeight,controller:document.querySelector('#controller').getBoundingClientRect().bottom,
+        pill:document.querySelector('#tvPill').getBoundingClientRect().width}));
+      assert.ok(size.body<=size.view+1,`${width}×${height} remote must not scroll vertically`);
+      assert.ok(size.controller<=size.view,`${width}×${height} controller must fit the viewport`);
+      assert.ok(size.pill>=100,`${width}×${height} TV switcher must remain legible`);
+    }
+    await phone.setViewportSize({width:390,height:844});
     const rp=await phone.screenshot({animations:'disabled'});
     await sharp(rp).webp({quality:82,effort:5}).toFile(path.join(dest,'phone-390.webp'));
     await phone.close();
-    console.log('Captured synthetic visual review in '+dest);
+    // This is Chromium source-preview readiness, NOT Android cold-start or
+    // actual device memory/CPU. Keep the number diagnostic, never a release gate.
+    console.log('Captured synthetic visual review in '+dest+
+      ` (Chromium Home DOM ready ${homeStartupMs}ms; phone sizes 320–430px fit)`);
   } finally { await browser.close(); }
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
