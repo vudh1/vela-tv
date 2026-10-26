@@ -1,6 +1,6 @@
 # Vela TV — Quiet Glass v1 living-room review
 
-**State:** source-only design PR, **not** Sony production, Samsung WGT, remote Pages, Worker deployment, or installed TV verification. FRIDAY's [`DESIGN_SYSTEM.md`](https://github.com/vudh1/friday/blob/main/docs/DESIGN_SYSTEM.md) and `design/tokens.v1.json` remain a proposal, not a production dependency. This PR maps selected values locally.
+**State (October 26, 2026 UTC):** Quiet Glass source [PR #46](https://github.com/vudh1/velatv/pull/46), Sony promotion [#48](https://github.com/vudh1/velatv/pull/48), Dream wake fix [#47](https://github.com/vudh1/velatv/pull/47), and production promotion [#49](https://github.com/vudh1/velatv/pull/49) are merged. The [signed Sony APK v22601](https://github.com/vudh1/velatv/releases/tag/v22601) and [production workflow](https://github.com/vudh1/velatv/actions/runs/40285377312) succeeded, as did [web remote Pages](https://github.com/vudh1/velatv/actions/runs/40283859156). **No physical Sony/iPhone verification, Samsung WGT signing/install, or independently verified Worker deployment is implied.** See [issue #50 device QA matrix](ISSUE_50_DEVICE_QA.md). FRIDAY's [`DESIGN_SYSTEM.md`](https://github.com/vudh1/friday/blob/main/docs/DESIGN_SYSTEM.md) and `design/tokens.v1.json` remain a proposal, not a production dependency; Vela maps selected values locally.
 
 ## Editable Figma review
 
@@ -66,7 +66,7 @@ The update emphasizes readable Now/Next, a known field and a stronger single foc
 
 `home-4k-scaling.webp` is rendered as **1920 CSS pixels × DPR 2**, yielding 3840 × 2160 image pixels. Reproduce locally with `VELA_CHROMIUM_PATH=/path/to/chromium node scripts/capture-quiet-glass.cjs`; this optional script requires locally installed `playwright` and `sharp`, not part of the TV application or its CI dependencies.
 
-The optional browser capture now asserts that the paired phone remote fits without vertical scrolling at **320×568, 375×667, 390×844 and 430×932**, with a visible TV-switch pill. It also prints elapsed time to first Home app card in desktop headless Chromium (one local sample: ~104 ms). This is a synthetic DOM-readiness diagnostic, **not** Android cold-start latency, Sony memory use, Safari validation, or a production performance benchmark. The 4K screen now uses the same fixed preview clock as 1080p for repeatable snapshots.
+The optional browser capture asserts that the paired phone remote fits without vertical scrolling at **320×568, 375×667, 390×844 and 430×932**, with a visible TV-switch pill. It also prints elapsed time to first Home app card in desktop headless Chromium (one earlier local sample: ~104 ms). This is a synthetic DOM-readiness diagnostic, **not** Android cold-start latency, Sony memory use, Safari validation, or a production performance benchmark. Both 1080p and 4K captures explicitly use the same Pacific timezone. The synthetic reference is **Sunday, October 25, 2026 at 8:42 PM Pacific** (October 26 at 03:42 UTC). The Figma Home idle/focus headings were corrected to this date during [issue #50](https://github.com/vudh1/velatv/issues/50) QA; the capture script checks clock/date consistency in both resolutions.
 
 ## Platform and security boundaries
 
@@ -78,6 +78,10 @@ Preserved: Google + BallerWatch read-only ICS, native app launching, package/sig
 
 ## Device acceptance checklist (must remain open until observed)
 
+The detailed pass/blocked/untested matrix and privacy-safe evidence template
+are in [ISSUE_50_DEVICE_QA.md](ISSUE_50_DEVICE_QA.md). Source publication
+has passed, but **every device-specific checkbox below remains open**.
+
 - [ ] Sony: cold start and manual profile switch never flash the previous profile; Guest exposes no saved source or reminders.
 - [ ] Sony: verify startup time, first D-pad response, app-icon decode/cache memory and 1080p/4K focus at 10 feet; exercise preferred apps, native streaming app launch, and reduced motion.
 - [ ] Sony: test Now/Next at 1–2 hours, ongoing past midnight, DST rollback/forward, duplicate feeds, stale/offline source, encrypted cache revocation and settings focus/scroll restoration.
@@ -85,6 +89,7 @@ Preserved: Google + BallerWatch read-only ICS, native app launching, package/sig
 - [ ] iPhone Safari: 390/430 px, safe areas, dynamic text, Home Screen PWA/background/foreground while holding Up and Volume, synthetic click suppression, reconnect, revocation, public-network mismatch, two-TV picker and four independent pairings.
 - [ ] Sony: confirm ARC volume, power toggling/wake limitations, optional native-app control, and relay latency/Free quota **on hardware**.
 - [ ] Samsung QN85: sign WGT for that device, inspect focus/Back and application launches, CORS-restricted feeds and offline cache. Do **not** claim native screensaver or launcher parity.
-- [ ] Final code/visual review, CI green, owner-led production promotion and installed-device smoke check on both target TVs.
+- [x] Source CI, reviewed Sony production promotion and release publishing (linked above); *not* physical validation.
+- [ ] Installed-device smoke check on both target TVs, including Samsung's separately signed WGT.
 
-**Rollback:** no migration or credential change. Revert this PR if a source regression appears; keep current production branch and installed app intact. A reviewed future Sony promotion must retain the installed APK signing certificate; a Samsung WGT needs its own signing/install path. Source/CI/preview does not authorize either.
+**Rollback:** no migration or credential change. If hardware QA fails, restore the stock TV Home as a safe recovery path and ship a reviewed **forward-versioned** signed Sony APK from known-good source (same package/certificate). Android may reject a lower-versionCode downgrade. Do not uninstall/clear Vela data or assume an old APK can be installed over a newer one. Samsung's WGT has a separate signing/install/rollback path.

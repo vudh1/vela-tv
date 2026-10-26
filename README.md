@@ -1,6 +1,13 @@
 # Vela TV
 
-> Review-only Quiet Glass v1 living-room implementation and platform test checklist: [design and validation note](docs/QUIET_GLASS_V1_REVIEW.md). Source previews and a PR do not mean this design has reached `production` or a physical TV.
+> **Release status (October 26, 2026 UTC):** Quiet Glass v1 is merged and the
+> [signed Sony v22601 APK](https://github.com/vudh1/velatv/releases/tag/v22601)
+> was published by a [successful production workflow](https://github.com/vudh1/velatv/actions/runs/40285377312).
+> The [web remote Pages workflow](https://github.com/vudh1/velatv/actions/runs/40283859156)
+> also succeeded. Neither proves installation or correct operation on an actual
+> Sony/iPhone, and **no signed Samsung WGT/device validation is recorded**.
+> See the [design review](docs/QUIET_GLASS_V1_REVIEW.md) and
+> [issue #50 acceptance matrix](docs/ISSUE_50_DEVICE_QA.md) for remaining gates.
 
 Minimalist TV Home experience. One shared interface with platform-specific
 integration and installation targets.
@@ -113,7 +120,9 @@ decoder still limits what is actually displayed.
 
 - `main`: source changes, testing and review.
 - `production`: builds and publishes a signed APK release on push via [GitHub Actions](.github/workflows/production-apk.yml).
-- [Draft release PR](../../pull/1): stage source and signing configuration safely before the first deployment.
+- Sony `v22601` is the last release verified by this dated audit; always check
+  [GitHub Releases](https://github.com/vudh1/velatv/releases) for later versions.
+- `production` is not a Samsung release or an installed-device verification.
 
 ## One-time signing setup
 
