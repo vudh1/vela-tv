@@ -1,6 +1,7 @@
 package com.danielvu.quiethome;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -8,9 +9,12 @@ import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
+import android.os.SystemClock;
 import android.service.dreams.DreamService;
 import android.text.TextUtils;
 import android.text.format.DateFormat;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
@@ -29,6 +33,8 @@ import java.util.Locale;
 /** Two-column native screensaver. Uses only verified, encrypted cached calendar events. */
 public final class VelaDreamService extends DreamService {
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private boolean beganOverVela;
+    private boolean openedVelaOnWake;
     private FrameLayout root;
     private LinearLayout clockGroup, eventBlock, weatherGroup;
     private ImageView scenery;
@@ -280,7 +286,30 @@ public final class VelaDreamService extends DreamService {
         setContentView(root); refreshEvents(); positionContent();
         showWeather(VelaWeatherRepository.cached(this));
     }
-    @Override public void onDreamingStarted() { super.onDreamingStarted(); handler.removeCallbacks(ticker); ticker.run(); }
+    @Override public void onDreamingStarted() {
+        super.onDreamingStarted();
+        beganOverVela = MainActivity.wasHomeUnderDream(SystemClock.elapsedRealtime());
+        openedVelaOnWake = false;
+        handler.removeCallbacks(ticker);
+        ticker.run();
+    }
+    @Override public void onWakeUp() {
+        PowerManager power = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        boolean interactive = power != null && power.isInteractive();
+        if (VelaDreamReturnPolicy.shouldOpenVela(beganOverVela, interactive, openedVelaOnWake)) {
+            openedVelaOnWake = true;
+            // Launch before the Dream window is dismissed. Android can reject background
+            // launches after finish(), revealing Sony's stock Home underneath instead.
+            Intent home = new Intent(this, MainActivity.class);
+            home.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NO_ANIMATION);
+            try { startActivity(home); }
+            catch (RuntimeException exception) {
+                Log.w("VelaDream", "Sony did not allow return to Vela after dream wake", exception);
+            }
+        }
+        super.onWakeUp();
+    }
     @Override public void onDreamingStopped() { handler.removeCallbacks(ticker); super.onDreamingStopped(); }
     @Override public void onDetachedFromWindow() {
         handler.removeCallbacks(ticker);
